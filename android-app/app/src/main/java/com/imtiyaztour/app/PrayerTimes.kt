@@ -136,7 +136,7 @@ fun formatJamShalat(h: Double): String {
 // supaya tidak menambah dependency baru yang bisa memicu masalah build lagi.
 // ============================================================================
 @Suppress("MissingPermission")
-private suspend fun getCurrentLocation(context: Context): Location? = suspendCancellableCoroutine { cont ->
+suspend fun getCurrentLocation(context: Context): Location? = suspendCancellableCoroutine { cont ->
     val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
     val hasFine = context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
     val hasCoarse = context.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED

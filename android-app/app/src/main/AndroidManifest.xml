@@ -5,23 +5,14 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
-    <application android:allowBackup="true" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:label="Imtiyaz Tour" android:theme="@android:style/Theme.Material.Light.NoActionBar">
+    <application android:allowBackup="true" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:label="Imtiyaz Tour" android:theme="@style/Theme.Imtiyaz">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-		<activity
-    android:name=".MainActivity"
-    android:exported="true"
-    android:theme="@style/Theme.App.Starting">
-    <intent-filter>
-        <action android:name="android.intent.action.MAIN" />
-        <category android:name="android.intent.category.LAUNCHER" />
-    </intent-filter>
-        </activity>
-		
+
         <!-- Diperlukan agar tombol "Kamera" bisa menyimpan & meng-upload foto bukti transfer (sebelumnya onClick kosong) -->
         <provider
             android:name="androidx.core.content.FileProvider"
