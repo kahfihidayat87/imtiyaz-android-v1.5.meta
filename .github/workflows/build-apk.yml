@@ -1,0 +1,101 @@
+name: Build APK - No Android Studio - v1.5.0 Simple Pro
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'android-app/**'
+      - '.github/workflows/build-apk.yml'
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17 - CLEAR
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK - CLEAR
+        uses: android-actions/setup-android@v3
+
+      - name: Grant execute permission for gradlew
+        run: |
+          cd android-app
+          chmod +x gradlew || echo "No gradlew, will use gradle action"
+          ls -la
+
+      - name: Create gradlew wrapper if missing - CLEAR
+        run: |
+          cd android-app
+          if [ ! -f gradlew ]; then
+            echo "Creating gradle wrapper..."
+            # Create wrapper properties
+            mkdir -p gradle/wrapper
+            cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
+            distributionBase=GRADLE_USER_HOME
+            distributionPath=wrapper/dists
+            distributionUrl=https\://services.gradle.org/distributions/gradle-8.2-bin.zip
+            networkTimeout=10000
+            validateDistributionUrl=true
+            zipStoreBase=GRADLE_USER_HOME
+            zipStorePath=wrapper/dists
+            EOF
+            # Create gradlew script
+            cat > gradlew << 'EOF'
+            #!/usr/bin/env sh
+            set -e
+            APP_HOME=$(cd "${0%/*}" && pwd -P)
+            exec gradle "$@"
+            EOF
+            chmod +x gradlew
+          fi
+
+      - name: Build Debug APK - CLEAR - No Android Studio
+        uses: gradle/gradle-build-action@v2
+        with:
+          arguments: |
+            :app:assembleDebug --no-daemon --stacktrace
+          build-root-directory: android-app
+
+      - name: List APK Output - CLEAR
+        run: |
+          find android-app -name "*.apk" -type f
+          ls -lh android-app/app/build/outputs/apk/debug/ || ls -lh android-app/build/outputs/apk/debug/ || echo "Checking build"
+
+      - name: Upload APK Artifact - CLEAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: Imtiyaz-v1.5.0-Simple-Pro-APK
+          path: |
+            android-app/app/build/outputs/apk/debug/*.apk
+            android-app/build/outputs/apk/debug/*.apk
+          retention-days: 30
+
+      - name: Create Release with APK - CLEAR
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v1.5.0-${{ github.run_number }}
+          name: Imtiyaz v1.5.0 Simple Pro - Build ${{ github.run_number }} - 5 Fitur (1,2,3,4,8)
+          body: |
+            ✅ APK Android v1.5.0 Simple Pro - 5 Fitur (1,2,3,4,8) - Tanpa 5,6,7,9,GPS,WebView
+            ✅ Build via Github Actions - Tanpa Android Studio
+            ✅ Fitur:
+            - 1. WA Langsung + Form Pilih Paket -> wa.me/628112776543
+            - 2. Status Bayar + Upload Bukti
+            - 3. Checklist Dokumen 6 item
+            - 4. Doa Offline 6 doa
+            - 8. Skrining 29 Pertanyaan
+            
+            Download APK di bawah ini -> Install di HP langsung jadi
+          files: |
+            android-app/app/build/outputs/apk/debug/*.apk
+            android-app/build/outputs/apk/debug/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,38 @@
+name: Deploy Backend - WordPress + Node.js - CLEAR
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'imtiyaz-connector/**'
+      - 'node-api/**'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Deploy WordPress Plugin CLEAR via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./imtiyaz-connector/
+          server-dir: /domains/pastiumrah.com/public_html/wp-content/plugins/imtiyaz-connector/
+          
+      - name: Deploy Node API CLEAR via SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          script: |
+            cd /domains/api.pastiumrah.com/
+            git pull origin main || echo "No git, uploading via FTP method"
+            npm install --production || npm install
+            pm2 restart imtiyaz-api || pm2 start node-api/app.js --name imtiyaz-api || pm2 start app.js --name imtiyaz-api
+            pm2 save
