@@ -1,4 +1,4 @@
-name: Build APK - ROBUST FIX Node24 - v1.5.0
+name: Build APK - DEBUG LOG - FIX Build Failed
 
 on:
   push:
@@ -18,56 +18,97 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Android SDK - FIX Node24
+      - name: Debug Environment - PRINT ALL
         run: |
-          echo "Manual SDK install - works Node 24"
+          echo "=== DEBUG ENV ==="
+          java -version
+          echo "JAVA_HOME=$JAVA_HOME"
+          echo "HOME=$HOME"
+          pwd
+          ls -la
+          echo "=== android-app files ==="
+          ls -la android-app/
+          ls -la android-app/app/
+          cat android-app/settings.gradle
+          cat android-app/build.gradle
+          cat android-app/app/build.gradle
+
+      - name: Setup Android SDK - FIX with full logs
+        run: |
+          set -x
           export ANDROID_HOME=$HOME/android-sdk
+          export ANDROID_SDK_ROOT=$HOME/android-sdk
           mkdir -p $ANDROID_HOME/cmdline-tools
           cd /tmp
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O tools.zip
           unzip -q tools.zip -d $ANDROID_HOME/cmdline-tools
           mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+          ls -la $ANDROID_HOME/cmdline-tools/latest/bin/
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --list | head -50
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "platforms;android-33"
           echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
           echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
           echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
           echo "$HOME/android-sdk/build-tools/34.0.0" >> $GITHUB_PATH
+          echo "SDK installed"
+
+      - name: Create local.properties - FIX Build Failed 10s
+        run: |
+          echo "sdk.dir=$HOME/android-sdk" > android-app/local.properties
+          cat android-app/local.properties
+          echo "sdk.dir=$HOME/android-sdk" > local.properties || true
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.2'
 
-      - name: Generate Wrapper
+      - name: Generate Wrapper with logs
         working-directory: android-app
         run: |
-          gradle wrapper --gradle-version 8.2
-          chmod +x gradlew
+          set -x
+          gradle --version
+          gradle wrapper --gradle-version 8.2 --no-daemon
+          ls -la
           ls -la gradle/wrapper/
+          chmod +x gradlew
+          cat gradle/wrapper/gradle-wrapper.properties
 
-      - name: Build Debug APK
+      - name: Build Debug APK - WITH FULL LOGS
         working-directory: android-app
         run: |
+          set -x
           export ANDROID_HOME=$HOME/android-sdk
-          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+          export ANDROID_SDK_ROOT=$HOME/android-sdk
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "Building..."
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace --info 2>&1 | tee build-log.txt || true
+          echo "=== BUILD LOG TAIL ==="
+          tail -200 build-log.txt || true
+          echo "=== Checking for APK ==="
+          find . -name "*.apk" -type f || echo "No APK found"
+          ls -lh app/build/outputs/apk/debug/ || ls -lh build/outputs/apk/debug/ || echo "No outputs"
+          echo "=== Gradle build files ==="
+          ls -lh app/build/ || true
+          # Fail if no APK but show logs
+          if [ ! -f app/build/outputs/apk/debug/app-debug.apk ]; then
+            echo "BUILD FAILED - Showing full log"
+            cat build-log.txt
+            exit 1
+          fi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Imtiyaz-APK-v1.5.0-ROBUST
+          name: Imtiyaz-APK-DEBUG-LOG
           path: android-app/app/build/outputs/apk/debug/*.apk
-          retention-days: 30
+          if-no-files-found: warn
 
-      - name: Release APK
-        if: github.ref == 'refs/heads/main'
-        uses: softprops/action-gh-release@v1
+      - name: Upload Build Log for Debug
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: v1.5.0-fix-${{ github.run_number }}
-          name: Imtiyaz v1.5.0 FIX Node24 - Build ${{ github.run_number }}
-          body: |
-            FIX Node.js v24.19.0 - Manual SDK install
-            5 Fitur (1,2,3,4,8) Tanpa 5,6,7,9,GPS,WebView
-          files: android-app/app/build/outputs/apk/debug/*.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: build-log-txt
+          path: android-app/build-log.txt
