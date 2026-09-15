@@ -8,11 +8,12 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
-import android.media.MediaPlayer
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -26,12 +27,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -49,19 +51,13 @@ import retrofit2.http.POST
 import retrofit2.http.Part
 import java.io.File
 import java.io.FileOutputStream
-import java.util.Calendar
-import java.util.TimeZone
 
 // ============================================================================
 // DATA MODELS
 // ============================================================================
 data class PaketUmrah(val id: String, val nama: String, val kategori: String, val durasi: String, val harga: String, val fasilitas: String, val badge: String = "")
 data class Dokumen(val id: String, val nama: String, val deskripsi: String, var checked: Boolean = false)
-data class Doa(val id: String, val judul: String, val arab: String, val latin: String, val arti: String, val audioUrl: String? = null)
-data class QuranSurah(val number: Int, val name: String, val englishName: String, val englishNameTranslation: String, val numberOfAyahs: Int)
-data class QuranAyah(val number: Int, val text: String, val numberInSurah: Int)
-data class QuranSurahData(val number: Int, val name: String, val englishName: String, val englishNameTranslation: String, val numberOfAyahs: Int, val ayahs: List<QuranAyah>)
-data class QuranResponse<T>(val code: Int, val status: String, val data: T)
+data class Doa(val id: String, val judul: String, val arab: String, val latin: String, val arti: String)
 
 data class KontakInfo(val nama_travel: String = "Imtiyaz Tour Jogja", val alamat: String = "PPIU U383/2021 • Jln. Pertapan, Tegal Cerme RT08, Baturetno, Banguntapan, Bantul", val kontak: String = "0811-277-6543 • pastiumrah.com")
 
@@ -97,6 +93,10 @@ object AppData {
     var dokumen by mutableStateOf(defaultDokumen)
     var kontak by mutableStateOf(KontakInfo())
     var wa by mutableStateOf(WaInfo())
+    // FIX: sebelumnya tidak ada cara sama sekali untuk memasukkan audio ke doa --
+    // sekarang admin bisa isi URL mp3 per-doa lewat WP Admin (tab "Audio Doa" di
+    // Pengaturan Aplikasi), diambil di sini, tanpa perlu update aplikasi.
+    var doaAudio by mutableStateOf<Map<String, String>>(emptyMap())
 }
 
 val listDoa = listOf(
@@ -149,6 +149,9 @@ interface ApiService {
     @GET("api/wa-admin")
     suspend fun getWaAdmin(): WaInfo
 
+    @GET("api/doa-audio")
+    suspend fun getDoaAudio(): Map<String, String>
+
     // FIX: sebelumnya TIDAK ADA login sama sekali. Username & password dibuat Admin
     // lewat WP Admin (lihat imtiyaz-connector.php), bukan didaftarkan sendiri oleh jamaah.
     @POST("api/login")
@@ -170,28 +173,6 @@ interface ApiService {
 
     @POST("api/skrining")
     suspend fun submitSkrining(@Body body: Map<String, String>): SkriningResponse
-}
-
-interface QuranApiService {
-    @GET("surah")
-    suspend fun getSurahs(): QuranResponse<List<QuranSurah>>
-
-    @GET("surah/{number}/quran-uthmani")
-    suspend fun getArabic(@retrofit2.http.Path("number") number: Int): QuranResponse<QuranSurahData>
-
-    @GET("surah/{number}/id.indonesian")
-    suspend fun getIndonesian(@retrofit2.http.Path("number") number: Int): QuranResponse<QuranSurahData>
-}
-
-object QuranApiClient {
-    val service: QuranApiService by lazy {
-        Retrofit.Builder()
-            .baseUrl("https://api.alquran.cloud/v1/")
-            .client(OkHttpClient.Builder().build())
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-            .create(QuranApiService::class.java)
-    }
 }
 
 object ApiClient {
@@ -273,8 +254,11 @@ suspend fun uploadBuktiFile(context: Context, jamaahId: String, token: String, f
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
+        // Tema splash (logo di windowBackground) hanya untuk menutup jeda cold-start.
+        // Begitu Activity ini hidup, langsung kembali ke tema biasa -- splash Compose
+        // di bawah (SplashScreen composable) yang mengatur durasi tampil logo sesungguhnya.
+        setTheme(android.R.style.Theme_Material_Light_NoActionBar)
         setContent { ImtiyazApp() }
     }
 }
@@ -282,48 +266,62 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ImtiyazApp() {
-    val context = LocalContext.current
+    var showSplash by remember { mutableStateOf(true) }
     var selectedTab by remember { mutableStateOf(0) }
     var selectedPaket by remember { mutableStateOf<PaketUmrah?>(null) }
     var selectedDoa by remember { mutableStateOf<Doa?>(null) }
-    var selectedSurah by remember { mutableStateOf<QuranSurah?>(null) }
-    var locationPermissionAsked by remember { mutableStateOf(
-        Prefs.get(context).getBoolean("location_permission_asked", false)
-    ) }
+    var selectedSurah by remember { mutableStateOf<Int?>(null) }
+    val context = LocalContext.current
 
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { result ->
-        Prefs.get(context).edit().putBoolean("location_permission_asked", true).apply()
-        locationPermissionAsked = true
+    // Izin lokasi diminta SEKALI di awal (sebelum masuk ke halaman utama), bukan
+    // lagi ditunda sampai user membuka fitur jadwal shalat -- sesuai permintaan.
+    // Catatan: Android tidak mengizinkan permission dangerous (termasuk lokasi)
+    // diberikan saat proses instal APK -- ini sudah tidak berlaku sejak Android 6.0
+    // dan berlaku untuk semua aplikasi, bukan keterbatasan aplikasi ini. Yang bisa
+    // dilakukan (dan sudah diterapkan di sini) adalah meminta izin itu paling awal
+    // saat aplikasi pertama kali dibuka, sebelum layar utama muncul.
+    val locationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
+    LaunchedEffect(Unit) {
+        val hasPermission = context.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            context.checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (!hasPermission) {
+            locationPermissionLauncher.launch(arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION))
+        }
     }
 
-    // Android hanya dapat menampilkan dialog runtime permission pada first launch,
-    // bukan benar-benar saat APK baru ter-install. Karena itu permintaan dijalankan
-    // segera saat aplikasi pertama kali dibuka, sebelum pengguna masuk ke fitur utama.
+    // Ambil konten yang dikelola admin (paket, dokumen wajib, kontak, audio doa) sekali
+    // saat app dibuka. Kalau gagal (offline/server down), AppData tetap berisi nilai
+    // default offline -- tidak melempar error ke pengguna, cukup diam-diam pakai fallback.
     LaunchedEffect(Unit) {
-        if (!locationPermissionAsked &&
-            context.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
-            context.checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED
-        ) {
-            permissionLauncher.launch(arrayOf(
-                android.Manifest.permission.ACCESS_FINE_LOCATION,
-                android.Manifest.permission.ACCESS_COARSE_LOCATION
-            ))
+        launch { try { AppData.paket = ApiClient.service.getPaket() } catch (e: Exception) { /* pakai defaultPaket */ } }
+        launch {
+            try {
+                val map = ApiClient.service.getDokumen()
+                AppData.dokumen = map.map { (key, label) -> Dokumen(key, label, "") }
+            } catch (e: Exception) { /* pakai defaultDokumen */ }
         }
-        launch { try { AppData.paket = ApiClient.service.getPaket() } catch (_: Exception) {} }
-        launch { try { AppData.dokumen = ApiClient.service.getDokumen().map { (key, label) -> Dokumen(key, label, "") } } catch (_: Exception) {} }
-        launch { try { AppData.kontak = ApiClient.service.getKontak() } catch (_: Exception) {} }
-        launch { try { AppData.wa = ApiClient.service.getWaAdmin() } catch (_: Exception) {} }
+        launch { try { AppData.kontak = ApiClient.service.getKontak() } catch (e: Exception) { /* pakai KontakInfo() default */ } }
+        launch { try { AppData.wa = ApiClient.service.getWaAdmin() } catch (e: Exception) { /* pakai WaInfo() default */ } }
+        launch { try { AppData.doaAudio = ApiClient.service.getDoaAudio() } catch (e: Exception) { /* tidak ada audio, tampilkan teks saja */ } }
+    }
+
+    // Splash Compose -- durasi tampil logo dikontrol pasti (bukan cuma jeda cold-start
+    // sekilas dari tema Android). Lihat juga windowBackground di AndroidManifest untuk
+    // splash native yang menutup jeda sebelum Compose sempat menggambar frame pertama.
+    LaunchedEffect(Unit) {
+        delay(1400)
+        showSplash = false
+    }
+
+    if (showSplash) {
+        SplashScreen()
+        return
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Column {
-                    Text("Imtiyaz Tour", fontWeight = FontWeight.Bold, color = Color(0xFF0F7A5A))
-                    Text("PPIU U383/2021 • Ibadah Lebih Mudah", fontSize = 11.sp, color = Color.Gray)
-                }},
+                title = { Column { Text("Imtiyaz Tour", fontWeight = FontWeight.Bold, color = Color(0xFF0F7A5A)); Text("PPIU U383/2021 • Pilih Paket Umrah", fontSize = 11.sp, color = Color.Gray) } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
             )
         },
@@ -331,24 +329,24 @@ fun ImtiyazApp() {
             NavigationBar(containerColor = Color.White) {
                 NavigationBarItem(selected = selectedTab == 0, onClick = { selectedTab = 0; selectedPaket = null; selectedDoa = null; selectedSurah = null }, icon = { Icon(Icons.Default.Home, null) }, label = { Text("Beranda", fontSize = 9.sp) })
                 NavigationBarItem(selected = selectedTab == 1, onClick = { selectedTab = 1; selectedPaket = null; selectedDoa = null; selectedSurah = null }, icon = { Icon(Icons.Default.List, null) }, label = { Text("Paket", fontSize = 9.sp) })
-                NavigationBarItem(selected = selectedTab == 2, onClick = { selectedTab = 2; selectedPaket = null; selectedDoa = null; selectedSurah = null }, icon = { Icon(Icons.Default.CheckCircle, null) }, label = { Text("Dokumen", fontSize = 9.sp) })
+                NavigationBarItem(selected = selectedTab == 2, onClick = { selectedTab = 2; selectedPaket = null; selectedDoa = null; selectedSurah = null }, icon = { Icon(Icons.Default.MenuBook, null) }, label = { Text("Quran", fontSize = 9.sp) })
                 NavigationBarItem(selected = selectedTab == 3, onClick = { selectedTab = 3; selectedPaket = null; selectedDoa = null; selectedSurah = null }, icon = { Icon(Icons.Default.Favorite, null) }, label = { Text("Doa", fontSize = 9.sp) })
-                NavigationBarItem(selected = selectedTab == 4, onClick = { selectedTab = 4; selectedPaket = null; selectedDoa = null; selectedSurah = null }, icon = { Icon(Icons.Default.MenuBook, null) }, label = { Text("e-Quran", fontSize = 9.sp) })
+                NavigationBarItem(selected = selectedTab == 4, onClick = { selectedTab = 4; selectedPaket = null; selectedDoa = null; selectedSurah = null }, icon = { Icon(Icons.Default.CheckCircle, null) }, label = { Text("Dokumen", fontSize = 9.sp) })
                 NavigationBarItem(selected = selectedTab == 5, onClick = { selectedTab = 5; selectedPaket = null; selectedDoa = null; selectedSurah = null }, icon = { Icon(Icons.Default.Person, null) }, label = { Text("Saya", fontSize = 9.sp) })
             }
         }
     ) { padding ->
         Box(Modifier.padding(padding)) {
             when {
-                selectedPaket != null -> DetailPaketScreen(selectedPaket!!, { selectedPaket = null })
-                selectedDoa != null -> DetailDoaScreen(selectedDoa!!, { selectedDoa = null })
-                selectedSurah != null -> QuranReaderScreen(selectedSurah!!, { selectedSurah = null })
+                selectedPaket != null -> DetailPaketScreen(paket = selectedPaket!!, onBack = { selectedPaket = null })
+                selectedDoa != null -> DetailDoaScreen(doa = selectedDoa!!, onBack = { selectedDoa = null })
+                selectedSurah != null -> SurahDetailScreen(nomor = selectedSurah!!, onBack = { selectedSurah = null })
                 else -> when (selectedTab) {
                     0 -> BerandaScreen(onPaketClick = { selectedPaket = it })
                     1 -> PaketListScreen(onPaketClick = { selectedPaket = it })
-                    2 -> DokumenScreen()
+                    2 -> QuranScreen(onSurahClick = { selectedSurah = it })
                     3 -> DoaListScreen(onDoaClick = { selectedDoa = it })
-                    4 -> QuranScreen(onSurahClick = { selectedSurah = it })
+                    4 -> DokumenScreen()
                     5 -> SayaScreen()
                 }
             }
@@ -357,90 +355,37 @@ fun ImtiyazApp() {
 }
 
 @Composable
-fun BerandaScreen(onPaketClick: (PaketUmrah) -> Unit) {
-    Column(Modifier.fillMaxSize()) {
-        LazyColumn(
-            Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            item {
-                Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF0F7A5A)),
-                    shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(20.dp)) {
-                        Text("Assalamualaikum,", color = Color(0xFFD1FAE5), fontSize = 14.sp)
-                        Text(AppData.kontak.nama_travel, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                        Text("Melayani Seperti Keluarga", color = Color(0xFFFFD700), fontSize = 12.sp)
-                    }
-                }
-            }
-            item { HomePrayerTimesCard() }
-            item {
-                Text("Pilih Paket Umrah", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                Text("${AppData.paket.size} pilihan, profesional & amanah", fontSize = 12.sp, color = Color.Gray)
-            }
-            items(AppData.paket) { paket -> PaketCard(paket, { onPaketClick(paket) }) }
+fun SplashScreen() {
+    Box(Modifier.fillMaxSize().background(Color.White), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Image(
+                painter = painterResource(id = R.drawable.splash_logo),
+                contentDescription = "Imtiyaz Tour & Travel",
+                modifier = Modifier.size(220.dp)
+            )
         }
     }
 }
 
 @Composable
-fun HomePrayerTimesCard() {
-    val context = LocalContext.current
-    var hasPermission by remember {
-        mutableStateOf(
-            context.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
-            context.checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        )
-    }
-    var locationLabel by remember { mutableStateOf("Menentukan lokasi…") }
-    var times by remember { mutableStateOf<PrayerTimesResult?>(null) }
-    var loading by remember { mutableStateOf(true) }
-
-    LaunchedEffect(hasPermission) {
-        loading = true
-        val loc = if (hasPermission) getCurrentLocation(context) else null
-        val lat = loc?.latitude ?: 21.4225
-        val lng = loc?.longitude ?: 39.8262
-        locationLabel = if (loc != null) "Lokasi Anda" else if (hasPermission) "Lokasi tidak terdeteksi" else "Lokasi default Mekkah"
-        val tzHours = TimeZone.getDefault().rawOffset / 3600000.0
-        val cal = Calendar.getInstance()
-        times = computePrayerTimes(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH)+1, cal.get(Calendar.DAY_OF_MONTH), lat, lng, tzHours)
-        loading = false
-    }
-
-    Card(
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(2.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(Modifier.padding(16.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Jadwal Shalat Hari Ini", fontWeight = FontWeight.Bold, fontSize = 17.sp, color = Color(0xFF0F7A5A))
-                    Text(locationLabel, fontSize = 10.sp, color = Color.Gray)
-                }
-                Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color(0xFF0F7A5A))
-            }
-            Spacer(Modifier.height(12.dp))
-            if (loading) {
-                LinearProgressIndicator(Modifier.fillMaxWidth())
-            } else if (times != null) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    listOf(
-                        "Subuh" to times!!.fajr, "Dzuhur" to times!!.dhuhr, "Ashar" to times!!.asr,
-                        "Maghrib" to times!!.maghrib, "Isya" to times!!.isha
-                    ).forEach { (name, time) ->
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
-                            Text(name, fontSize = 10.sp, color = Color.Gray)
-                            Text(formatJamShalat(time), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F7A5A))
-                        }
-                    }
+fun BerandaScreen(onPaketClick: (PaketUmrah) -> Unit) {
+    LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF0F7A5A)), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(20.dp)) {
+                    Text("Assalamualaikum,", color = Color(0xFFD1FAE5), fontSize = 14.sp)
+                    Text(AppData.kontak.nama_travel, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                    Text("Melayani Seperti Keluarga", color = Color(0xFFFFD700), fontSize = 12.sp)
                 }
             }
-            Spacer(Modifier.height(10.dp))
-            Text("Jadwal dihitung otomatis berdasarkan GPS perangkat.", fontSize = 9.sp, color = Color.Gray)
+            Spacer(Modifier.height(16.dp))
+            PrayerTimesCard()
+            Spacer(Modifier.height(16.dp))
+            Text("Pilih Paket Umrah", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Text("${AppData.paket.size} pilihan, profesional & amanah", fontSize = 12.sp, color = Color.Gray)
+            Spacer(Modifier.height(8.dp))
         }
+        items(AppData.paket) { paket -> PaketCard(paket = paket, onClick = { onPaketClick(paket) }) }
     }
 }
 
@@ -574,87 +519,6 @@ fun DokumenScreen() {
 }
 
 @Composable
-fun QuranScreen(onSurahClick: (QuranSurah) -> Unit) {
-    var surahs by remember { mutableStateOf<List<QuranSurah>>(emptyList()) }
-    var loading by remember { mutableStateOf(true) }
-    var error by remember { mutableStateOf("") }
-
-    LaunchedEffect(Unit) {
-        try { surahs = QuranApiClient.service.getSurahs().data }
-        catch (e: Exception) { error = "Tidak dapat memuat e-Quran. Periksa koneksi internet." }
-        loading = false
-    }
-
-    LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        item {
-            Text("e-Quran", fontWeight = FontWeight.Bold, fontSize = 22.sp, color = Color(0xFF0F7A5A))
-            Text("Al-Qur'an digital dengan teks Arab dan terjemahan Indonesia.", fontSize = 11.sp, color = Color.Gray)
-            Spacer(Modifier.height(8.dp))
-        }
-        if (loading) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
-        if (error.isNotEmpty()) item { Text(error, color = Color(0xFFDC2626), fontSize = 12.sp) }
-        items(surahs) { surah ->
-            Card(shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(1.dp), modifier = Modifier.fillMaxWidth().clickable { onSurahClick(surah) }) {
-                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(surah.number.toString(), fontWeight = FontWeight.Bold, color = Color(0xFF0F7A5A), modifier = Modifier.width(32.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(surah.name, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                        Text(surah.englishName, fontSize = 11.sp, color = Color.Gray)
-                    }
-                    Text("${surah.numberOfAyahs} ayat", fontSize = 10.sp, color = Color.Gray)
-                }
-            }
-        }
-        item { Text("Sumber teks & API: Al Quran Cloud • memerlukan internet untuk memuat.", fontSize = 9.sp, color = Color.Gray) }
-    }
-}
-
-@Composable
-fun QuranReaderScreen(surah: QuranSurah, onBack: () -> Unit) {
-    var arabic by remember { mutableStateOf<QuranSurahData?>(null) }
-    var indo by remember { mutableStateOf<QuranSurahData?>(null) }
-    var loading by remember { mutableStateOf(true) }
-    var error by remember { mutableStateOf("") }
-
-    LaunchedEffect(surah.number) {
-        try {
-            val a = QuranApiClient.service.getArabic(surah.number).data
-            val i = QuranApiClient.service.getIndonesian(surah.number).data
-            arabic = a; indo = i
-        } catch (e: Exception) { error = "Gagal memuat surah." }
-        loading = false
-    }
-
-    LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item {
-            Button(onClick = onBack, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A))) { Text("← Kembali") }
-            Spacer(Modifier.height(4.dp))
-            Text(surah.name, fontWeight = FontWeight.Bold, fontSize = 22.sp, color = Color(0xFF0F7A5A))
-            Text("${surah.englishName} • ${surah.numberOfAyahs} ayat", fontSize = 11.sp, color = Color.Gray)
-        }
-        if (loading) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
-        if (error.isNotEmpty()) item { Text(error, color = Color(0xFFDC2626)) }
-        if (arabic != null && indo != null) {
-            items(arabic!!.ayahs.size) { idx ->
-                val a = arabic!!.ayahs[idx]
-                val tr = indo!!.ayahs.getOrNull(idx)?.text.orEmpty()
-                Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = Color.White),
-                    elevation = CardDefaults.cardElevation(1.dp), modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(16.dp)) {
-                        Text("Ayat ${a.numberInSurah}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F7A5A))
-                        Spacer(Modifier.height(8.dp))
-                        Text(a.text, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth())
-                        Spacer(Modifier.height(10.dp))
-                        Text(tr, fontSize = 13.sp, color = Color(0xFF374151))
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 fun DoaListScreen(onDoaClick: (Doa) -> Unit) {
     LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
@@ -664,9 +528,16 @@ fun DoaListScreen(onDoaClick: (Doa) -> Unit) {
             Spacer(Modifier.height(8.dp))
         }
         items(listDoa) { doa ->
+            val hasAudio = AppData.doaAudio.containsKey(doa.id)
             Card(shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(1.dp), modifier = Modifier.fillMaxWidth().clickable { onDoaClick(doa) }) {
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) { Text(doa.judul, fontWeight = FontWeight.Bold, fontSize = 14.sp); Text(doa.latin.take(40) + "...", fontSize = 11.sp, color = Color.Gray, maxLines = 1) }
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(doa.judul, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            if (hasAudio) { Spacer(Modifier.width(6.dp)); Icon(Icons.Default.VolumeUp, contentDescription = "Ada audio", tint = Color(0xFF0F7A5A), modifier = Modifier.size(14.dp)) }
+                        }
+                        Text(doa.latin.take(40) + "...", fontSize = 11.sp, color = Color.Gray, maxLines = 1)
+                    }
                     Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF0F7A5A))
                 }
             }
@@ -676,13 +547,31 @@ fun DoaListScreen(onDoaClick: (Doa) -> Unit) {
 
 @Composable
 fun DetailDoaScreen(doa: Doa, onBack: () -> Unit) {
+    val audioUrl = AppData.doaAudio[doa.id]
+    val playing = AudioPlayerManager.currentlyPlayingUrl == audioUrl
+    DisposableEffect(Unit) { onDispose { AudioPlayerManager.stop() } }
+
     LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item {
             Button(onClick = onBack, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)), shape = RoundedCornerShape(8.dp)) { Text("← Kembali") }
             Spacer(Modifier.height(12.dp))
             Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(2.dp)) {
                 Column(Modifier.padding(20.dp)) {
-                    Text(doa.judul, fontWeight = FontWeight.Bold, fontSize = 22.sp, color = Color(0xFF0F7A5A))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text(doa.judul, fontWeight = FontWeight.Bold, fontSize = 22.sp, color = Color(0xFF0F7A5A), modifier = Modifier.weight(1f))
+                        if (audioUrl != null) {
+                            IconButton(onClick = { AudioPlayerManager.toggle(audioUrl) }, modifier = Modifier.size(40.dp)) {
+                                Icon(
+                                    if (playing) Icons.Default.Stop else Icons.Default.PlayCircle,
+                                    contentDescription = "Putar audio",
+                                    tint = Color(0xFF0F7A5A),
+                                    modifier = Modifier.size(32.dp)
+                                )
+                            }
+                        }
+                    }
+                    if (AudioPlayerManager.isLoading && playing) { LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 4.dp)) }
+                    AudioPlayerManager.errorMessage?.let { if (playing || AudioPlayerManager.currentlyPlayingUrl == null) Text(it, fontSize = 10.sp, color = Color(0xFFDC2626)) }
                     Divider(Modifier.padding(vertical = 12.dp))
                     Text("Arab:", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.Gray)
                     Text(doa.arab, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.Black)
@@ -692,83 +581,9 @@ fun DetailDoaScreen(doa: Doa, onBack: () -> Unit) {
                     Spacer(Modifier.height(16.dp))
                     Text("Arti:", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.Gray)
                     Text(doa.arti, fontSize = 13.sp, color = Color(0xFF0F7A5A))
-                    Spacer(Modifier.height(18.dp))
-                    DoaAudioPlayer(doa)
                 }
             }
         }
-    }
-}
-
-@Composable
-fun DoaAudioPlayer(doa: Doa) {
-    val context = LocalContext.current
-    var playing by remember { mutableStateOf(false) }
-    var player by remember { mutableStateOf<MediaPlayer?>(null) }
-
-    DisposableEffect(doa.id) {
-        onDispose {
-            player?.release()
-            player = null
-        }
-    }
-
-    fun startAudio() {
-        try {
-            player?.release()
-            val url = doa.audioUrl
-            if (!url.isNullOrBlank()) {
-                player = MediaPlayer().apply {
-                    setDataSource(url)
-                    setOnPreparedListener { it.start(); playing = true }
-                    setOnCompletionListener { playing = false }
-                    prepareAsync()
-                }
-            } else {
-                // Tambahkan file MP3 ke res/raw dengan pola:
-                // doa_keluar_rumah.mp3, doa_naik_kendaraan.mp3, dst.
-                val resId = context.resources.getIdentifier(
-                    "doa_${doa.id}", "raw", context.packageName
-                )
-                if (resId == 0) {
-                    Toast.makeText(context, "Audio belum ditambahkan untuk doa ini.", Toast.LENGTH_SHORT).show()
-                    return
-                }
-                player = MediaPlayer.create(context, resId)
-                player?.setOnCompletionListener { playing = false }
-                player?.start()
-                playing = true
-            }
-        } catch (_: Exception) {
-            playing = false
-            Toast.makeText(context, "Audio tidak dapat diputar.", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    Column(Modifier.fillMaxWidth()) {
-        Text("Audio Doa", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.Gray)
-        Spacer(Modifier.height(6.dp))
-        Button(
-            onClick = {
-                if (playing) {
-                    player?.pause()
-                    playing = false
-                } else {
-                    startAudio()
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A))
-        ) {
-            Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow, null)
-            Spacer(Modifier.width(8.dp))
-            Text(if (playing) "Jeda Audio" else "Putar Audio")
-        }
-        Text(
-            if (!doa.audioUrl.isNullOrBlank()) "Audio online aktif."
-            else "Audio lokal dapat ditambahkan di res/raw dengan nama doa_${doa.id}.mp3.",
-            fontSize = 9.sp, color = Color.Gray
-        )
     }
 }
 

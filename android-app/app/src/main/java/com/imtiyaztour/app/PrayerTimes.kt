@@ -10,12 +10,14 @@ import android.os.Bundle
 import android.os.Looper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -136,7 +138,7 @@ fun formatJamShalat(h: Double): String {
 // supaya tidak menambah dependency baru yang bisa memicu masalah build lagi.
 // ============================================================================
 @Suppress("MissingPermission")
-suspend fun getCurrentLocation(context: Context): Location? = suspendCancellableCoroutine { cont ->
+private suspend fun getCurrentLocation(context: Context): Location? = suspendCancellableCoroutine { cont ->
     val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
     val hasFine = context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
     val hasCoarse = context.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
@@ -175,8 +177,12 @@ private fun currentPrayerName(now: Double, t: PrayerTimesResult): String {
     return "Isya" // sebelum Fajar = masih waktu Isya malam sebelumnya
 }
 
+// Kartu ringkas untuk halaman Beranda (dipindah dari tab terpisah "Shalat" sebelumnya,
+// sesuai permintaan supaya lebih menyatu dengan halaman utama). Izin lokasi TIDAK
+// diminta dari sini lagi -- sudah diminta di awal saat app pertama dibuka (lihat
+// ImtiyazApp -> LaunchedEffect), kartu ini cuma memakai hasilnya.
 @Composable
-fun JadwalShalatScreen() {
+fun PrayerTimesCard() {
     val context = LocalContext.current
     var hasPermission by remember {
         mutableStateOf(
@@ -186,30 +192,29 @@ fun JadwalShalatScreen() {
     }
     var locationLabel by remember { mutableStateOf("") }
     var times by remember { mutableStateOf<PrayerTimesResult?>(null) }
-    var loading by remember { mutableStateOf(false) }
     var errorMsg by remember { mutableStateOf("") }
 
+    // Kalau user baru saja mengizinkan lokasi lewat dialog sistem (diminta di awal app),
+    // recheck saat kartu ini pertama kali muncul supaya langsung dapat lokasi GPS asli.
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
         hasPermission = result.values.any { it }
-        if (!hasPermission) errorMsg = "Izin lokasi ditolak -- jadwal memakai lokasi Mekkah sebagai default"
     }
 
     suspend fun loadTimes() {
-        loading = true; errorMsg = ""
+        errorMsg = ""
         val loc = if (hasPermission) getCurrentLocation(context) else null
         val lat: Double; val lng: Double
         if (loc != null) {
             lat = loc.latitude; lng = loc.longitude
-            locationLabel = "Lokasi GPS saat ini (%.4f, %.4f)".format(lat, lng)
+            locationLabel = "Berdasarkan lokasi Anda saat ini"
         } else {
             lat = 21.4225; lng = 39.8262 // fallback: Masjidil Haram, Mekkah
-            locationLabel = if (hasPermission) "Lokasi tidak terdeteksi -- pakai default Mekkah" else "Pakai default Mekkah (izin lokasi belum diberikan)"
+            locationLabel = if (hasPermission) "Lokasi tidak terdeteksi -- pakai Mekkah" else "Aktifkan lokasi untuk jadwal sesuai posisi Anda"
         }
         val tzHours = TimeZone.getDefault().rawOffset / 3600000.0
         val cal = Calendar.getInstance()
         val result = computePrayerTimes(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH), lat, lng, tzHours)
         if (result == null) errorMsg = "Gagal menghitung jadwal untuk lokasi ini" else times = result
-        loading = false
     }
 
     LaunchedEffect(hasPermission) { loadTimes() }
@@ -218,65 +223,55 @@ fun JadwalShalatScreen() {
         val c = Calendar.getInstance(); c.get(Calendar.HOUR_OF_DAY) + c.get(Calendar.MINUTE) / 60.0
     }
 
-    LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item {
-            Text("Jadwal Waktu Shalat", fontWeight = FontWeight.Bold, fontSize = 20.sp)
-            Text("Metode Ummul Qura -- otomatis menyesuaikan lokasi", fontSize = 12.sp, color = Color.Gray)
-            Spacer(Modifier.height(8.dp))
-
-            if (!hasPermission) {
-                Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3CD)), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(14.dp)) {
-                        Text("Aktifkan lokasi untuk jadwal yang sesuai posisi Anda", fontSize = 12.sp)
-                        Spacer(Modifier.height(8.dp))
-                        Button(onClick = { permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)) }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A))) {
-                            Text("Izinkan Akses Lokasi")
-                        }
+    Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(2.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Schedule, contentDescription = null, tint = Color(0xFF0F7A5A), modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Jadwal Shalat Hari Ini", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                }
+                if (!hasPermission) {
+                    TextButton(onClick = { permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)) }) {
+                        Text("Aktifkan Lokasi", fontSize = 10.sp)
                     }
                 }
-                Spacer(Modifier.height(8.dp))
             }
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color(0xFF0F7A5A), modifier = Modifier.size(14.dp))
-                Spacer(Modifier.width(4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+                Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(11.dp))
+                Spacer(Modifier.width(3.dp))
                 Text(locationLabel, fontSize = 10.sp, color = Color.Gray)
             }
             if (errorMsg.isNotEmpty()) { Text(errorMsg, fontSize = 10.sp, color = Color(0xFFDC2626)) }
-            Spacer(Modifier.height(12.dp))
-        }
+            Spacer(Modifier.height(10.dp))
 
-        if (loading) {
-            item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
-        }
-
-        times?.let { t ->
-            val current = currentPrayerName(nowHour, t)
-            val rows = listOf(
-                "Fajar" to t.fajr, "Terbit" to t.sunrise, "Dzuhur" to t.dhuhr,
-                "Ashar" to t.asr, "Maghrib" to t.maghrib, "Isya" to t.isha
-            )
-            items(rows) { (label, time) ->
-                val active = label == current
-                Card(
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = if (active) Color(0xFF0F7A5A) else Color.White),
-                    elevation = CardDefaults.cardElevation(if (active) 4.dp else 1.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text(label, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = if (active) Color.White else Color.Black)
-                        Text(formatJamShalat(time), fontWeight = FontWeight.Bold, fontSize = 18.sp, color = if (active) Color.White else Color(0xFF0F7A5A))
+            times?.let { t ->
+                val current = currentPrayerName(nowHour, t)
+                val rows = listOf(
+                    "Fajar" to t.fajr, "Terbit" to t.sunrise, "Dzuhur" to t.dhuhr,
+                    "Ashar" to t.asr, "Maghrib" to t.maghrib, "Isya" to t.isha
+                )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    rows.forEach { (label, time) ->
+                        val active = label == current
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier
+                                .weight(1f)
+                                .background(if (active) Color(0xFF0F7A5A) else Color.Transparent, RoundedCornerShape(8.dp))
+                                .padding(vertical = 6.dp, horizontal = 2.dp)
+                        ) {
+                            Text(label, fontSize = 9.sp, color = if (active) Color.White else Color.Gray)
+                            Spacer(Modifier.height(2.dp))
+                            Text(formatJamShalat(time), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (active) Color.White else Color(0xFF0F7A5A))
+                        }
                     }
                 }
+            } ?: run {
+                LinearProgressIndicator(Modifier.fillMaxWidth())
             }
-            item {
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "Estimasi astronomis (Fajar 18,5° -- Isya = Maghrib + 90 menit). Selisih beberapa menit dengan adzan Masjidil Haram/Nabawi setempat adalah wajar; jadikan pengumuman adzan setempat sebagai rujukan utama.",
-                    fontSize = 10.sp, color = Color.Gray
-                )
-            }
+            Spacer(Modifier.height(6.dp))
+            Text("Estimasi Ummul Qura -- rujuk adzan Masjidil Haram/Nabawi setempat", fontSize = 8.sp, color = Color.LightGray)
         }
     }
 }

@@ -1,13 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Imtiyaz" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">@android:color/white</item>
-        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
-        <item name="postSplashScreenTheme">@style/Theme.Imtiyaz.App</item>
-    </style>
-    <style name="Theme.Imtiyaz.App" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="android:windowLightStatusBar">true</item>
-        <item name="android:statusBarColor">@android:color/white</item>
-        <item name="android:navigationBarColor">@android:color/white</item>
+    <!-- Dipakai HANYA sebagai windowBackground saat cold-start (sebelum Compose sempat
+         menggambar frame pertama) supaya tidak ada kedipan layar putih kosong. Begitu
+         MainActivity.onCreate() jalan, tema langsung ditukar kembali ke tema normal --
+         lihat setTheme(...) di MainActivity.kt sebelum setContent. -->
+    <style name="Theme.Imtiyaz.Splash" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@drawable/splash_background</item>
     </style>
 </resources>
