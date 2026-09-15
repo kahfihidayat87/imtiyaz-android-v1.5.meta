@@ -1,4 +1,4 @@
-name: Build APK - DEBUG LOG - FIX Build Failed
+name: Build APK - FIX Line2 Error - v1.5.0
 
 on:
   push:
@@ -9,8 +9,7 @@ jobs:
   build-apk:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -18,97 +17,42 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Debug Environment - PRINT ALL
+      - name: Setup Android SDK - FIX Node24
         run: |
-          echo "=== DEBUG ENV ==="
-          java -version
-          echo "JAVA_HOME=$JAVA_HOME"
-          echo "HOME=$HOME"
-          pwd
-          ls -la
-          echo "=== android-app files ==="
-          ls -la android-app/
-          ls -la android-app/app/
-          cat android-app/settings.gradle
-          cat android-app/build.gradle
-          cat android-app/app/build.gradle
-
-      - name: Setup Android SDK - FIX with full logs
-        run: |
-          set -x
           export ANDROID_HOME=$HOME/android-sdk
-          export ANDROID_SDK_ROOT=$HOME/android-sdk
           mkdir -p $ANDROID_HOME/cmdline-tools
           cd /tmp
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O tools.zip
           unzip -q tools.zip -d $ANDROID_HOME/cmdline-tools
           mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
-          ls -la $ANDROID_HOME/cmdline-tools/latest/bin/
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --list | head -50
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "platforms;android-33"
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
           echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
           echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
           echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
-          echo "$HOME/android-sdk/build-tools/34.0.0" >> $GITHUB_PATH
-          echo "SDK installed"
 
-      - name: Create local.properties - FIX Build Failed 10s
-        run: |
-          echo "sdk.dir=$HOME/android-sdk" > android-app/local.properties
-          cat android-app/local.properties
-          echo "sdk.dir=$HOME/android-sdk" > local.properties || true
+      - name: Create local.properties
+        run: echo "sdk.dir=$HOME/android-sdk" > android-app/local.properties
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.2'
 
-      - name: Generate Wrapper with logs
+      - name: Generate Wrapper
         working-directory: android-app
         run: |
-          set -x
-          gradle --version
-          gradle wrapper --gradle-version 8.2 --no-daemon
-          ls -la
-          ls -la gradle/wrapper/
+          gradle wrapper --gradle-version 8.2
           chmod +x gradlew
-          cat gradle/wrapper/gradle-wrapper.properties
 
-      - name: Build Debug APK - WITH FULL LOGS
+      - name: Build APK - FIX Line2
         working-directory: android-app
         run: |
-          set -x
           export ANDROID_HOME=$HOME/android-sdk
-          export ANDROID_SDK_ROOT=$HOME/android-sdk
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "Building..."
-          ./gradlew :app:assembleDebug --no-daemon --stacktrace --info 2>&1 | tee build-log.txt || true
-          echo "=== BUILD LOG TAIL ==="
-          tail -200 build-log.txt || true
-          echo "=== Checking for APK ==="
-          find . -name "*.apk" -type f || echo "No APK found"
-          ls -lh app/build/outputs/apk/debug/ || ls -lh build/outputs/apk/debug/ || echo "No outputs"
-          echo "=== Gradle build files ==="
-          ls -lh app/build/ || true
-          # Fail if no APK but show logs
-          if [ ! -f app/build/outputs/apk/debug/app-debug.apk ]; then
-            echo "BUILD FAILED - Showing full log"
-            cat build-log.txt
-            exit 1
-          fi
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Imtiyaz-APK-DEBUG-LOG
+          name: Imtiyaz-APK-FIX-Line2
           path: android-app/app/build/outputs/apk/debug/*.apk
-          if-no-files-found: warn
-
-      - name: Upload Build Log for Debug
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log-txt
-          path: android-app/build-log.txt
