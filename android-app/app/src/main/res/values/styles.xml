@@ -2,7 +2,7 @@
 <resources>
     <!-- Dipakai HANYA sebagai windowBackground saat cold-start (sebelum Compose sempat
          menggambar frame pertama) supaya tidak ada kedipan layar putih kosong. Begitu
-         MainActivity.onCreate() jalan, tema langsung ditukar kembali ke tema normal --
+         MainActivity.onCreate() jalan, tema langsung ditukar kembali ke tema normal;
          lihat setTheme(...) di MainActivity.kt sebelum setContent. -->
     <style name="Theme.Imtiyaz.Splash" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@drawable/splash_background</item>
