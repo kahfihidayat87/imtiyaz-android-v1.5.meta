@@ -1,26 +1,10 @@
-
-plugins {
-    id 'com.android.application'
-    id 'org.jetbrains.kotlin.android'
-}
+plugins { id 'com.android.application'; id 'org.jetbrains.kotlin.android' }
 android {
     namespace 'com.imtiyaztour.app'
     compileSdk 34
-    defaultConfig {
-        applicationId "com.imtiyaztour.app"
-        minSdk 24
-        targetSdk 34
-        versionCode 16
-        versionName "1.5.0-simple-pro"
-    }
-    buildTypes {
-        release { minifyEnabled false }
-        debug { debuggable true; minifyEnabled false }
-    }
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
-    }
+    defaultConfig { applicationId "com.imtiyaztour.app"; minSdk 24; targetSdk 34; versionCode 16; versionName "1.5.0-fix" }
+    buildTypes { release { minifyEnabled false }; debug { debuggable true; minifyEnabled false } }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
     kotlinOptions { jvmTarget = '1.8' }
     buildFeatures { compose true }
     composeOptions { kotlinCompilerExtensionVersion '1.5.4' }

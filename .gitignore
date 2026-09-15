@@ -1,0 +1,5 @@
+node_modules/
+.env
+android-app/.gradle/
+android-app/build/
+android-app/app/build/

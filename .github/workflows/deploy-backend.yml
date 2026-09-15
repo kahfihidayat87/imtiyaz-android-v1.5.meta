@@ -1,11 +1,9 @@
-name: Deploy Backend - CLEAR
+name: Deploy Backend
 
 on:
   push:
     branches: [ main ]
-    paths:
-      - 'imtiyaz-connector/**'
-      - 'node-api/**'
+    paths: ['imtiyaz-connector/**', 'node-api/**']
   workflow_dispatch:
 
 jobs:
@@ -13,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Deploy WordPress Plugin via FTP
+      - name: Deploy Plugin via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.4
         with:
           server: ${{ secrets.FTP_SERVER }}
@@ -21,13 +19,3 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./imtiyaz-connector/
           server-dir: /domains/pastiumrah.com/public_html/wp-content/plugins/imtiyaz-connector/
-      - name: Deploy Node API via SSH
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
-          password: ${{ secrets.SSH_PASSWORD }}
-          script: |
-            cd /domains/api.pastiumrah.com/
-            npm install --production
-            pm2 restart imtiyaz-api || pm2 start node-api/app.js --name imtiyaz-api
