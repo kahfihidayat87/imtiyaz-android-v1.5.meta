@@ -46,15 +46,23 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 // ============================================================================
-// RADIO (WALKIE-TALKIE) TOUR LEADER
+// RADIO (WALKIE-TALKIE) TOUR LEADER -- MODEL SIARAN
 //
 // CATATAN JUJUR SOAL BATASAN: ini model "push-to-talk" ala Zello/voice-note
 // instan -- BUKAN audio streaming langsung sungguhan seperti HT/radio fisik.
-// Jamaah tekan-tahan tombol untuk merekam, lepas untuk kirim; anggota rombongan
-// lain menerimanya lewat polling setiap ~2,5 detik (ada delay singkat, bukan
+// Tour Leader tekan-tahan tombol untuk merekam, lepas untuk kirim; jamaah
+// menerimanya lewat polling setiap ~2,5 detik (ada delay singkat, bukan
 // sepersekian detik). Audio streaming real-time sungguhan butuh infrastruktur
 // WebRTC + server TURN/SFU yang jauh lebih besar dari stack WordPress+Node ini
 // -- kalau ke depan dibutuhkan itu, itu proyek infrastruktur terpisah.
+//
+// FIX: sebelumnya semua jamaah bisa "bicara" (model grup walkie-talkie ramai).
+// Sekarang model diubah jadi SIARAN satu-arah sesuai permintaan: 1 Tour Leader
+// bicara, jamaah mendengarkan. Yang bisa bicara HANYA yang tahu "Kode Radio TL"
+// (diatur Admin per paket di WP Admin, tab Paket Umrah) -- dicek di SERVER, jadi
+// tidak bisa dilewati dengan sekadar mengedit tampilan aplikasi. Kalau Admin
+// tidak mengisi kode untuk suatu paket, kanal itu tetap terbuka (siapa saja
+// boleh bicara) -- supaya kompatibel untuk rombongan yang belum diatur kodenya.
 //
 // Kanal ditentukan otomatis dari paket_id jamaah (di-resolve server dari token),
 // jadi serombongan satu paket otomatis satu kanal radio, tanpa perlu isi kode
@@ -64,7 +72,7 @@ import java.util.Locale
 data class RadioSendResponse(val success: Boolean? = null, val channel: String? = null, val error: String? = null)
 data class RadioMessage(val id: String, val nama: String, val time: Long, val audio: String? = null)
 data class RadioPollRequest(val jamaah_id: String, val token: String, val after: Long)
-data class RadioPollResponse(val channel: String? = null, val nama_saya: String? = null, val server_time: Long? = null, val messages: List<RadioMessage> = emptyList(), val error: String? = null)
+data class RadioPollResponse(val channel: String? = null, val nama_saya: String? = null, val server_time: Long? = null, val requires_tl_code: Boolean? = null, val messages: List<RadioMessage> = emptyList(), val error: String? = null)
 
 interface RadioApiService {
     @Multipart
@@ -72,6 +80,7 @@ interface RadioApiService {
     suspend fun send(
         @Part("jamaah_id") jamaahId: okhttp3.RequestBody,
         @Part("token") token: okhttp3.RequestBody,
+        @Part("tl_code") tlCode: okhttp3.RequestBody,
         @Part audio: MultipartBody.Part
     ): RadioSendResponse
 
@@ -173,6 +182,7 @@ fun RadioScreen(onBack: () -> Unit) {
     }
 
     var channel by remember { mutableStateOf("") }
+    var requiresTlCode by remember { mutableStateOf(false) }
     var messages by remember { mutableStateOf(listOf<RadioMessage>()) }
     var lastAfter by remember { mutableStateOf(0L) }
     var myName by remember { mutableStateOf("") }
@@ -182,6 +192,12 @@ fun RadioScreen(onBack: () -> Unit) {
     val playedIds = remember { mutableSetOf<String>() }
     val recorder = remember { RadioRecorder(context) }
 
+    // Status "TL": kosong = belum coba jadi TL, isi = kode yang dipakai jamaah ini
+    // untuk mencoba bicara. Server yang memutuskan valid/tidak, ini cuma input lokal.
+    var tlCodeInput by remember { mutableStateOf("") }
+    var isTl by remember { mutableStateOf(false) }
+    var tlError by remember { mutableStateOf("") }
+
     // Polling loop -- ini yang menggantikan "streaming langsung" (lihat catatan di atas).
     LaunchedEffect(Unit) {
         while (isActive) {
@@ -189,6 +205,7 @@ fun RadioScreen(onBack: () -> Unit) {
                 val resp = withContext(Dispatchers.IO) { RadioApiClient.service.poll(RadioPollRequest(jamaahId, token, lastAfter)) }
                 channel = resp.channel ?: channel
                 myName = resp.nama_saya ?: myName
+                requiresTlCode = resp.requires_tl_code ?: false
                 if (resp.messages.isNotEmpty()) {
                     messages = (messages + resp.messages).takeLast(30)
                     lastAfter = resp.messages.maxOf { it.time }
@@ -221,11 +238,16 @@ fun RadioScreen(onBack: () -> Unit) {
             try {
                 val idBody = jamaahId.toRequestBody("text/plain".toMediaTypeOrNull())
                 val tokenBody = token.toRequestBody("text/plain".toMediaTypeOrNull())
+                val codeBody = tlCodeInput.toRequestBody("text/plain".toMediaTypeOrNull())
                 val reqFile = file.asRequestBody("audio/mp4".toMediaTypeOrNull())
                 val part = MultipartBody.Part.createFormData("audio", file.name, reqFile)
-                withContext(Dispatchers.IO) { RadioApiClient.service.send(idBody, tokenBody, part) }
+                withContext(Dispatchers.IO) { RadioApiClient.service.send(idBody, tokenBody, codeBody, part) }
+                tlError = ""
             } catch (e: Exception) {
-                statusMsg = "Gagal mengirim klip -- periksa koneksi"
+                // Kalau kode TL ternyata salah, server menolak (403) -- turunkan lagi ke mode dengar.
+                isTl = false
+                tlError = "Kode Radio TL salah atau kosong -- hanya Tour Leader yang bisa bicara di kanal ini"
+                statusMsg = ""
             }
             isSending = false
             file.delete()
@@ -258,7 +280,7 @@ fun RadioScreen(onBack: () -> Unit) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
             Text("Radio Tour Leader", fontWeight = FontWeight.Bold, fontSize = 20.sp)
             Text(
-                if (channel.isNotEmpty()) "Kanal: rombongan paket \"$channel\"" else "Menghubungkan ke kanal...",
+                if (channel.isNotEmpty()) "Kanal siaran rombongan paket \"$channel\"" else "Menghubungkan ke kanal...",
                 fontSize = 12.sp, color = Color.Gray
             )
             if (statusMsg.isNotEmpty()) Text(statusMsg, fontSize = 11.sp, color = Color(0xFFDC2626))
@@ -281,22 +303,56 @@ fun RadioScreen(onBack: () -> Unit) {
             }
         }
 
-        // Tombol Push-to-Talk -- tekan & tahan untuk bicara, lepas untuk kirim.
-        Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                when { isSending -> "Mengirim..."; isRecording -> "Merekam... lepas untuk kirim"; else -> "Tekan & tahan untuk bicara" },
-                fontSize = 12.sp, color = if (isRecording) Color(0xFFDC2626) else Color.Gray, fontWeight = FontWeight.Bold
-            )
-            Spacer(Modifier.height(12.dp))
-            Box(
-                modifier = Modifier
-                    .size(84.dp)
-                    .background(if (isRecording) Color(0xFFDC2626) else Color(0xFF0F7A5A), CircleShape)
-                    .clickable(interactionSource = interactionSource, indication = null) { },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Default.Mic, contentDescription = "Tekan untuk bicara", tint = Color.White, modifier = Modifier.size(36.dp))
+        // Kanal terbuka (Admin belum isi Kode Radio TL untuk paket ini) -> semua orang
+        // boleh bicara, tombol PTT langsung tampil (perilaku lama, tetap kompatibel).
+        if (!requiresTlCode) {
+            PushToTalkButton(isRecording, isSending, interactionSource)
+        }
+        // Kanal siaran (Admin sudah isi kode) & belum jadi TL -> tampilkan gerbang kode,
+        // bukan tombol bicara. Jamaah biasa tinggal dengar saja tanpa perlu isi apa pun.
+        else if (!isTl) {
+            Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                Text("Kanal siaran satu-arah -- hanya Tour Leader yang bisa bicara di kanal ini.", fontSize = 11.sp, color = Color.Gray)
+                if (tlError.isNotEmpty()) { Spacer(Modifier.height(4.dp)); Text(tlError, fontSize = 11.sp, color = Color(0xFFDC2626)) }
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = tlCodeInput, onValueChange = { tlCodeInput = it },
+                        label = { Text("Kode Radio TL (khusus Tour Leader)") },
+                        modifier = Modifier.weight(1f), singleLine = true, shape = RoundedCornerShape(8.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Button(
+                        onClick = { if (tlCodeInput.isNotBlank()) { isTl = true; tlError = "" } },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A))
+                    ) { Text("Aktifkan") }
+                }
             }
+        }
+        // Sudah masukkan kode -> tampilkan tombol bicara. Kalau kodenya ternyata salah,
+        // percobaan bicara pertama akan ditolak server dan otomatis balik ke mode dengar.
+        else {
+            PushToTalkButton(isRecording, isSending, interactionSource)
+        }
+    }
+}
+
+@Composable
+private fun PushToTalkButton(isRecording: Boolean, isSending: Boolean, interactionSource: MutableInteractionSource) {
+    Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            when { isSending -> "Mengirim..."; isRecording -> "Merekam... lepas untuk kirim"; else -> "Tekan & tahan untuk bicara" },
+            fontSize = 12.sp, color = if (isRecording) Color(0xFFDC2626) else Color.Gray, fontWeight = FontWeight.Bold
+        )
+        Spacer(Modifier.height(12.dp))
+        Box(
+            modifier = Modifier
+                .size(84.dp)
+                .background(if (isRecording) Color(0xFFDC2626) else Color(0xFF0F7A5A), CircleShape)
+                .clickable(interactionSource = interactionSource, indication = null) { },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Default.Mic, contentDescription = "Tekan untuk bicara", tint = Color.White, modifier = Modifier.size(36.dp))
         }
     }
 }

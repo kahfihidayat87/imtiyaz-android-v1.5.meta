@@ -27,7 +27,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Calendar
 import java.util.TimeZone
 import kotlin.coroutines.resume
@@ -137,36 +140,47 @@ fun formatJamShalat(h: Double): String {
 // LOKASI — pakai LocationManager bawaan Android (bukan Google Play Services)
 // supaya tidak menambah dependency baru yang bisa memicu masalah build lagi.
 // ============================================================================
+// FIX: sebelumnya lastKnownLocation dipakai tanpa cek umur -- kalau HP sudah lama
+// tidak dapat fix baru (mis. GPS mati/di dalam gedung), lokasi yang dipakai bisa
+// jadi cache lama dari kota sebelumnya (mis. rumah di Indonesia) meski jamaah sudah
+// di Arab Saudi. Sekarang lastKnownLocation hanya dipakai kalau umurnya < 10 menit;
+// kalau lebih tua, langsung minta fix baru. Ditambah timeout 15 detik supaya kalau
+// tidak ada fix sama sekali, tidak menggantung selamanya -- jatuh ke default Mekkah.
+private const val LOCATION_MAX_AGE_MS = 10 * 60 * 1000L
+
 @Suppress("MissingPermission")
-private suspend fun getCurrentLocation(context: Context): Location? = suspendCancellableCoroutine { cont ->
-    val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-    val hasFine = context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-    val hasCoarse = context.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-    if (!hasFine && !hasCoarse) { cont.resume(null); return@suspendCancellableCoroutine }
+private suspend fun getCurrentLocation(context: Context): Location? = kotlinx.coroutines.withTimeoutOrNull(15000) {
+    suspendCancellableCoroutine { cont ->
+        val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        val hasFine = context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val hasCoarse = context.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (!hasFine && !hasCoarse) { cont.resume(null); return@suspendCancellableCoroutine }
 
-    val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER).filter {
-        try { lm.isProviderEnabled(it) } catch (e: Exception) { false }
-    }
-    // Coba lastKnownLocation dulu (instan) -- kalau kosong, minta 1 update baru.
-    val last = providers.mapNotNull { try { lm.getLastKnownLocation(it) } catch (e: Exception) { null } }
-        .maxByOrNull { it.time }
-    if (last != null) { cont.resume(last); return@suspendCancellableCoroutine }
-
-    if (providers.isEmpty()) { cont.resume(null); return@suspendCancellableCoroutine }
-    val listener = object : LocationListener {
-        override fun onLocationChanged(location: Location) {
-            try { lm.removeUpdates(this) } catch (e: Exception) {}
-            if (cont.isActive) cont.resume(location)
+        val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER).filter {
+            try { lm.isProviderEnabled(it) } catch (e: Exception) { false }
         }
-        override fun onProviderDisabled(provider: String) {}
-        override fun onProviderEnabled(provider: String) {}
-        @Deprecated("Deprecated in Java")
-        override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+        val last = providers.mapNotNull { try { lm.getLastKnownLocation(it) } catch (e: Exception) { null } }
+            .maxByOrNull { it.time }
+        if (last != null && System.currentTimeMillis() - last.time < LOCATION_MAX_AGE_MS) {
+            cont.resume(last); return@suspendCancellableCoroutine
+        }
+
+        if (providers.isEmpty()) { cont.resume(last); return@suspendCancellableCoroutine } // last (walau tua) lebih baik daripada tidak ada
+        val listener = object : LocationListener {
+            override fun onLocationChanged(location: Location) {
+                try { lm.removeUpdates(this) } catch (e: Exception) {}
+                if (cont.isActive) cont.resume(location)
+            }
+            override fun onProviderDisabled(provider: String) {}
+            override fun onProviderEnabled(provider: String) {}
+            @Deprecated("Deprecated in Java")
+            override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+        }
+        try {
+            providers.forEach { lm.requestLocationUpdates(it, 0L, 0f, listener, Looper.getMainLooper()) }
+        } catch (e: Exception) { cont.resume(last); return@suspendCancellableCoroutine }
+        cont.invokeOnCancellation { try { lm.removeUpdates(listener) } catch (e: Exception) {} }
     }
-    try {
-        lm.requestLocationUpdates(providers.first(), 0L, 0f, listener, Looper.getMainLooper())
-    } catch (e: Exception) { cont.resume(null); return@suspendCancellableCoroutine }
-    cont.invokeOnCancellation { try { lm.removeUpdates(listener) } catch (e: Exception) {} }
 }
 
 private val PRAYER_LABELS = listOf("Fajar" to "fajr", "Terbit" to "sunrise", "Dzuhur" to "dhuhr", "Ashar" to "asr", "Maghrib" to "maghrib", "Isya" to "isha")
@@ -217,7 +231,16 @@ fun PrayerTimesCard() {
         if (result == null) errorMsg = "Gagal menghitung jadwal untuk lokasi ini" else times = result
     }
 
-    LaunchedEffect(hasPermission) { loadTimes() }
+    LaunchedEffect(hasPermission) {
+        // FIX: sebelumnya hanya dihitung SEKALI saat kartu pertama muncul (atau saat
+        // status izin berubah), tidak pernah diperbarui lagi -- kalau jamaah berpindah
+        // kota (mis. dari Indonesia ke Madinah lalu Makkah), jadwal tidak ikut berubah
+        // sampai app ditutup-buka ulang. Sekarang diperbarui otomatis setiap 5 menit.
+        while (isActive) {
+            loadTimes()
+            delay(5 * 60 * 1000L)
+        }
+    }
 
     val nowHour = remember {
         val c = Calendar.getInstance(); c.get(Calendar.HOUR_OF_DAY) + c.get(Calendar.MINUTE) / 60.0

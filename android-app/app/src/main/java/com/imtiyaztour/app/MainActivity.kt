@@ -55,7 +55,7 @@ import java.io.FileOutputStream
 // ============================================================================
 // DATA MODELS
 // ============================================================================
-data class PaketUmrah(val id: String, val nama: String, val kategori: String, val durasi: String, val harga: String, val fasilitas: String, val badge: String = "")
+data class PaketUmrah(val id: String, val nama: String, val kategori: String, val durasi: String, val harga: String, val fasilitas: String, val badge: String = "", val kode_radio: String = "")
 data class Dokumen(val id: String, val nama: String, val deskripsi: String, var checked: Boolean = false)
 data class Doa(val id: String, val judul: String, val arab: String, val latin: String, val arti: String)
 
@@ -142,7 +142,8 @@ data class JamaahProfile(
     val sudah_dibayar: String? = null,
     val sisa_tagihan: String? = null,
     val status_pembayaran: String? = null,
-    val bukti_transfer: String? = null
+    val bukti_transfer: String? = null,
+    val checklist_dokumen: Map<String, Boolean>? = null
 )
 
 /** Format angka mentah dari server ("37400000") jadi "Rp 37.400.000". Tanpa dependency locale. */
@@ -515,57 +516,77 @@ fun DetailPaketScreen(paket: PaketUmrah, onBack: () -> Unit) {
 // FITUR 3 - sekarang tersimpan permanen (SharedPreferences) dan disinkron ke server
 // jika ID Jamaah sudah diisi di tab "Saya". Sebelumnya reset setiap pindah layar
 // dan tidak pernah memanggil /api/update-checklist.
+// FIX: sebelumnya checklist ini bisa diedit LANGSUNG oleh jamaah di HP-nya sendiri
+// (tersimpan di SharedPreferences lokal) SEKALIGUS oleh Admin di WP Admin -- dua
+// sumber yang saling menimpa, itulah sebabnya data di Admin dan di aplikasi tidak
+// pernah sinkron. Sekarang status dokumen HANYA diisi oleh Admin (dokumen fisik kan
+// memang diperiksa admin/petugas, bukan diakui sendiri oleh jamaah); aplikasi cuma
+// menampilkan keterangan "Lengkap/Tidak/Belum Diperiksa" per dokumen -- dan karena
+// ini data pribadi jamaah, layar ini sekarang digerbang login juga.
 @Composable
 fun DokumenScreen() {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    // Kunci ke AppData.dokumen: kalau daftar dari server datang belakangan (setelah tab
-    // ini pertama kali dibuka), checklist otomatis dihitung ulang dari daftar terbaru.
-    var dokumenList by remember(AppData.dokumen) {
-        val saved = Prefs.getChecklist(context, AppData.dokumen)
-        mutableStateOf(AppData.dokumen.map { it.copy(checked = saved[it.id] ?: false) })
-    }
-    var syncStatus by remember { mutableStateOf("") }
-    val progress = dokumenList.count { it.checked }
-    val totalDokumen = dokumenList.size
 
-    fun syncToServer() {
-        if (!Prefs.isLoggedIn(context)) { syncStatus = "Login dulu di tab Saya agar checklist tersimpan di server"; return }
-        val jamaahId = Prefs.getJamaahId(context)
-        val token = Prefs.getToken(context)
-        scope.launch {
-            try {
-                val map = dokumenList.associate { it.id to it.checked }
-                withContext(Dispatchers.IO) { ApiClient.service.updateChecklist(ChecklistRequest(jamaahId, token, map)) }
-                syncStatus = "Tersimpan ke server ✓"
-            } catch (e: Exception) {
-                syncStatus = "Gagal sync ke server: ${e.message}"
-            }
+    if (!Prefs.isLoggedIn(context)) {
+        Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Text("Checklist Dokumen hanya bisa diakses setelah login", fontWeight = FontWeight.Bold, fontSize = 16.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            Spacer(Modifier.height(8.dp))
+            Text("Silakan login lewat tab Saya terlebih dahulu.", fontSize = 12.sp, color = Color.Gray, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         }
+        return
     }
+
+    val jamaahId = Prefs.getJamaahId(context)
+    val token = Prefs.getToken(context)
+    var profile by remember { mutableStateOf<JamaahProfile?>(null) }
+    var loading by remember { mutableStateOf(true) }
+    var errorMsg by remember { mutableStateOf("") }
+
+    LaunchedEffect(jamaahId) {
+        loading = true; errorMsg = ""
+        try {
+            profile = withContext(Dispatchers.IO) { ApiClient.service.getMe(MeRequest(jamaahId, token)) }
+        } catch (e: Exception) {
+            errorMsg = "Gagal memuat status dokumen -- periksa koneksi internet"
+        }
+        loading = false
+    }
+
+    val checklist = profile?.checklist_dokumen ?: emptyMap()
+    val totalDokumen = AppData.dokumen.size
+    val lengkapCount = AppData.dokumen.count { checklist[it.id] == true }
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Text("Checklist Dokumen", fontWeight = FontWeight.Bold, fontSize = 20.sp)
-        Text("$totalDokumen dokumen wajib umrah", fontSize = 12.sp, color = Color.Gray)
+        Text("Diperiksa & diperbarui oleh Admin -- bukan diisi sendiri", fontSize = 12.sp, color = Color.Gray)
         Spacer(Modifier.height(12.dp))
-        val fraction = if (totalDokumen > 0) progress / totalDokumen.toFloat() else 0f
-        LinearProgressIndicator(progress = fraction, modifier = Modifier.fillMaxWidth().height(8.dp).padding(horizontal = 4.dp), color = Color(0xFF0F7A5A))
-        Spacer(Modifier.height(4.dp))
-        Text("$progress / $totalDokumen selesai - ${(fraction*100).toInt()}%", fontSize = 11.sp, color = Color(0xFF0F7A5A), fontWeight = FontWeight.Bold)
-        if (syncStatus.isNotEmpty()) { Text(syncStatus, fontSize = 10.sp, color = Color.Gray) }
-        Spacer(Modifier.height(16.dp))
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(dokumenList.size) { index ->
-                val doc = dokumenList[index]
-                Card(shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(1.dp)) {
-                    Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = doc.checked, onCheckedChange = { checked ->
-                            dokumenList = dokumenList.toMutableList().also { it[index] = doc.copy(checked = checked) }
-                            Prefs.setChecklistItem(context, doc.id, checked)
-                            syncToServer()
-                        })
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) { Text(doc.nama, fontWeight = FontWeight.Bold, fontSize = 14.sp); Text(doc.deskripsi, fontSize = 11.sp, color = Color.Gray) }
+
+        if (loading) {
+            LinearProgressIndicator(Modifier.fillMaxWidth())
+        } else if (errorMsg.isNotEmpty()) {
+            Text(errorMsg, fontSize = 12.sp, color = Color(0xFFDC2626))
+        } else {
+            val fraction = if (totalDokumen > 0) lengkapCount / totalDokumen.toFloat() else 0f
+            LinearProgressIndicator(progress = fraction, modifier = Modifier.fillMaxWidth().height(8.dp).padding(horizontal = 4.dp), color = Color(0xFF0F7A5A))
+            Spacer(Modifier.height(4.dp))
+            Text("$lengkapCount / $totalDokumen lengkap - ${(fraction*100).toInt()}%", fontSize = 11.sp, color = Color(0xFF0F7A5A), fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(16.dp))
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(AppData.dokumen) { doc ->
+                    val status = checklist[doc.id] // null = belum diperiksa, true = lengkap, false = tidak lengkap
+                    val (label, labelColor) = when (status) {
+                        true -> "Lengkap" to Color(0xFF0F7A5A)
+                        false -> "Tidak Lengkap" to Color(0xFFDC2626)
+                        else -> "Belum Diperiksa" to Color.Gray
+                    }
+                    Card(shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(1.dp), modifier = Modifier.fillMaxWidth()) {
+                        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) { Text(doc.nama, fontWeight = FontWeight.Bold, fontSize = 14.sp); Text(doc.deskripsi, fontSize = 11.sp, color = Color.Gray) }
+                            Spacer(Modifier.width(8.dp))
+                            Box(
+                                modifier = Modifier.background(labelColor.copy(alpha = 0.12f), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 6.dp)
+                            ) { Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = labelColor) }
+                        }
                     }
                 }
             }
@@ -794,7 +815,9 @@ fun SayaScreen(onRadioClick: () -> Unit) {
                     }
                 }) { Text("Keluar", fontSize = 12.sp) }
             }
+        }
 
+        item {
             Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3CD)), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text("Status Pembayaran", fontWeight = FontWeight.Bold, fontSize = 14.sp)
@@ -847,7 +870,9 @@ fun SayaScreen(onRadioClick: () -> Unit) {
                     Text("Upload bukti transfer - akan diverifikasi admin", fontSize = 10.sp, color = Color.Gray)
                 }
             }
-            // FITUR 8 - Skrining
+        }
+
+        item {
             Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(2.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text("Skrining Kesehatan Lansia", fontWeight = FontWeight.Bold, fontSize = 14.sp)
@@ -860,17 +885,22 @@ fun SayaScreen(onRadioClick: () -> Unit) {
                     }
                 }
             }
+        }
+
+        item {
             // Radio Tour Leader (walkie-talkie) -- hanya muncul setelah login, sesuai
             // permintaan; SayaScreen ini sendiri sudah menjadi gerbang login.
             Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(2.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text("Radio Tour Leader", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                    Text("Push-to-talk untuk koordinasi rombongan selama prosesi umrah", fontSize = 11.sp, color = Color.Gray)
+                    Text("Dengarkan arahan Tour Leader secara langsung selama prosesi umrah", fontSize = 11.sp, color = Color.Gray)
                     Spacer(Modifier.height(12.dp))
                     Button(onClick = onRadioClick, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)), shape = RoundedCornerShape(12.dp)) { Text("Buka Radio") }
                 }
             }
-            // Profil
+        }
+
+        item {
             Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(1.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text(AppData.kontak.nama_travel, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF0F7A5A))
