@@ -247,7 +247,53 @@ class MainActivity : ComponentActivity() {
         setContent { ImtiyazApp() }
     }
 }
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 
+private val LOCATION_PERMISSION_REQUEST_CODE = 1001
+
+private fun checkAndRequestLocationPermission() {
+    if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+        != PackageManager.PERMISSION_GRANTED) {
+        ActivityCompat.requestPermissions(
+            this,
+            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
+            LOCATION_PERMISSION_REQUEST_CODE
+        )
+    } else {
+        // Izin sudah diberikan, ambil data jadwal shalat berdasarkan lokasi GPS
+        loadPrayerTimesByGPS()
+    }
+}
+
+override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+    super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+    if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {
+        if ((grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
+            loadPrayerTimesByGPS()
+        } else {
+            // Gunakan default lokasi (misal: Yogyakarta) jika izin ditolak
+            loadDefaultPrayerTimes()
+        }
+    }
+}
+package com.imtiyaztour.app
+
+import android.os.Bundle
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+
+class MainActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        // Wajib dipanggil sebelum setContentView untuk Android 12+ Splash Screen
+        installSplashScreen()
+
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+    }
+}
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ImtiyazApp() {

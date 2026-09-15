@@ -1,0 +1,15 @@
+<resources>
+    <!-- Tema Splash Screen untuk Android 12+ -->
+    <style name="Theme.App.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/white</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="postSplashScreenTheme">@style/Theme.ImtiyazTour</item>
+    </style>
+
+    <style name="Theme.ImtiyazTour" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- Warna utama aplikasi Anda -->
+        <item name="colorPrimary">@color/purple_700</item>
+        <item name="colorPrimaryVariant">@color/purple_700</item>
+        <item name="colorOnPrimary">@color/white</item>
+    </style>
+</resources>
