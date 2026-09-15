@@ -1,3 +1,3 @@
-# Imtiyaz FIX COMPLETE - Build APK via Github - No Android Studio
+# DEBUG LOG BUILD - FIX Build Failed in 10s
 
-FIX Node24: build-apk.yml ada, manual SDK install, work 100%
+Workflow ini print full log biar keliatan error aslinya.
