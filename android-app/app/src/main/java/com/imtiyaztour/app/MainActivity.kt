@@ -133,6 +133,30 @@ data class ChecklistRequest(val jamaah_id: String, val token: String, val checkl
 data class LoginRequest(val username: String, val password: String)
 data class LoginResponse(val success: Boolean? = null, val jamaah_id: Int? = null, val nama: String? = null, val token: String? = null, val error: String? = null)
 data class LogoutRequest(val jamaah_id: String, val token: String)
+data class MeRequest(val jamaah_id: String, val token: String)
+data class JamaahProfile(
+    val id: Int? = null,
+    val nama: String? = null,
+    val paket_id: String? = null,
+    val total_tagihan: String? = null,
+    val sudah_dibayar: String? = null,
+    val sisa_tagihan: String? = null,
+    val status_pembayaran: String? = null,
+    val bukti_transfer: String? = null
+)
+
+/** Format angka mentah dari server ("37400000") jadi "Rp 37.400.000". Tanpa dependency locale. */
+fun formatRupiah(raw: String?): String {
+    val n = raw?.toLongOrNull()
+    if (n == null) return "Belum diisi Admin"
+    val digits = n.toString()
+    val grouped = StringBuilder()
+    for ((i, c) in digits.reversed().withIndex()) {
+        if (i > 0 && i % 3 == 0) grouped.append('.')
+        grouped.append(c)
+    }
+    return "Rp " + grouped.reverse().toString()
+}
 
 interface ApiService {
     // FIX: sebelumnya tidak ada fungsi fetch untuk paket/dokumen/kontak sama sekali,
@@ -159,6 +183,9 @@ interface ApiService {
 
     @POST("api/logout")
     suspend fun logout(@Body body: LogoutRequest): Map<String, Boolean>
+
+    @POST("api/me")
+    suspend fun getMe(@Body body: MeRequest): JamaahProfile
 
     @Multipart
     @POST("api/upload-bukti")
@@ -271,6 +298,8 @@ fun ImtiyazApp() {
     var selectedPaket by remember { mutableStateOf<PaketUmrah?>(null) }
     var selectedDoa by remember { mutableStateOf<Doa?>(null) }
     var selectedSurah by remember { mutableStateOf<Int?>(null) }
+    var showItinerary by remember { mutableStateOf(false) }
+    var showRadio by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     // Izin lokasi diminta SEKALI di awal (sebelum masuk ke halaman utama), bukan
@@ -341,13 +370,15 @@ fun ImtiyazApp() {
                 selectedPaket != null -> DetailPaketScreen(paket = selectedPaket!!, onBack = { selectedPaket = null })
                 selectedDoa != null -> DetailDoaScreen(doa = selectedDoa!!, onBack = { selectedDoa = null })
                 selectedSurah != null -> SurahDetailScreen(nomor = selectedSurah!!, onBack = { selectedSurah = null })
+                showItinerary -> ItineraryScreen(onBack = { showItinerary = false })
+                showRadio -> RadioScreen(onBack = { showRadio = false })
                 else -> when (selectedTab) {
-                    0 -> BerandaScreen(onPaketClick = { selectedPaket = it })
+                    0 -> BerandaScreen(onPaketClick = { selectedPaket = it }, onItineraryClick = { showItinerary = true })
                     1 -> PaketListScreen(onPaketClick = { selectedPaket = it })
                     2 -> QuranScreen(onSurahClick = { selectedSurah = it })
                     3 -> DoaListScreen(onDoaClick = { selectedDoa = it })
                     4 -> DokumenScreen()
-                    5 -> SayaScreen()
+                    5 -> SayaScreen(onRadioClick = { showRadio = true })
                 }
             }
         }
@@ -368,18 +399,42 @@ fun SplashScreen() {
 }
 
 @Composable
-fun BerandaScreen(onPaketClick: (PaketUmrah) -> Unit) {
+fun BerandaScreen(onPaketClick: (PaketUmrah) -> Unit, onItineraryClick: () -> Unit) {
+    val context = LocalContext.current
+    val namaJamaah = Prefs.getNama(context)
     LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF0F7A5A)), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(20.dp)) {
+                    // FIX: sebelumnya selalu menampilkan nama travel meski jamaah sudah login --
+                    // sekarang tampil nama jamaah yang sedang login (mis. "Yasir Ismail"),
+                    // dan baru jatuh kembali ke nama travel kalau belum login.
                     Text("Assalamualaikum,", color = Color(0xFFD1FAE5), fontSize = 14.sp)
-                    Text(AppData.kontak.nama_travel, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                    Text(
+                        namaJamaah.ifBlank { AppData.kontak.nama_travel },
+                        color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp
+                    )
                     Text("Melayani Seperti Keluarga", color = Color(0xFFFFD700), fontSize = 12.sp)
                 }
             }
             Spacer(Modifier.height(16.dp))
             PrayerTimesCard()
+            Spacer(Modifier.height(16.dp))
+            Card(
+                shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(1.dp),
+                modifier = Modifier.fillMaxWidth().clickable { onItineraryClick() }
+            ) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Map, contentDescription = null, tint = Color(0xFF0F7A5A))
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Itinerary Umrah 9 Hari", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text("Ramadhan & Reguler -- jadwal harian umum", fontSize = 11.sp, color = Color.Gray)
+                    }
+                    Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF0F7A5A))
+                }
+            }
             Spacer(Modifier.height(16.dp))
             Text("Pilih Paket Umrah", fontWeight = FontWeight.Bold, fontSize = 18.sp)
             Text("${AppData.paket.size} pilihan, profesional & amanah", fontSize = 12.sp, color = Color.Gray)
@@ -433,7 +488,7 @@ fun DetailPaketScreen(paket: PaketUmrah, onBack: () -> Unit) {
                     Text("Fasilitas:", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     Text(paket.fasilitas, fontSize = 13.sp, color = Color(0xFF374151))
                     Divider(Modifier.padding(vertical = 16.dp))
-                    Text("Form Pendaftaran (Fitur 1 - WA Langsung)", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF0F7A5A))
+                    Text("Form Pendaftaran", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF0F7A5A))
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(value = nama, onValueChange = { nama = it }, label = { Text("Nama Lengkap") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
                     Spacer(Modifier.height(8.dp))
@@ -490,7 +545,7 @@ fun DokumenScreen() {
     }
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Checklist Dokumen (Fitur 3)", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+        Text("Checklist Dokumen", fontWeight = FontWeight.Bold, fontSize = 20.sp)
         Text("$totalDokumen dokumen wajib umrah", fontSize = 12.sp, color = Color.Gray)
         Spacer(Modifier.height(12.dp))
         val fraction = if (totalDokumen > 0) progress / totalDokumen.toFloat() else 0f
@@ -522,7 +577,7 @@ fun DokumenScreen() {
 fun DoaListScreen(onDoaClick: (Doa) -> Unit) {
     LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
-            Text("Panduan Doa Offline (Fitur 4)", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+            Text("Panduan Doa", fontWeight = FontWeight.Bold, fontSize = 20.sp)
             Text("Bisa dibaca tanpa internet", fontSize = 12.sp, color = Color.Gray)
             Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFF0FDF4)), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) { Text("✅ Offline Mode - Tanpa internet di pesawat / Masjidil Haram", fontSize = 10.sp, color = Color(0xFF0F7A5A), modifier = Modifier.padding(8.dp)) }
             Spacer(Modifier.height(8.dp))
@@ -645,7 +700,7 @@ fun LoginScreen(onLoggedIn: () -> Unit) {
 // FITUR 2 - tombol Galeri/Kamera sekarang benar-benar meng-upload ke /api/upload-bukti.
 // Sebelumnya onClick = {} (kosong total).
 @Composable
-fun SayaScreen() {
+fun SayaScreen(onRadioClick: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -665,10 +720,13 @@ fun SayaScreen() {
     var showSkrining by remember { mutableStateOf(false) }
     var cameraUri by remember { mutableStateOf<Uri?>(null) }
 
-    var total by remember { mutableStateOf("Rp 37.400.000") }
-    var sudah by remember { mutableStateOf("Rp 10.000.000") }
-    var sisa by remember { mutableStateOf("Rp 27.400.000") }
-    var status by remember { mutableStateOf("Belum Lunas") }
+    // FIX: sebelumnya angka-angka ini hardcode ("Rp 37.400.000", "Paket Linuwih", dst)
+    // -- tidak pernah diganti data jamaah yang benar-benar login, jadi terlihat salah/
+    // tidak sesuai. Sekarang diambil dari server lewat endpoint /api/me yang memverifikasi
+    // token, bukan sekadar dipercaya dari input jamaah_id.
+    var profile by remember { mutableStateOf<JamaahProfile?>(null) }
+    var profileLoading by remember { mutableStateOf(true) }
+    var profileError by remember { mutableStateOf("") }
 
     fun handleUnauthorized(message: String?): Boolean {
         // Kalau server bilang token tidak valid (kedaluwarsa / dipakai di perangkat lain
@@ -680,13 +738,24 @@ fun SayaScreen() {
         return false
     }
 
+    suspend fun loadProfile() {
+        profileLoading = true; profileError = ""
+        try {
+            profile = withContext(Dispatchers.IO) { ApiClient.service.getMe(MeRequest(jamaahId, token)) }
+        } catch (e: Exception) {
+            if (!handleUnauthorized(e.message)) profileError = "Gagal memuat data akun -- periksa koneksi internet"
+        }
+        profileLoading = false
+    }
+    LaunchedEffect(jamaahId) { loadProfile() }
+
     fun doUpload(file: File) {
         isUploading = true
         scope.launch {
             val result = uploadBuktiFile(context, jamaahId, token, file)
             isUploading = false
             result.fold(
-                onSuccess = { uploadStatus = it.message ?: "Berhasil diupload" },
+                onSuccess = { uploadStatus = it.message ?: "Berhasil diupload"; loadProfile() },
                 onFailure = { if (!handleUnauthorized(it.message)) uploadStatus = "Gagal upload: ${it.message}" }
             )
         }
@@ -726,16 +795,31 @@ fun SayaScreen() {
                 }) { Text("Keluar", fontSize = 12.sp) }
             }
 
-            // FITUR 2 - Status Pembayaran
             Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3CD)), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text("Status Pembayaran (Fitur 2)", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text("Status Pembayaran", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     Spacer(Modifier.height(8.dp))
-                    Text("Paket: Linuwih - 9 Hari", fontSize = 11.sp, color = Color.Gray)
-                    Text("Total: $total", fontSize = 13.sp)
-                    Text("Sudah Dibayar: $sudah", fontSize = 13.sp)
-                    Text("Sisa: $sisa", fontWeight = FontWeight.Bold, color = Color(0xFFDC2626), fontSize = 14.sp)
-                    Text("Status: $status", fontWeight = FontWeight.Bold, color = if (status == "Lunas") Color(0xFF0F7A5A) else Color(0xFFDC2626), fontSize = 13.sp)
+
+                    if (profileLoading) {
+                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                    } else if (profileError.isNotEmpty()) {
+                        Text(profileError, fontSize = 12.sp, color = Color(0xFFDC2626))
+                    } else if (profile == null || profile?.paket_id.isNullOrBlank()) {
+                        Text(
+                            "Data pendaftaran Anda belum diisi Admin. Hubungi Admin Imtiyaz Tour untuk memastikan pendaftaran Anda tercatat.",
+                            fontSize = 12.sp, color = Color(0xFF374151)
+                        )
+                    } else {
+                        val p = profile!!
+                        val paketName = AppData.paket.find { it.id == p.paket_id }?.nama ?: p.paket_id ?: "-"
+                        val statusText = p.status_pembayaran?.takeIf { it.isNotBlank() } ?: "Belum Lunas"
+                        Text("Paket: $paketName", fontSize = 11.sp, color = Color.Gray)
+                        Text("Total: ${formatRupiah(p.total_tagihan)}", fontSize = 13.sp)
+                        Text("Sudah Dibayar: ${formatRupiah(p.sudah_dibayar)}", fontSize = 13.sp)
+                        Text("Sisa: ${formatRupiah(p.sisa_tagihan)}", fontWeight = FontWeight.Bold, color = Color(0xFFDC2626), fontSize = 14.sp)
+                        Text("Status: $statusText", fontWeight = FontWeight.Bold, color = if (statusText == "Lunas") Color(0xFF0F7A5A) else Color(0xFFDC2626), fontSize = 13.sp)
+                    }
+
                     Spacer(Modifier.height(12.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
@@ -766,7 +850,7 @@ fun SayaScreen() {
             // FITUR 8 - Skrining
             Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(2.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text("Skrining Kesehatan Lansia (Fitur 8)", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text("Skrining Kesehatan Lansia", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     Text("29 Pertanyaan A-H - Wajib untuk Kamulyan & Linuwih", fontSize = 11.sp, color = Color.Gray)
                     Spacer(Modifier.height(12.dp))
                     if (!showSkrining) {
@@ -774,6 +858,16 @@ fun SayaScreen() {
                     } else {
                         SkriningForm(jamaahId = jamaahId, token = token, onClose = { showSkrining = false }, onUnauthorized = { handleUnauthorized("Token login") })
                     }
+                }
+            }
+            // Radio Tour Leader (walkie-talkie) -- hanya muncul setelah login, sesuai
+            // permintaan; SayaScreen ini sendiri sudah menjadi gerbang login.
+            Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(2.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text("Radio Tour Leader", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text("Push-to-talk untuk koordinasi rombongan selama prosesi umrah", fontSize = 11.sp, color = Color.Gray)
+                    Spacer(Modifier.height(12.dp))
+                    Button(onClick = onRadioClick, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)), shape = RoundedCornerShape(12.dp)) { Text("Buka Radio") }
                 }
             }
             // Profil
