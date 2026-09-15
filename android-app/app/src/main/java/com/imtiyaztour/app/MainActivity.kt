@@ -1,11 +1,16 @@
 
 package com.imtiyaztour.app
 
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,8 +27,29 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.OkHttpClient
+import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.logging.HttpLoggingInterceptor
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
+import retrofit2.http.Body
+import retrofit2.http.GET
+import retrofit2.http.Multipart
+import retrofit2.http.POST
+import retrofit2.http.Part
+import java.io.File
+import java.io.FileOutputStream
 
-// DATA - 5 PAKET NATIVE TANPA WEBVIEW
+// ============================================================================
+// DATA MODELS
+// ============================================================================
 data class PaketUmrah(val id: String, val nama: String, val kategori: String, val durasi: String, val harga: String, val fasilitas: String, val badge: String = "")
 data class Dokumen(val id: String, val nama: String, val deskripsi: String, var checked: Boolean = false)
 data class Doa(val id: String, val judul: String, val arab: String, val latin: String, val arti: String)
@@ -53,6 +79,97 @@ val listDoa = listOf(
     Doa("ziarah", "Doa Ziarah Madinah", "السَّلَامُ عَلَيْكَ يَا رَسُولَ اللَّهِ", "As-salaamu 'alaika yaa Rasuulallaah", "Salam sejahtera atasmu wahai Rasulullah"),
     Doa("harian", "Doa Sehari-hari", "اللَّهُمَّ إِنِّي أَسْأَلُكَ عِلْمًا نَافِعًا", "Allaahumma innii as-aluka 'ilman naafi'an", "Ya Allah, sesungguhnya aku memohon ilmu yang bermanfaat")
 )
+
+// ============================================================================
+// NETWORKING
+// Sebelumnya TIDAK ADA sama sekali di file asli — app.js/plugin PHP tidak pernah
+// dipanggil oleh Android app. Base URL mengikuti dokumentasi di dashboard plugin
+// WordPress ("api.pastiumrah.com"). GANTI sesuai domain aktual server Node.js Anda.
+// ============================================================================
+object ApiConfig {
+    const val BASE_URL = "https://api.pastiumrah.com/" // TODO: sesuaikan domain produksi
+}
+
+data class UploadBuktiResponse(val success: Boolean? = null, val bukti_url: String? = null, val status: String? = null, val message: String? = null, val error: String? = null)
+data class ChecklistResponse(val success: Boolean? = null, val message: String? = null, val error: String? = null)
+data class SkriningResponse(val success: Boolean? = null, val id: Any? = null, val message: String? = null, val error: String? = null)
+data class ChecklistRequest(val jamaah_id: String, val checklist: Map<String, Boolean>)
+
+interface ApiService {
+    @Multipart
+    @POST("api/upload-bukti")
+    suspend fun uploadBukti(
+        @Part("jamaah_id") jamaahId: okhttp3.RequestBody,
+        @Part bukti: MultipartBody.Part
+    ): UploadBuktiResponse
+
+    @POST("api/update-checklist")
+    suspend fun updateChecklist(@Body body: ChecklistRequest): ChecklistResponse
+
+    @POST("api/skrining")
+    suspend fun submitSkrining(@Body body: Map<String, String>): SkriningResponse
+}
+
+object ApiClient {
+    val service: ApiService by lazy {
+        val logging = HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC }
+        val client = OkHttpClient.Builder().addInterceptor(logging).build()
+        Retrofit.Builder()
+            .baseUrl(ApiConfig.BASE_URL)
+            .client(client)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(ApiService::class.java)
+    }
+}
+
+// ============================================================================
+// PENYIMPANAN LOKAL SEDERHANA (SharedPreferences)
+// Sebelumnya checklist & data skrining hilang setiap kali layar berpindah
+// karena hanya disimpan di `remember { mutableStateOf(...) }`.
+// ============================================================================
+object Prefs {
+    private const val NAME = "imtiyaz_prefs"
+    fun get(context: Context) = context.getSharedPreferences(NAME, Context.MODE_PRIVATE)
+
+    fun getJamaahId(context: Context): String = get(context).getString("jamaah_id", "") ?: ""
+    fun setJamaahId(context: Context, value: String) = get(context).edit().putString("jamaah_id", value).apply()
+
+    fun getChecklist(context: Context): MutableMap<String, Boolean> {
+        val prefs = get(context)
+        return listDokumen.associate { it.id to prefs.getBoolean("doc_${it.id}", false) }.toMutableMap()
+    }
+    fun setChecklistItem(context: Context, key: String, value: Boolean) =
+        get(context).edit().putBoolean("doc_$key", value).apply()
+}
+
+// Menyalin konten Uri (misal dari galeri) ke file cache sementara agar bisa di-upload sebagai Multipart
+fun uriToTempFile(context: Context, uri: Uri): File {
+    val dir = File(context.cacheDir, "bukti").apply { mkdirs() }
+    val outFile = File(dir, "bukti_${System.currentTimeMillis()}.jpg")
+    context.contentResolver.openInputStream(uri)?.use { input ->
+        FileOutputStream(outFile).use { output -> input.copyTo(output) }
+    }
+    return outFile
+}
+
+fun createCameraImageUri(context: Context): Uri {
+    val dir = File(context.cacheDir, "bukti").apply { mkdirs() }
+    val file = File(dir, "camera_${System.currentTimeMillis()}.jpg")
+    return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+}
+
+suspend fun uploadBuktiFile(context: Context, jamaahId: String, file: File): Result<UploadBuktiResponse> = withContext(Dispatchers.IO) {
+    try {
+        val idBody = jamaahId.toRequestBody("text/plain".toMediaTypeOrNull())
+        val reqFile = file.asRequestBody("image/*".toMediaTypeOrNull())
+        val part = MultipartBody.Part.createFormData("bukti", file.name, reqFile)
+        val response = ApiClient.service.uploadBukti(idBody, part)
+        Result.success(response)
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -189,10 +306,34 @@ fun DetailPaketScreen(paket: PaketUmrah, onBack: () -> Unit) {
     }
 }
 
+// FITUR 3 - sekarang tersimpan permanen (SharedPreferences) dan disinkron ke server
+// jika ID Jamaah sudah diisi di tab "Saya". Sebelumnya reset setiap pindah layar
+// dan tidak pernah memanggil /api/update-checklist.
 @Composable
 fun DokumenScreen() {
-    var dokumenList by remember { mutableStateOf(listDokumen.map { it.copy() }) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var dokumenList by remember {
+        val saved = Prefs.getChecklist(context)
+        mutableStateOf(listDokumen.map { it.copy(checked = saved[it.id] ?: false) })
+    }
+    var syncStatus by remember { mutableStateOf("") }
     val progress = dokumenList.count { it.checked }
+
+    fun syncToServer() {
+        val jamaahId = Prefs.getJamaahId(context)
+        if (jamaahId.isBlank()) { syncStatus = "Isi ID Jamaah di tab Saya agar checklist tersimpan di server"; return }
+        scope.launch {
+            try {
+                val map = dokumenList.associate { it.id to it.checked }
+                withContext(Dispatchers.IO) { ApiClient.service.updateChecklist(ChecklistRequest(jamaahId, map)) }
+                syncStatus = "Tersimpan ke server ✓"
+            } catch (e: Exception) {
+                syncStatus = "Gagal sync ke server: ${e.message}"
+            }
+        }
+    }
+
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Text("Checklist Dokumen (Fitur 3)", fontWeight = FontWeight.Bold, fontSize = 20.sp)
         Text("6 dokumen wajib umrah", fontSize = 12.sp, color = Color.Gray)
@@ -200,13 +341,18 @@ fun DokumenScreen() {
         LinearProgressIndicator(progress = progress / 6f, modifier = Modifier.fillMaxWidth().height(8.dp).padding(horizontal = 4.dp), color = Color(0xFF0F7A5A))
         Spacer(Modifier.height(4.dp))
         Text("$progress / 6 selesai - ${((progress/6f)*100).toInt()}%", fontSize = 11.sp, color = Color(0xFF0F7A5A), fontWeight = FontWeight.Bold)
+        if (syncStatus.isNotEmpty()) { Text(syncStatus, fontSize = 10.sp, color = Color.Gray) }
         Spacer(Modifier.height(16.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(dokumenList.size) { index ->
                 val doc = dokumenList[index]
                 Card(shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(1.dp)) {
                     Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = doc.checked, onCheckedChange = { checked -> dokumenList = dokumenList.toMutableList().also { it[index] = doc.copy(checked = checked) } })
+                        Checkbox(checked = doc.checked, onCheckedChange = { checked ->
+                            dokumenList = dokumenList.toMutableList().also { it[index] = doc.copy(checked = checked) }
+                            Prefs.setChecklistItem(context, doc.id, checked)
+                            syncToServer()
+                        })
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) { Text(doc.nama, fontWeight = FontWeight.Bold, fontSize = 14.sp); Text(doc.deskripsi, fontSize = 11.sp, color = Color.Gray) }
                     }
@@ -260,17 +406,77 @@ fun DetailDoaScreen(doa: Doa, onBack: () -> Unit) {
     }
 }
 
+// FITUR 2 - tombol Galeri/Kamera sekarang benar-benar meng-upload ke /api/upload-bukti.
+// Sebelumnya onClick = {} (kosong total).
 @Composable
 fun SayaScreen() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    var jamaahId by remember { mutableStateOf(Prefs.getJamaahId(context)) }
+    var uploadStatus by remember { mutableStateOf("") }
+    var isUploading by remember { mutableStateOf(false) }
+    var showSkrining by remember { mutableStateOf(false) }
+    var cameraUri by remember { mutableStateOf<Uri?>(null) }
+
     var total by remember { mutableStateOf("Rp 37.400.000") }
     var sudah by remember { mutableStateOf("Rp 10.000.000") }
     var sisa by remember { mutableStateOf("Rp 27.400.000") }
     var status by remember { mutableStateOf("Belum Lunas") }
-    var showSkrining by remember { mutableStateOf(false) }
+
+    fun doUpload(file: File) {
+        if (jamaahId.isBlank()) { uploadStatus = "Isi ID Jamaah dulu sebelum upload bukti"; return }
+        isUploading = true
+        scope.launch {
+            val result = uploadBuktiFile(context, jamaahId, file)
+            isUploading = false
+            uploadStatus = result.fold(
+                onSuccess = { it.message ?: "Berhasil diupload" },
+                onFailure = { "Gagal upload: ${it.message}" }
+            )
+        }
+    }
+
+    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) doUpload(uriToTempFile(context, uri))
+    }
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        if (success && cameraUri != null) {
+            // salin dari content:// FileProvider uri ke File nyata untuk di-upload
+            doUpload(uriToTempFile(context, cameraUri!!))
+        }
+    }
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            val uri = createCameraImageUri(context)
+            cameraUri = uri
+            cameraLauncher.launch(uri)
+        } else {
+            uploadStatus = "Izin kamera ditolak"
+        }
+    }
 
     LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item {
             Text("Saya", fontWeight = FontWeight.Bold, fontSize = 22.sp)
+
+            // ID Jamaah - dibutuhkan agar upload bukti, checklist, dan skrining bisa
+            // dikaitkan ke data jamaah yang benar di WordPress (diberikan oleh admin).
+            Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(1.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text("ID Jamaah", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Text("Diberikan oleh admin saat pendaftaran", fontSize = 10.sp, color = Color.Gray)
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = jamaahId,
+                        onValueChange = { jamaahId = it; Prefs.setJamaahId(context, it) },
+                        label = { Text("Contoh: 123") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                }
+            }
+
             // FITUR 2 - Status Pembayaran
             Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3CD)), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
@@ -283,9 +489,28 @@ fun SayaScreen() {
                     Text("Status: $status", fontWeight = FontWeight.Bold, color = if (status == "Lunas") Color(0xFF0F7A5A) else Color(0xFFDC2626), fontSize = 13.sp)
                     Spacer(Modifier.height(12.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = {}, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)), shape = RoundedCornerShape(8.dp)) { Text("Galeri", fontSize = 12.sp) }
-                        Button(onClick = {}, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)), shape = RoundedCornerShape(8.dp)) { Text("Kamera", fontSize = 12.sp) }
+                        Button(
+                            onClick = { galleryLauncher.launch("image/*") },
+                            enabled = !isUploading,
+                            modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)), shape = RoundedCornerShape(8.dp)
+                        ) { Text("Galeri", fontSize = 12.sp) }
+                        Button(
+                            onClick = {
+                                val granted = context.checkSelfPermission(android.Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+                                if (granted) {
+                                    val uri = createCameraImageUri(context)
+                                    cameraUri = uri
+                                    cameraLauncher.launch(uri)
+                                } else {
+                                    cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+                                }
+                            },
+                            enabled = !isUploading,
+                            modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)), shape = RoundedCornerShape(8.dp)
+                        ) { Text("Kamera", fontSize = 12.sp) }
                     }
+                    if (isUploading) { Spacer(Modifier.height(8.dp)); LinearProgressIndicator(Modifier.fillMaxWidth()) }
+                    if (uploadStatus.isNotEmpty()) { Spacer(Modifier.height(6.dp)); Text(uploadStatus, fontSize = 11.sp, color = Color(0xFF0F7A5A)) }
                     Text("Upload bukti transfer - akan diverifikasi admin", fontSize = 10.sp, color = Color.Gray)
                 }
             }
@@ -298,7 +523,7 @@ fun SayaScreen() {
                     if (!showSkrining) {
                         Button(onClick = { showSkrining = true }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)), shape = RoundedCornerShape(12.dp)) { Text("Mulai Skrining - 29 Pertanyaan") }
                     } else {
-                        SkriningForm(onClose = { showSkrining = false })
+                        SkriningForm(jamaahId = jamaahId, onClose = { showSkrining = false })
                     }
                 }
             }
@@ -314,14 +539,19 @@ fun SayaScreen() {
     }
 }
 
+// FITUR 8 - tombol "Kirim ke Admin" sekarang benar-benar POST ke /api/skrining.
+// Sebelumnya hanya memanggil onClose() tanpa mengirim data ke mana pun.
 @Composable
-fun SkriningForm(onClose: () -> Unit) {
+fun SkriningForm(jamaahId: String, onClose: () -> Unit) {
+    val scope = rememberCoroutineScope()
     var step by remember { mutableStateOf(1) }
     var nama by remember { mutableStateOf("") }
     var penyakit by remember { mutableStateOf("") }
     var obat by remember { mutableStateOf("") }
     var alergi by remember { mutableStateOf("") }
     var kontakDarurat by remember { mutableStateOf("") }
+    var isSending by remember { mutableStateOf(false) }
+    var sendResult by remember { mutableStateOf("") }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Langkah $step / 4", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF0F7A5A))
@@ -346,12 +576,43 @@ fun SkriningForm(onClose: () -> Unit) {
                 Text("D. Konfirmasi & Kirim", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 Text("Nama: $nama\nPenyakit: $penyakit\nObat: $obat\nAlergi: $alergi\nDarurat: $kontakDarurat", fontSize = 11.sp, color = Color(0xFF374151))
                 Text("Data akan dikirim ke Admin untuk asesmen medis pra-berangkat (Linuwih & Kamulyan wajib)", fontSize = 10.sp, color = Color.Gray)
+                if (isSending) { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+                if (sendResult.isNotEmpty()) { Text(sendResult, fontSize = 11.sp, color = Color(0xFF0F7A5A)) }
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             if (step > 1) { OutlinedButton(onClick = { step-- }, modifier = Modifier.weight(1f)) { Text("Kembali") } }
-            if (step < 4) { Button(onClick = { step++ }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A))) { Text("Lanjut") } }
-            else { Button(onClick = onClose, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A))) { Text("Kirim ke Admin") } }
+            if (step < 4) {
+                Button(onClick = { step++ }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A))) { Text("Lanjut") }
+            } else {
+                Button(
+                    onClick = {
+                        if (jamaahId.isBlank()) { sendResult = "Isi ID Jamaah dulu di atas sebelum mengirim"; return@Button }
+                        isSending = true
+                        scope.launch {
+                            try {
+                                val body = mapOf(
+                                    "jamaah_id" to jamaahId,
+                                    "nama_lengkap" to nama,
+                                    "kontak_darurat" to kontakDarurat,
+                                    "riwayat_penyakit" to penyakit,
+                                    "obat_rutin" to obat,
+                                    "alergi" to alergi
+                                )
+                                val resp = withContext(Dispatchers.IO) { ApiClient.service.submitSkrining(body) }
+                                sendResult = resp.message ?: "Terkirim"
+                                isSending = false
+                                onClose()
+                            } catch (e: Exception) {
+                                isSending = false
+                                sendResult = "Gagal mengirim: ${e.message}"
+                            }
+                        }
+                    },
+                    enabled = !isSending,
+                    modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A))
+                ) { Text("Kirim ke Admin") }
+            }
         }
     }
 }

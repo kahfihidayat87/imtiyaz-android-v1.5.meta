@@ -1,5 +1,9 @@
+# Node backend
 node_modules/
 .env
+backend/uploads/
+
+# Android
 android-app/.gradle/
 android-app/build/
 android-app/app/build/

@@ -1,4 +1,4 @@
-name: Build APK - FIX Line2 Error - v1.5.0
+name: Build APK
 
 on:
   push:
@@ -17,7 +17,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Android SDK - FIX Node24
+      - name: Setup Android SDK
         run: |
           export ANDROID_HOME=$HOME/android-sdk
           mkdir -p $ANDROID_HOME/cmdline-tools
@@ -34,18 +34,15 @@ jobs:
       - name: Create local.properties
         run: echo "sdk.dir=$HOME/android-sdk" > android-app/local.properties
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: '8.2'
-
-      - name: Generate Wrapper
+      # FIX: repo sekarang sudah menyertakan gradlew + gradle-wrapper.jar asli
+      # (sebelumnya file stub 4 baris tanpa jar). Step "Generate Wrapper" yang lama
+      # dihapus karena tidak lagi diperlukan -- gradlew di repo sudah lengkap dan
+      # akan otomatis mengunduh distribusi Gradle 8.2 sesuai gradle-wrapper.properties.
+      - name: Make gradlew executable
         working-directory: android-app
-        run: |
-          gradle wrapper --gradle-version 8.2
-          chmod +x gradlew
+        run: chmod +x gradlew
 
-      - name: Build APK - FIX Line2
+      - name: Build APK
         working-directory: android-app
         run: |
           export ANDROID_HOME=$HOME/android-sdk
@@ -54,5 +51,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Imtiyaz-APK-FIX-Line2
+          name: Imtiyaz-APK
           path: android-app/app/build/outputs/apk/debug/*.apk
