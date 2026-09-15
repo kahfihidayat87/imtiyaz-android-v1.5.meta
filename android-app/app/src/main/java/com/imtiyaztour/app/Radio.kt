@@ -70,9 +70,13 @@ import java.util.Locale
 // ============================================================================
 
 data class RadioSendResponse(val success: Boolean? = null, val channel: String? = null, val error: String? = null)
-data class RadioMessage(val id: String, val nama: String, val time: Long, val audio: String? = null)
+data class RadioMessage(val id: String, val jamaah_id: String? = null, val nama: String, val time: Long, val audio: String? = null)
 data class RadioPollRequest(val jamaah_id: String, val token: String, val after: Long)
-data class RadioPollResponse(val channel: String? = null, val nama_saya: String? = null, val server_time: Long? = null, val requires_tl_code: Boolean? = null, val messages: List<RadioMessage> = emptyList(), val error: String? = null)
+data class RadioPollResponse(
+    val channel: String? = null, val nama_saya: String? = null, val my_jamaah_id: String? = null,
+    val is_fallback_channel: Boolean? = null, val server_time: Long? = null, val requires_tl_code: Boolean? = null,
+    val messages: List<RadioMessage> = emptyList(), val error: String? = null
+)
 
 interface RadioApiService {
     @Multipart
@@ -182,6 +186,7 @@ fun RadioScreen(onBack: () -> Unit) {
     }
 
     var channel by remember { mutableStateOf("") }
+    var isFallbackChannel by remember { mutableStateOf(false) }
     var requiresTlCode by remember { mutableStateOf(false) }
     var messages by remember { mutableStateOf(listOf<RadioMessage>()) }
     var lastAfter by remember { mutableStateOf(0L) }
@@ -205,13 +210,18 @@ fun RadioScreen(onBack: () -> Unit) {
                 val resp = withContext(Dispatchers.IO) { RadioApiClient.service.poll(RadioPollRequest(jamaahId, token, lastAfter)) }
                 channel = resp.channel ?: channel
                 myName = resp.nama_saya ?: myName
+                isFallbackChannel = resp.is_fallback_channel ?: false
                 requiresTlCode = resp.requires_tl_code ?: false
                 if (resp.messages.isNotEmpty()) {
                     messages = (messages + resp.messages).takeLast(30)
                     lastAfter = resp.messages.maxOf { it.time }
-                    // Auto-play pesan baru dari orang lain (bukan pesan sendiri, untuk hindari "gema")
+                    // FIX: sebelumnya deteksi "pesan sendiri" (supaya tidak diputar ulang/gema)
+                    // dibandingkan lewat NAMA -- kalau dua jamaah kebetulan namanya sama
+                    // (mis. keduanya masih data uji coba "Jamaah"), pesan orang lain jadi
+                    // ikut dianggap "punya sendiri" dan TIDAK PERNAH diputar. Sekarang
+                    // dibandingkan lewat jamaah_id yang pasti unik per akun.
                     for (m in resp.messages) {
-                        if (m.id !in playedIds && m.nama != myName && m.audio != null) {
+                        if (m.id !in playedIds && m.jamaah_id != jamaahId && m.audio != null) {
                             playedIds.add(m.id)
                             try {
                                 val dir = File(context.cacheDir, "radio").apply { mkdirs() }
@@ -283,6 +293,15 @@ fun RadioScreen(onBack: () -> Unit) {
                 if (channel.isNotEmpty()) "Kanal siaran rombongan paket \"$channel\"" else "Menghubungkan ke kanal...",
                 fontSize = 12.sp, color = Color.Gray
             )
+            if (isFallbackChannel) {
+                Spacer(Modifier.height(6.dp))
+                Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3CD)), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        "⚠ Akun Anda belum ditugaskan ke paket tertentu oleh Admin, jadi masuk ke kanal umum \"umum\". Kalau ini seharusnya satu rombongan dengan jamaah lain, minta Admin mengisi Paket ID akun Anda di WP Admin (Data Jamaah) -- tanpa itu, Anda tidak akan bisa saling dengar dengan rombongan yang benar.",
+                        fontSize = 10.sp, color = Color(0xFF92400E), modifier = Modifier.padding(10.dp)
+                    )
+                }
+            }
             if (statusMsg.isNotEmpty()) Text(statusMsg, fontSize = 11.sp, color = Color(0xFFDC2626))
         }
         Spacer(Modifier.height(8.dp))
