@@ -58,22 +58,24 @@ import java.util.Locale
 //
 // FIX: sebelumnya semua jamaah bisa "bicara" (model grup walkie-talkie ramai).
 // Sekarang model diubah jadi SIARAN satu-arah sesuai permintaan: 1 Tour Leader
-// bicara, jamaah mendengarkan. Yang bisa bicara HANYA yang tahu "Kode Radio TL"
-// (diatur Admin per paket di WP Admin, tab Paket Umrah) -- dicek di SERVER, jadi
-// tidak bisa dilewati dengan sekadar mengedit tampilan aplikasi. Kalau Admin
-// tidak mengisi kode untuk suatu paket, kanal itu tetap terbuka (siapa saja
-// boleh bicara) -- supaya kompatibel untuk rombongan yang belum diatur kodenya.
+// bicara, jamaah mendengarkan. Yang bisa bicara HANYA yang tahu "Kode TL" --
+// dicek di SERVER, jadi tidak bisa dilewati dengan sekadar mengedit tampilan
+// aplikasi. Kalau Admin tidak mengisi kode untuk suatu kanal, kanal itu tetap
+// terbuka (siapa saja boleh bicara) -- supaya kompatibel untuk rombongan yang
+// belum diatur kodenya.
 //
-// Kanal ditentukan otomatis dari paket_id jamaah (di-resolve server dari token),
-// jadi serombongan satu paket otomatis satu kanal radio, tanpa perlu isi kode
-// kanal manual, dan tidak bisa dengar kanal rombongan lain.
+// FIX: kanal SEBELUMNYA = paket_id jamaah -- ternyata SATU nama paket (mis.
+// "Paket Slamet") bisa punya banyak tanggal keberangkatan berbeda, yang
+// seharusnya masing-masing jadi kanal terpisah. Sekarang Admin membuat "Kanal
+// Radio" sendiri (tab terpisah di Pengaturan Aplikasi, lepas dari Paket Umrah)
+// dan menugaskan tiap jamaah ke kanal yang sesuai rombongan/tanggal keberangkatannya.
 // ============================================================================
 
 data class RadioSendResponse(val success: Boolean? = null, val channel: String? = null, val error: String? = null)
 data class RadioMessage(val id: String, val jamaah_id: String? = null, val nama: String, val time: Long, val audio: String? = null)
 data class RadioPollRequest(val jamaah_id: String, val token: String, val after: Long)
 data class RadioPollResponse(
-    val channel: String? = null, val nama_saya: String? = null, val my_jamaah_id: String? = null,
+    val channel: String? = null, val channel_nama: String? = null, val nama_saya: String? = null, val my_jamaah_id: String? = null,
     val is_fallback_channel: Boolean? = null, val server_time: Long? = null, val requires_tl_code: Boolean? = null,
     val messages: List<RadioMessage> = emptyList(), val error: String? = null
 )
@@ -186,6 +188,7 @@ fun RadioScreen(onBack: () -> Unit) {
     }
 
     var channel by remember { mutableStateOf("") }
+    var channelNama by remember { mutableStateOf("") }
     var isFallbackChannel by remember { mutableStateOf(false) }
     var requiresTlCode by remember { mutableStateOf(false) }
     var messages by remember { mutableStateOf(listOf<RadioMessage>()) }
@@ -209,6 +212,7 @@ fun RadioScreen(onBack: () -> Unit) {
             try {
                 val resp = withContext(Dispatchers.IO) { RadioApiClient.service.poll(RadioPollRequest(jamaahId, token, lastAfter)) }
                 channel = resp.channel ?: channel
+                channelNama = resp.channel_nama ?: channelNama
                 myName = resp.nama_saya ?: myName
                 isFallbackChannel = resp.is_fallback_channel ?: false
                 requiresTlCode = resp.requires_tl_code ?: false
@@ -256,7 +260,7 @@ fun RadioScreen(onBack: () -> Unit) {
             } catch (e: Exception) {
                 // Kalau kode TL ternyata salah, server menolak (403) -- turunkan lagi ke mode dengar.
                 isTl = false
-                tlError = "Kode Radio TL salah atau kosong -- hanya Tour Leader yang bisa bicara di kanal ini"
+                tlError = "Kode TL salah atau kosong -- hanya Tour Leader yang bisa bicara di kanal ini"
                 statusMsg = ""
             }
             isSending = false
@@ -290,14 +294,14 @@ fun RadioScreen(onBack: () -> Unit) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
             Text("Radio Tour Leader", fontWeight = FontWeight.Bold, fontSize = 20.sp)
             Text(
-                if (channel.isNotEmpty()) "Kanal siaran rombongan paket \"$channel\"" else "Menghubungkan ke kanal...",
+                if (channelNama.isNotEmpty()) "Kanal: $channelNama" else "Menghubungkan ke kanal...",
                 fontSize = 12.sp, color = Color.Gray
             )
             if (isFallbackChannel) {
                 Spacer(Modifier.height(6.dp))
                 Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3CD)), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        "⚠ Akun Anda belum ditugaskan ke paket tertentu oleh Admin, jadi masuk ke kanal umum \"umum\". Kalau ini seharusnya satu rombongan dengan jamaah lain, minta Admin mengisi Paket ID akun Anda di WP Admin (Data Jamaah) -- tanpa itu, Anda tidak akan bisa saling dengar dengan rombongan yang benar.",
+                        "⚠ Akun Anda belum ditugaskan ke kanal radio tertentu oleh Admin, jadi masuk ke kanal umum. Kalau seharusnya Anda satu rombongan dengan jamaah lain, minta Admin memilih Kanal Radio akun Anda di WP Admin (Data Jamaah > Kanal Radio) -- tanpa itu, Anda tidak akan bisa saling dengar dengan rombongan yang benar.",
                         fontSize = 10.sp, color = Color(0xFF92400E), modifier = Modifier.padding(10.dp)
                     )
                 }
@@ -322,7 +326,7 @@ fun RadioScreen(onBack: () -> Unit) {
             }
         }
 
-        // Kanal terbuka (Admin belum isi Kode Radio TL untuk paket ini) -> semua orang
+        // Kanal terbuka (Admin belum isi Kode TL untuk kanal ini) -> semua orang
         // boleh bicara, tombol PTT langsung tampil (perilaku lama, tetap kompatibel).
         if (!requiresTlCode) {
             PushToTalkButton(isRecording, isSending, interactionSource)
@@ -337,7 +341,7 @@ fun RadioScreen(onBack: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
                         value = tlCodeInput, onValueChange = { tlCodeInput = it },
-                        label = { Text("Kode Radio TL (khusus Tour Leader)") },
+                        label = { Text("Kode TL (khusus Tour Leader)") },
                         modifier = Modifier.weight(1f), singleLine = true, shape = RoundedCornerShape(8.dp)
                     )
                     Spacer(Modifier.width(8.dp))
