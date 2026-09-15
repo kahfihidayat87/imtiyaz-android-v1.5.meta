@@ -4,10 +4,6 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
-import android.location.LocationListener
-import android.location.LocationManager
-import android.os.Bundle
-import android.os.Looper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -137,49 +133,33 @@ fun formatJamShalat(h: Double): String {
 }
 
 // ============================================================================
-// LOKASI — pakai LocationManager bawaan Android (bukan Google Play Services)
-// supaya tidak menambah dependency baru yang bisa memicu masalah build lagi.
+// LOKASI — sebelumnya pakai LocationManager mentah Android supaya tidak menambah
+// dependency baru; TERBUKTI TIDAK CUKUP ANDAL (dua kali dilaporkan tidak update)
+// -- raw LocationManager memang dikenal lambat/tidak konsisten mendapat fix baru,
+// terutama di dalam gedung. Sekarang pakai FusedLocationProviderClient (Google
+// Play Services) yang menggabungkan GPS+WiFi+seluler, jauh lebih cepat & andal,
+// dan merupakan dependency resmi Google yang sangat umum dipakai (risiko build
+// gagal jauh lebih kecil daripada risiko "tidak pernah dapat lokasi" sebelumnya).
 // ============================================================================
-// FIX: sebelumnya lastKnownLocation dipakai tanpa cek umur -- kalau HP sudah lama
-// tidak dapat fix baru (mis. GPS mati/di dalam gedung), lokasi yang dipakai bisa
-// jadi cache lama dari kota sebelumnya (mis. rumah di Indonesia) meski jamaah sudah
-// di Arab Saudi. Sekarang lastKnownLocation hanya dipakai kalau umurnya < 10 menit;
-// kalau lebih tua, langsung minta fix baru. Ditambah timeout 15 detik supaya kalau
-// tidak ada fix sama sekali, tidak menggantung selamanya -- jatuh ke default Mekkah.
-private const val LOCATION_MAX_AGE_MS = 10 * 60 * 1000L
-
 @Suppress("MissingPermission")
-private suspend fun getCurrentLocation(context: Context): Location? = kotlinx.coroutines.withTimeoutOrNull(15000) {
+private suspend fun getCurrentLocation(context: Context): Location? = withTimeoutOrNull(15000) {
     suspendCancellableCoroutine { cont ->
-        val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
         val hasFine = context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
         val hasCoarse = context.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
         if (!hasFine && !hasCoarse) { cont.resume(null); return@suspendCancellableCoroutine }
 
-        val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER).filter {
-            try { lm.isProviderEnabled(it) } catch (e: Exception) { false }
-        }
-        val last = providers.mapNotNull { try { lm.getLastKnownLocation(it) } catch (e: Exception) { null } }
-            .maxByOrNull { it.time }
-        if (last != null && System.currentTimeMillis() - last.time < LOCATION_MAX_AGE_MS) {
-            cont.resume(last); return@suspendCancellableCoroutine
-        }
+        val client = com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(context)
+        val cts = com.google.android.gms.tasks.CancellationTokenSource()
 
-        if (providers.isEmpty()) { cont.resume(last); return@suspendCancellableCoroutine } // last (walau tua) lebih baik daripada tidak ada
-        val listener = object : LocationListener {
-            override fun onLocationChanged(location: Location) {
-                try { lm.removeUpdates(this) } catch (e: Exception) {}
-                if (cont.isActive) cont.resume(location)
-            }
-            override fun onProviderDisabled(provider: String) {}
-            override fun onProviderEnabled(provider: String) {}
-            @Deprecated("Deprecated in Java")
-            override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
-        }
-        try {
-            providers.forEach { lm.requestLocationUpdates(it, 0L, 0f, listener, Looper.getMainLooper()) }
-        } catch (e: Exception) { cont.resume(last); return@suspendCancellableCoroutine }
-        cont.invokeOnCancellation { try { lm.removeUpdates(listener) } catch (e: Exception) {} }
+        // getCurrentLocation() secara aktif minta fix BARU (bukan cache lama seperti
+        // getLastLocation()), dengan prioritas akurasi tinggi kalau izin FINE ada.
+        val priority = if (hasFine) com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY
+                       else com.google.android.gms.location.Priority.PRIORITY_BALANCED_POWER_ACCURACY
+        client.getCurrentLocation(priority, cts.token)
+            .addOnSuccessListener { location -> if (cont.isActive) cont.resume(location) }
+            .addOnFailureListener { if (cont.isActive) cont.resume(null) }
+
+        cont.invokeOnCancellation { cts.cancel() }
     }
 }
 
@@ -242,7 +222,11 @@ fun PrayerTimesCard() {
         }
     }
 
-    val nowHour = remember {
+    // FIX: sebelumnya dibungkus remember{} tanpa key -- nilainya "membeku" di waktu
+    // pertama kartu ini muncul dan TIDAK PERNAH diperbarui, jadi sorotan "shalat yang
+    // sedang berlangsung" bisa salah kalau kartu sudah lama terbuka. Perhitungannya
+    // sangat murah, jadi dihitung ulang setiap kali times diperbarui (tanpa remember).
+    val nowHour = run {
         val c = Calendar.getInstance(); c.get(Calendar.HOUR_OF_DAY) + c.get(Calendar.MINUTE) / 60.0
     }
 

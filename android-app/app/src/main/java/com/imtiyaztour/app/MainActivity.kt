@@ -301,6 +301,7 @@ fun ImtiyazApp() {
     var selectedSurah by remember { mutableStateOf<Int?>(null) }
     var showItinerary by remember { mutableStateOf(false) }
     var showRadio by remember { mutableStateOf(false) }
+    var showJadwal by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     // Izin lokasi diminta SEKALI di awal (sebelum masuk ke halaman utama), bukan
@@ -373,8 +374,9 @@ fun ImtiyazApp() {
                 selectedSurah != null -> SurahDetailScreen(nomor = selectedSurah!!, onBack = { selectedSurah = null })
                 showItinerary -> ItineraryScreen(onBack = { showItinerary = false })
                 showRadio -> RadioScreen(onBack = { showRadio = false })
+                showJadwal -> JadwalKeberangkatanScreen(onBack = { showJadwal = false })
                 else -> when (selectedTab) {
-                    0 -> BerandaScreen(onPaketClick = { selectedPaket = it }, onItineraryClick = { showItinerary = true })
+                    0 -> BerandaScreen(onPaketClick = { selectedPaket = it }, onItineraryClick = { showItinerary = true }, onJadwalClick = { showJadwal = true })
                     1 -> PaketListScreen(onPaketClick = { selectedPaket = it })
                     2 -> QuranScreen(onSurahClick = { selectedSurah = it })
                     3 -> DoaListScreen(onDoaClick = { selectedDoa = it })
@@ -400,7 +402,7 @@ fun SplashScreen() {
 }
 
 @Composable
-fun BerandaScreen(onPaketClick: (PaketUmrah) -> Unit, onItineraryClick: () -> Unit) {
+fun BerandaScreen(onPaketClick: (PaketUmrah) -> Unit, onItineraryClick: () -> Unit, onJadwalClick: () -> Unit) {
     val context = LocalContext.current
     val namaJamaah = Prefs.getNama(context)
     LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -432,6 +434,21 @@ fun BerandaScreen(onPaketClick: (PaketUmrah) -> Unit, onItineraryClick: () -> Un
                     Column(Modifier.weight(1f)) {
                         Text("Itinerary Umrah 9 Hari", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         Text("Ramadhan & Reguler -- jadwal harian umum", fontSize = 11.sp, color = Color.Gray)
+                    }
+                    Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF0F7A5A))
+                }
+            }
+            Card(
+                shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(1.dp),
+                modifier = Modifier.fillMaxWidth().clickable { onJadwalClick() }
+            ) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.DateRange, contentDescription = null, tint = Color(0xFF0F7A5A))
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Jadwal Keberangkatan Terbaru", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text("Tanggal & harga live dari sistem", fontSize = 11.sp, color = Color.Gray)
                     }
                     Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF0F7A5A))
                 }
