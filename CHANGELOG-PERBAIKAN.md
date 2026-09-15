@@ -1,5 +1,70 @@
 # Ringkasan Perbaikan
 
+## v1.7.0 — Doa Umrah, Jadwal Shalat, dan Login Jamaah
+
+**1. Doa Umrah** — dari 6 jadi 14 doa, disusun urut sesuai rangkaian ibadah: keluar
+rumah → naik kendaraan/safar → talbiyah → niat umrah → masuk masjid → melihat Ka'bah
+→ mulai tawaf → rukun Yamani → sa'i → tahallul → minum zamzam → ziarah Madinah. Teks
+Arab/Latin/arti sudah saya validasi silang terhadap referensi klasik (Al-Qur'an &
+hadis shahih yang jadi rujukan umum buku panduan umrah) sebelum ditulis ke kode.
+*Doa "di Arafah" yang lama saya lepas karena itu ritual haji (wukuf), bukan umrah.*
+
+**2. Jadwal Waktu Shalat** — file baru `PrayerTimes.kt`, metode **Ummul Qura** (Fajr
+18,5°, Isya = Maghrib + 90 menit di luar Ramadan). Dihitung LOKAL di perangkat dari
+GPS + tanggal & zona waktu HP (tidak butuh internet -- penting karena jamaah sering
+tanpa data di Masjidil Haram/pesawat). Rumus astronomi sudah saya uji dulu di Python
+dan dibandingkan terhadap pola waktu shalat Mekkah/Madinah/Jakarta yang dikenal umum
+sebelum ditulis ke Kotlin. Pakai `LocationManager` bawaan Android (bukan Google Play
+Services) supaya tidak menambah dependency baru yang berisiko bikin build gagal lagi.
+Tab baru "Shalat" ditambahkan di bottom navigation.
+*Catatan jujur: ini estimasi astronomis, bukan jadwal resmi -- ada disclaimer di UI
+agar jamaah tetap merujuk ke adzan Masjidil Haram/Nabawi setempat.*
+
+**3. Login Jamaah (username/password dibuat Admin)** — ini perbaikan keamanan, bukan
+sekadar fitur baru. Sebelumnya field "ID Jamaah" adalah teks bebas TANPA password --
+siapa pun yang tahu/menebak angka ID bisa upload bukti transfer, ubah checklist, atau
+kirim data skrining kesehatan atas nama jamaah lain. Sekarang:
+- Admin membuat username & password lewat metabox "Data Jamaah" di WP Admin (field
+  password: kosongkan untuk tidak mengubah, sama seperti form user WordPress asli).
+  Jamaah tidak pernah bisa mendaftar sendiri -- form ini cuma ada di dashboard admin.
+- Endpoint baru `/imtiyaz/v1/login` (WP) dan `/api/login` (Node) mengeluarkan token
+  setelah username+password cocok (`wp_check_password`, token disimpan sebagai post
+  meta, dicek pakai `hash_equals` biar aman dari timing attack).
+- Ketiga endpoint yang menulis data (`upload-bukti`, `update-checklist`, `skrining`)
+  sekarang WAJIB menyertakan token yang valid -- ini pengecekan tambahan di dalam
+  fungsi itu sendiri, terpisah dari Basic Auth Node→WP yang sudah ada sebelumnya
+  (Basic Auth cuma membuktikan "ini server app.js kami", bukan "ini jamaah yang benar").
+- Android: field ID Jamaah polos diganti `LoginScreen` sungguhan; token & ID disimpan
+  di SharedPreferences setelah login sukses; kalau server bilang token tidak valid
+  (kedaluwarsa/logout dari perangkat lain), app otomatis memaksa login ulang.
+
+## v1.6.0 — Admin akses penuh atas Paket, Dokumen Wajib, dan Kontak/WA
+Gap yang ditemukan: harga/fasilitas paket, daftar dokumen wajib, dan nomor WA/kontak
+semuanya **hardcode di kode** (PHP maupun Kotlin) — admin tidak bisa mengubah apa pun
+tanpa minta developer edit & build ulang. Diperbaiki di 3 layer sekaligus (kalau cuma
+satu layer yang dibenahi, perubahan admin tidak akan pernah sampai ke aplikasi):
+
+1. **Plugin WordPress**: halaman baru "Pengaturan Aplikasi" (menu Imtiyaz App) dengan
+   3 tab — Paket Umrah (tambah/edit/hapus paket beserta harga & fasilitas), Dokumen
+   Wajib (tambah/edit/hapus item checklist), dan Kontak & WA (nomor WA, nama travel,
+   alamat, kontak yang tampil di app). Semua disimpan di `wp_options`, bukan lagi array
+   di kode. Menu lama yang read-only ("Pilih Paket Umrah") dan terpisah ("Pengaturan WA")
+   digabung jadi satu halaman ini biar admin tidak loncat-loncat menu.
+2. **`app.js`**: endpoint baru `/api/dokumen` dan `/api/kontak` yang meneruskan data dari
+   WordPress ke Android (sebelumnya cuma `/api/paket` yang ada, dua lainnya belum dibuat
+   sama sekali).
+3. **Android**: `listPaket`/`listDokumen` yang tadinya konstanta hardcode sekarang jadi
+   `defaultPaket`/`defaultDokumen` — cuma dipakai sebagai fallback offline. Data aktif
+   diambil dari server sekali saat app dibuka (`AppData` di `MainActivity.kt`), termasuk
+   nomor WA yang sebelumnya juga hardcode di 2 tempat. Kalau fetch gagal (offline/server
+   mati), app tetap jalan pakai nilai default, tidak crash.
+
+**Catatan batasan**: konten Doa (tab "Doa") sengaja tetap hardcode/offline karena
+memang dirancang bisa dibaca tanpa internet (di pesawat, di Masjidil Haram). Kalau
+Anda ingin itu juga bisa diedit admin, itu perubahan arsitektur terpisah — beri tahu
+saya kalau mau saya kerjakan juga.
+
+
 ## 1. File yang hilang — `android-app/app/build.gradle`
 Dua file bernama sama ter-upload (root & app-level), satu menimpa yang lain sehingga app-level `build.gradle` hilang. **Dibuat ulang dari nol** berdasarkan import yang dipakai di `MainActivity.kt` (Compose, Material3, activity-compose) + `namespace` sesuai package `com.imtiyaztour.app`. **Tolong bandingkan dengan versi asli Anda** (jika ada) untuk memastikan tidak ada dependency lain yang saya lewatkan.
 

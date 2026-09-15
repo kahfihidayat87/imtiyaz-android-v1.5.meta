@@ -55,7 +55,14 @@ data class PaketUmrah(val id: String, val nama: String, val kategori: String, va
 data class Dokumen(val id: String, val nama: String, val deskripsi: String, var checked: Boolean = false)
 data class Doa(val id: String, val judul: String, val arab: String, val latin: String, val arti: String)
 
-val listPaket = listOf(
+data class KontakInfo(val nama_travel: String = "Imtiyaz Tour Jogja", val alamat: String = "PPIU U383/2021 • Jln. Pertapan, Tegal Cerme RT08, Baturetno, Banguntapan, Bantul", val kontak: String = "0811-277-6543 • pastiumrah.com")
+
+// FIX: sebelumnya paket, dokumen, dan kontak ini hardcode DAN dipakai langsung oleh
+// layar Beranda/Paket/Dokumen/Saya — jadi walau admin sudah bisa mengubahnya lewat
+// WP Admin, perubahan itu TIDAK PERNAH tampil di aplikasi. Sekarang nilai di bawah
+// ini hanya jadi fallback offline; nilai aktif diambil dari AppData yang di-fetch
+// dari server saat app dibuka (lihat LaunchedEffect di ImtiyazApp).
+val defaultPaket = listOf(
     PaketUmrah("slamet", "Paket Slamet", "Ekonomis", "9 Hari", "Rp 28,9 jt", "Bus Jogja-Jakarta, Hotel *3 250m/750m, 45 Pax, Scoot/AirAsia"),
     PaketUmrah("ayem", "Paket Ayem Tentrem", "Hemat", "9 Hari", "Rp 29,9 jt", "Pesawat YIA-CGK, Hotel *3, 35-45 Pax, Oman Air/Lion Air"),
     PaketUmrah("linuwih", "Paket Linuwih", "Reguler", "9 Hari", "Rp 37,4 jt", "Garuda/Saudia Langsung, Hotel Bintang 4 ±250m, Max 25 Jamaah, Grup 55+ Eksklusif", "Paling Diminati"),
@@ -63,7 +70,7 @@ val listPaket = listOf(
     PaketUmrah("plus", "Paket Plus", "Plus Wisata", "13 Hari", "Rp 40,9 jt", "Umrah Plus Mesir/Turki (Kairo-Alexandria), Hotel *4/*5, 13 Hari")
 )
 
-val listDokumen = listOf(
+val defaultDokumen = listOf(
     Dokumen("ktp", "KTP", "Kartu Tanda Penduduk asli & fotokopi"),
     Dokumen("kk", "Kartu Keluarga", "KK asli & fotokopi"),
     Dokumen("paspor", "Paspor", "Masa berlaku min 12 bulan"),
@@ -72,12 +79,32 @@ val listDokumen = listOf(
     Dokumen("nikah", "Buku Nikah", "Jika berangkat pasangan")
 )
 
+// Wadah state global untuk konten yang dikelola admin. Diisi sekali saat app dibuka
+// (ImtiyazApp -> LaunchedEffect), dipakai oleh semua layar yang butuh. Kalau fetch
+// gagal (offline/server down), tetap pakai nilai default di atas -- app tidak crash.
+data class WaInfo(val wa_admin: String = "628112776543", val wa_link: String = "https://wa.me/628112776543")
+
+object AppData {
+    var paket by mutableStateOf(defaultPaket)
+    var dokumen by mutableStateOf(defaultDokumen)
+    var kontak by mutableStateOf(KontakInfo())
+    var wa by mutableStateOf(WaInfo())
+}
+
 val listDoa = listOf(
+    Doa("keluar_rumah", "Doa Keluar Rumah", "بِسْمِ اللَّهِ تَوَكَّلْتُ عَلَى اللَّهِ وَلَا حَوْلَ وَلَا قُوَّةَ إِلَّا بِاللَّهِ", "Bismillaahi tawakkaltu 'alallaah, wa laa haula wa laa quwwata illaa billaah", "Dengan nama Allah, aku bertawakal kepada Allah, tiada daya dan kekuatan kecuali dengan pertolongan Allah"),
+    Doa("naik_kendaraan", "Doa Naik Kendaraan/Pesawat", "سُبْحَانَ الَّذِي سَخَّرَ لَنَا هَذَا وَمَا كُنَّا لَهُ مُقْرِنِينَ وَإِنَّا إِلَى رَبِّنَا لَمُنْقَلِبُونَ", "Subhaanalladzii sakhkhara lanaa hadzaa wa maa kunnaa lahu muqriniin, wa innaa ilaa rabbinaa lamunqalibuun", "Maha Suci Allah yang telah menundukkan kendaraan ini untuk kami, padahal kami sebelumnya tidak mampu menguasainya, dan sesungguhnya kami akan kembali kepada Tuhan kami (QS. Az-Zukhruf: 13-14)"),
+    Doa("safar", "Doa Safar (Bepergian Jauh)", "اللَّهُمَّ إِنَّا نَسْأَلُكَ فِي سَفَرِنَا هَذَا الْبِرَّ وَالتَّقْوَى، وَمِنَ الْعَمَلِ مَا تَرْضَى، اللَّهُمَّ هَوِّنْ عَلَيْنَا سَفَرَنَا هَذَا وَاطْوِ عَنَّا بُعْدَهُ", "Allaahumma innaa nas-aluka fii safarinaa haadzal birra wat-taqwaa, wa minal 'amali maa tardhaa, Allaahumma hawwin 'alainaa safaranaa haadzaa wathwi 'annaa bu'dah", "Ya Allah, kami memohon kepada-Mu dalam perjalanan kami ini kebajikan dan ketakwaan, dan amal yang Engkau ridhai. Ya Allah, mudahkanlah perjalanan kami ini dan dekatkanlah jaraknya yang jauh (HR. Muslim)"),
+    Doa("talbiyah", "Talbiyah", "لَبَّيْكَ اللَّهُمَّ لَبَّيْكَ، لَبَّيْكَ لَا شَرِيكَ لَكَ لَبَّيْكَ، إِنَّ الْحَمْدَ وَالنِّعْمَةَ لَكَ وَالْمُلْكَ، لَا شَرِيكَ لَكَ", "Labbaikallaahumma labbaik, labbaika laa syariika laka labbaik, innal hamda wan-ni'mata laka wal mulk, laa syariika lak", "Aku penuhi panggilan-Mu ya Allah, aku penuhi panggilan-Mu. Aku penuhi panggilan-Mu, tiada sekutu bagi-Mu, aku penuhi panggilan-Mu. Sesungguhnya segala puji, nikmat, dan kerajaan adalah milik-Mu, tiada sekutu bagi-Mu. Dibaca berulang-ulang sejak niat ihram hingga melihat Ka'bah"),
     Doa("niat", "Niat Umrah", "نَوَيْتُ الْعُمْرَةَ وَأَحْرَمْتُ بِهَا لِلَّهِ تَعَالَى", "Nawaitul 'umrata wa ahramtu bihaa lillaahi ta'aalaa", "Aku niat umrah dan berihram karena Allah Ta'ala"),
-    Doa("tawaf", "Doa Tawaf", "رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الْآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ", "Rabbanaa aatinaa fid-dunyaa hasanah wa fil-aakhirati hasanah wa qinaa 'adzaaban-naar", "Ya Tuhan kami, berilah kami kebaikan di dunia dan akhirat, dan peliharalah kami dari siksa neraka"),
-    Doa("sai", "Doa Sa'i", "إِنَّ الصَّفَا وَالْمَرْوَةَ مِنْ شَعَائِرِ اللَّهِ", "Innas-shafaa wal-marwata min sya'aa-irillaah", "Sesungguhnya Shafa dan Marwah adalah sebagian dari syi'ar Allah"),
-    Doa("arafah", "Doa di Arafah", "لَا إِلَهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ", "Laa ilaaha illallaahu wahdahu laa syariika lah", "Tidak ada Tuhan selain Allah semata, tidak ada sekutu bagi-Nya"),
-    Doa("ziarah", "Doa Ziarah Madinah", "السَّلَامُ عَلَيْكَ يَا رَسُولَ اللَّهِ", "As-salaamu 'alaika yaa Rasuulallaah", "Salam sejahtera atasmu wahai Rasulullah"),
+    Doa("masuk_masjid", "Doa Memasuki Masjidil Haram", "اللَّهُمَّ افْتَحْ لِي أَبْوَابَ رَحْمَتِكَ", "Allaahummaftah lii abwaaba rahmatik", "Ya Allah, bukakanlah untukku pintu-pintu rahmat-Mu (HR. Muslim, dibaca sambil melangkah kaki kanan masuk masjid)"),
+    Doa("lihat_kabah", "Doa Melihat Ka'bah", "اللَّهُمَّ زِدْ هَذَا الْبَيْتَ تَشْرِيفًا وَتَعْظِيمًا وَتَكْرِيمًا وَمَهَابَةً، وَزِدْ مَنْ شَرَّفَهُ وَكَرَّمَهُ مِمَّنْ حَجَّهُ أَوِ اعْتَمَرَهُ تَشْرِيفًا وَتَكْرِيمًا وَتَعْظِيمًا وَبِرًّا", "Allaahumma zid haadzal baita tasyriifan wa ta'zhiiman wa takriiman wa mahaabah, wa zid man syarrafahu wa karramahu mimman hajjahu awi'tamarahu tasyriifan wa takriiman wa ta'zhiiman wa birraa", "Ya Allah, tambahkanlah kemuliaan, keagungan, kehormatan, dan kewibawaan bagi Baitullah ini, dan tambahkanlah pula bagi orang yang memuliakannya di antara mereka yang berhaji atau berumrah kemuliaan, kehormatan, keagungan, dan kebaikan"),
+    Doa("mulai_tawaf", "Doa Memulai Tawaf", "بِسْمِ اللَّهِ، اللَّهُ أَكْبَرُ", "Bismillaah, Allaahu akbar", "Dengan nama Allah, Allah Maha Besar — diucapkan setiap kali sejajar dengan Hajar Aswad di awal setiap putaran tawaf (boleh disertai mengecup/mengisyaratkan tangan ke arah Hajar Aswad)"),
+    Doa("rukun_yamani", "Doa di Antara Rukun Yamani-Hajar Aswad", "رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الْآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ", "Rabbanaa aatinaa fid-dunyaa hasanah wa fil-aakhirati hasanah wa qinaa 'adzaaban-naar", "Ya Tuhan kami, berilah kami kebaikan di dunia dan akhirat, dan peliharalah kami dari siksa neraka — dibaca sepanjang jarak antara Rukun Yamani dan Hajar Aswad di setiap putaran tawaf (QS. Al-Baqarah: 201)"),
+    Doa("sai", "Doa Sa'i (Naik ke Shafa/Marwah)", "إِنَّ الصَّفَا وَالْمَرْوَةَ مِنْ شَعَائِرِ اللَّهِ", "Innash-shafaa wal-marwata min sya'aa-irillaah", "Sesungguhnya Shafa dan Marwah adalah sebagian dari syi'ar Allah (QS. Al-Baqarah: 158), dibaca saat pertama kali mendekati bukit Shafa sebelum memulai sa'i"),
+    Doa("tahallul", "Doa Tahallul (Mencukur Rambut)", "اللَّهُمَّ اغْفِرْ لِلْمُحَلِّقِينَ وَالْمُقَصِّرِينَ", "Allaahummaghfir lil-muhalliqiina wal-muqashshiriin", "Ya Allah, ampunilah orang-orang yang mencukur habis rambutnya dan orang-orang yang memendekkannya (HR. Bukhari-Muslim) — dibaca setelah selesai mencukur/memotong rambut sebagai penutup rangkaian umrah"),
+    Doa("zamzam", "Doa Minum Air Zamzam", "اللَّهُمَّ إِنِّي أَسْأَلُكَ عِلْمًا نَافِعًا، وَرِزْقًا وَاسِعًا، وَشِفَاءً مِنْ كُلِّ دَاءٍ", "Allaahumma innii as-aluka 'ilman naafi'an, wa rizqan waasi'an, wa syifaa-an min kulli daa'", "Ya Allah, sesungguhnya aku memohon kepada-Mu ilmu yang bermanfaat, rezeki yang luas, dan kesembuhan dari segala penyakit — air zamzam diminum sesuai niat, doa ini salah satu yang masyhur diamalkan"),
+    Doa("ziarah", "Doa Ziarah Madinah", "السَّلَامُ عَلَيْكَ يَا رَسُولَ اللَّهِ", "As-salaamu 'alaika yaa Rasuulallaah", "Salam sejahtera atasmu wahai Rasulullah — diucapkan pelan saat ziarah ke makam Nabi Muhammad ﷺ di Masjid Nabawi"),
     Doa("harian", "Doa Sehari-hari", "اللَّهُمَّ إِنِّي أَسْأَلُكَ عِلْمًا نَافِعًا", "Allaahumma innii as-aluka 'ilman naafi'an", "Ya Allah, sesungguhnya aku memohon ilmu yang bermanfaat")
 )
 
@@ -94,13 +121,39 @@ object ApiConfig {
 data class UploadBuktiResponse(val success: Boolean? = null, val bukti_url: String? = null, val status: String? = null, val message: String? = null, val error: String? = null)
 data class ChecklistResponse(val success: Boolean? = null, val message: String? = null, val error: String? = null)
 data class SkriningResponse(val success: Boolean? = null, val id: Any? = null, val message: String? = null, val error: String? = null)
-data class ChecklistRequest(val jamaah_id: String, val checklist: Map<String, Boolean>)
+data class ChecklistRequest(val jamaah_id: String, val token: String, val checklist: Map<String, Boolean>)
+data class LoginRequest(val username: String, val password: String)
+data class LoginResponse(val success: Boolean? = null, val jamaah_id: Int? = null, val nama: String? = null, val token: String? = null, val error: String? = null)
+data class LogoutRequest(val jamaah_id: String, val token: String)
 
 interface ApiService {
+    // FIX: sebelumnya tidak ada fungsi fetch untuk paket/dokumen/kontak sama sekali,
+    // jadi walau admin edit lewat WP, Android tidak pernah tahu.
+    @GET("api/paket")
+    suspend fun getPaket(): List<PaketUmrah>
+
+    @GET("api/dokumen")
+    suspend fun getDokumen(): Map<String, String>
+
+    @GET("api/kontak")
+    suspend fun getKontak(): KontakInfo
+
+    @GET("api/wa-admin")
+    suspend fun getWaAdmin(): WaInfo
+
+    // FIX: sebelumnya TIDAK ADA login sama sekali. Username & password dibuat Admin
+    // lewat WP Admin (lihat imtiyaz-connector.php), bukan didaftarkan sendiri oleh jamaah.
+    @POST("api/login")
+    suspend fun login(@Body body: LoginRequest): LoginResponse
+
+    @POST("api/logout")
+    suspend fun logout(@Body body: LogoutRequest): Map<String, Boolean>
+
     @Multipart
     @POST("api/upload-bukti")
     suspend fun uploadBukti(
         @Part("jamaah_id") jamaahId: okhttp3.RequestBody,
+        @Part("token") token: okhttp3.RequestBody,
         @Part bukti: MultipartBody.Part
     ): UploadBuktiResponse
 
@@ -128,17 +181,32 @@ object ApiClient {
 // PENYIMPANAN LOKAL SEDERHANA (SharedPreferences)
 // Sebelumnya checklist & data skrining hilang setiap kali layar berpindah
 // karena hanya disimpan di `remember { mutableStateOf(...) }`.
+// FIX: sebelumnya ID Jamaah diisi bebas oleh siapa saja tanpa password -- sekarang
+// yang disimpan adalah hasil LOGIN (jamaah_id + token dari server), bukan input bebas.
 // ============================================================================
 object Prefs {
     private const val NAME = "imtiyaz_prefs"
     fun get(context: Context) = context.getSharedPreferences(NAME, Context.MODE_PRIVATE)
 
     fun getJamaahId(context: Context): String = get(context).getString("jamaah_id", "") ?: ""
-    fun setJamaahId(context: Context, value: String) = get(context).edit().putString("jamaah_id", value).apply()
+    fun getToken(context: Context): String = get(context).getString("jamaah_token", "") ?: ""
+    fun getNama(context: Context): String = get(context).getString("jamaah_nama", "") ?: ""
+    fun isLoggedIn(context: Context): Boolean = getJamaahId(context).isNotBlank() && getToken(context).isNotBlank()
 
-    fun getChecklist(context: Context): MutableMap<String, Boolean> {
+    fun saveLogin(context: Context, jamaahId: String, token: String, nama: String) {
+        get(context).edit()
+            .putString("jamaah_id", jamaahId)
+            .putString("jamaah_token", token)
+            .putString("jamaah_nama", nama)
+            .apply()
+    }
+    fun clearLogin(context: Context) {
+        get(context).edit().remove("jamaah_id").remove("jamaah_token").remove("jamaah_nama").apply()
+    }
+
+    fun getChecklist(context: Context, dokumenList: List<Dokumen>): MutableMap<String, Boolean> {
         val prefs = get(context)
-        return listDokumen.associate { it.id to prefs.getBoolean("doc_${it.id}", false) }.toMutableMap()
+        return dokumenList.associate { it.id to prefs.getBoolean("doc_${it.id}", false) }.toMutableMap()
     }
     fun setChecklistItem(context: Context, key: String, value: Boolean) =
         get(context).edit().putBoolean("doc_$key", value).apply()
@@ -160,12 +228,13 @@ fun createCameraImageUri(context: Context): Uri {
     return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
 }
 
-suspend fun uploadBuktiFile(context: Context, jamaahId: String, file: File): Result<UploadBuktiResponse> = withContext(Dispatchers.IO) {
+suspend fun uploadBuktiFile(context: Context, jamaahId: String, token: String, file: File): Result<UploadBuktiResponse> = withContext(Dispatchers.IO) {
     try {
         val idBody = jamaahId.toRequestBody("text/plain".toMediaTypeOrNull())
+        val tokenBody = token.toRequestBody("text/plain".toMediaTypeOrNull())
         val reqFile = file.asRequestBody("image/*".toMediaTypeOrNull())
         val part = MultipartBody.Part.createFormData("bukti", file.name, reqFile)
-        val response = ApiClient.service.uploadBukti(idBody, part)
+        val response = ApiClient.service.uploadBukti(idBody, tokenBody, part)
         Result.success(response)
     } catch (e: Exception) {
         Result.failure(e)
@@ -186,6 +255,21 @@ fun ImtiyazApp() {
     var selectedPaket by remember { mutableStateOf<PaketUmrah?>(null) }
     var selectedDoa by remember { mutableStateOf<Doa?>(null) }
 
+    // Ambil konten yang dikelola admin (paket, dokumen wajib, kontak) sekali saat app
+    // dibuka. Kalau gagal (offline/server down), AppData tetap berisi nilai default
+    // offline -- tidak melempar error ke pengguna, cukup diam-diam pakai fallback.
+    LaunchedEffect(Unit) {
+        launch { try { AppData.paket = ApiClient.service.getPaket() } catch (e: Exception) { /* pakai defaultPaket */ } }
+        launch {
+            try {
+                val map = ApiClient.service.getDokumen()
+                AppData.dokumen = map.map { (key, label) -> Dokumen(key, label, "") }
+            } catch (e: Exception) { /* pakai defaultDokumen */ }
+        }
+        launch { try { AppData.kontak = ApiClient.service.getKontak() } catch (e: Exception) { /* pakai KontakInfo() default */ } }
+        launch { try { AppData.wa = ApiClient.service.getWaAdmin() } catch (e: Exception) { /* pakai WaInfo() default */ } }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -199,7 +283,8 @@ fun ImtiyazApp() {
                 NavigationBarItem(selected = selectedTab == 1, onClick = { selectedTab = 1; selectedPaket = null; selectedDoa = null }, icon = { Icon(Icons.Default.List, null) }, label = { Text("Paket", fontSize = 9.sp) })
                 NavigationBarItem(selected = selectedTab == 2, onClick = { selectedTab = 2; selectedPaket = null; selectedDoa = null }, icon = { Icon(Icons.Default.CheckCircle, null) }, label = { Text("Dokumen", fontSize = 9.sp) })
                 NavigationBarItem(selected = selectedTab == 3, onClick = { selectedTab = 3; selectedPaket = null; selectedDoa = null }, icon = { Icon(Icons.Default.Favorite, null) }, label = { Text("Doa", fontSize = 9.sp) })
-                NavigationBarItem(selected = selectedTab == 4, onClick = { selectedTab = 4; selectedPaket = null; selectedDoa = null }, icon = { Icon(Icons.Default.Person, null) }, label = { Text("Saya", fontSize = 9.sp) })
+                NavigationBarItem(selected = selectedTab == 4, onClick = { selectedTab = 4; selectedPaket = null; selectedDoa = null }, icon = { Icon(Icons.Default.Schedule, null) }, label = { Text("Shalat", fontSize = 9.sp) })
+                NavigationBarItem(selected = selectedTab == 5, onClick = { selectedTab = 5; selectedPaket = null; selectedDoa = null }, icon = { Icon(Icons.Default.Person, null) }, label = { Text("Saya", fontSize = 9.sp) })
             }
         }
     ) { padding ->
@@ -212,7 +297,8 @@ fun ImtiyazApp() {
                     1 -> PaketListScreen(onPaketClick = { selectedPaket = it })
                     2 -> DokumenScreen()
                     3 -> DoaListScreen(onDoaClick = { selectedDoa = it })
-                    4 -> SayaScreen()
+                    4 -> JadwalShalatScreen()
+                    5 -> SayaScreen()
                 }
             }
         }
@@ -226,16 +312,16 @@ fun BerandaScreen(onPaketClick: (PaketUmrah) -> Unit) {
             Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF0F7A5A)), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(20.dp)) {
                     Text("Assalamualaikum,", color = Color(0xFFD1FAE5), fontSize = 14.sp)
-                    Text("Imtiyaz Tour Jogja", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                    Text(AppData.kontak.nama_travel, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
                     Text("Melayani Seperti Keluarga", color = Color(0xFFFFD700), fontSize = 12.sp)
                 }
             }
             Spacer(Modifier.height(16.dp))
             Text("Pilih Paket Umrah", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-            Text("5 pilihan, profesional & amanah", fontSize = 12.sp, color = Color.Gray)
+            Text("${AppData.paket.size} pilihan, profesional & amanah", fontSize = 12.sp, color = Color.Gray)
             Spacer(Modifier.height(8.dp))
         }
-        items(listPaket) { paket -> PaketCard(paket = paket, onClick = { onPaketClick(paket) }) }
+        items(AppData.paket) { paket -> PaketCard(paket = paket, onClick = { onPaketClick(paket) }) }
     }
 }
 
@@ -243,7 +329,7 @@ fun BerandaScreen(onPaketClick: (PaketUmrah) -> Unit) {
 fun PaketListScreen(onPaketClick: (PaketUmrah) -> Unit) {
     LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Text("Pilih Paket Umrah", fontWeight = FontWeight.Bold, fontSize = 20.sp); Text("Tanpa WebView, semua di APK", fontSize = 11.sp, color = Color.Gray); Spacer(Modifier.height(8.dp)) }
-        items(listPaket) { paket -> PaketCard(paket = paket, onClick = { onPaketClick(paket) }) }
+        items(AppData.paket) { paket -> PaketCard(paket = paket, onClick = { onPaketClick(paket) }) }
     }
 }
 
@@ -292,7 +378,7 @@ fun DetailPaketScreen(paket: PaketUmrah, onBack: () -> Unit) {
                     Button(
                         onClick = {
                             val pesan = "Assalamualaikum, saya mau daftar ${paket.nama} ${paket.harga} - Nama: $nama - HP: $hp"
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/628112776543?text=${Uri.encode(pesan)}"))
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/${AppData.wa.wa_admin}?text=${Uri.encode(pesan)}"))
                             context.startActivity(intent)
                         },
                         modifier = Modifier.fillMaxWidth().height(50.dp),
@@ -300,7 +386,7 @@ fun DetailPaketScreen(paket: PaketUmrah, onBack: () -> Unit) {
                         shape = RoundedCornerShape(12.dp)
                     ) { Text("Daftar via WhatsApp", fontWeight = FontWeight.Bold) }
                     Spacer(Modifier.height(8.dp))
-                    Text("Akan membuka WhatsApp ke Admin 0811-277-6543", fontSize = 10.sp, color = Color.Gray)
+                    Text("Akan membuka WhatsApp ke Admin ${AppData.wa.wa_admin}", fontSize = 10.sp, color = Color.Gray)
                 }
             }
         }
@@ -314,20 +400,24 @@ fun DetailPaketScreen(paket: PaketUmrah, onBack: () -> Unit) {
 fun DokumenScreen() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var dokumenList by remember {
-        val saved = Prefs.getChecklist(context)
-        mutableStateOf(listDokumen.map { it.copy(checked = saved[it.id] ?: false) })
+    // Kunci ke AppData.dokumen: kalau daftar dari server datang belakangan (setelah tab
+    // ini pertama kali dibuka), checklist otomatis dihitung ulang dari daftar terbaru.
+    var dokumenList by remember(AppData.dokumen) {
+        val saved = Prefs.getChecklist(context, AppData.dokumen)
+        mutableStateOf(AppData.dokumen.map { it.copy(checked = saved[it.id] ?: false) })
     }
     var syncStatus by remember { mutableStateOf("") }
     val progress = dokumenList.count { it.checked }
+    val totalDokumen = dokumenList.size
 
     fun syncToServer() {
+        if (!Prefs.isLoggedIn(context)) { syncStatus = "Login dulu di tab Saya agar checklist tersimpan di server"; return }
         val jamaahId = Prefs.getJamaahId(context)
-        if (jamaahId.isBlank()) { syncStatus = "Isi ID Jamaah di tab Saya agar checklist tersimpan di server"; return }
+        val token = Prefs.getToken(context)
         scope.launch {
             try {
                 val map = dokumenList.associate { it.id to it.checked }
-                withContext(Dispatchers.IO) { ApiClient.service.updateChecklist(ChecklistRequest(jamaahId, map)) }
+                withContext(Dispatchers.IO) { ApiClient.service.updateChecklist(ChecklistRequest(jamaahId, token, map)) }
                 syncStatus = "Tersimpan ke server ✓"
             } catch (e: Exception) {
                 syncStatus = "Gagal sync ke server: ${e.message}"
@@ -337,11 +427,12 @@ fun DokumenScreen() {
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Text("Checklist Dokumen (Fitur 3)", fontWeight = FontWeight.Bold, fontSize = 20.sp)
-        Text("6 dokumen wajib umrah", fontSize = 12.sp, color = Color.Gray)
+        Text("$totalDokumen dokumen wajib umrah", fontSize = 12.sp, color = Color.Gray)
         Spacer(Modifier.height(12.dp))
-        LinearProgressIndicator(progress = progress / 6f, modifier = Modifier.fillMaxWidth().height(8.dp).padding(horizontal = 4.dp), color = Color(0xFF0F7A5A))
+        val fraction = if (totalDokumen > 0) progress / totalDokumen.toFloat() else 0f
+        LinearProgressIndicator(progress = fraction, modifier = Modifier.fillMaxWidth().height(8.dp).padding(horizontal = 4.dp), color = Color(0xFF0F7A5A))
         Spacer(Modifier.height(4.dp))
-        Text("$progress / 6 selesai - ${((progress/6f)*100).toInt()}%", fontSize = 11.sp, color = Color(0xFF0F7A5A), fontWeight = FontWeight.Bold)
+        Text("$progress / $totalDokumen selesai - ${(fraction*100).toInt()}%", fontSize = 11.sp, color = Color(0xFF0F7A5A), fontWeight = FontWeight.Bold)
         if (syncStatus.isNotEmpty()) { Text(syncStatus, fontSize = 10.sp, color = Color.Gray) }
         Spacer(Modifier.height(16.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -407,6 +498,61 @@ fun DetailDoaScreen(doa: Doa, onBack: () -> Unit) {
     }
 }
 
+// FIX KEAMANAN: sebelumnya kolom "ID Jamaah" adalah teks bebas tanpa password --
+// siapa pun yang tahu/menebak nomor jamaah bisa upload bukti/checklist/skrining atas
+// nama orang lain. Sekarang jamaah WAJIB login dengan username+password yang dibuat
+// Admin (lihat imtiyaz-connector.php) sebelum bisa mengakses fitur-fitur ini.
+@Composable
+fun LoginScreen(onLoggedIn: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var username by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
+    var errorMsg by remember { mutableStateOf("") }
+
+    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {
+        Text("Login Jamaah", fontWeight = FontWeight.Bold, fontSize = 22.sp, color = Color(0xFF0F7A5A))
+        Text("Username & password diberikan oleh Admin/petugas Imtiyaz Tour saat pendaftaran -- bukan dibuat sendiri.", fontSize = 12.sp, color = Color.Gray)
+        Spacer(Modifier.height(20.dp))
+        OutlinedTextField(value = username, onValueChange = { username = it }, label = { Text("Username") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp))
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
+            value = password, onValueChange = { password = it }, label = { Text("Password") },
+            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)
+        )
+        Spacer(Modifier.height(16.dp))
+        if (errorMsg.isNotEmpty()) { Text(errorMsg, fontSize = 12.sp, color = Color(0xFFDC2626)); Spacer(Modifier.height(8.dp)) }
+        Button(
+            onClick = {
+                if (username.isBlank() || password.isBlank()) { errorMsg = "Username dan password wajib diisi"; return@Button }
+                isLoading = true; errorMsg = ""
+                scope.launch {
+                    try {
+                        val resp = withContext(Dispatchers.IO) { ApiClient.service.login(LoginRequest(username.trim(), password)) }
+                        if (resp.success == true && resp.token != null && resp.jamaah_id != null) {
+                            Prefs.saveLogin(context, resp.jamaah_id.toString(), resp.token, resp.nama ?: "")
+                            onLoggedIn()
+                        } else {
+                            errorMsg = resp.error ?: "Username atau password salah"
+                        }
+                    } catch (e: Exception) {
+                        errorMsg = "Username atau password salah, atau tidak ada koneksi internet"
+                    }
+                    isLoading = false
+                }
+            },
+            enabled = !isLoading,
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)),
+            shape = RoundedCornerShape(12.dp)
+        ) { if (isLoading) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp) else Text("Masuk", fontWeight = FontWeight.Bold) }
+        Spacer(Modifier.height(12.dp))
+        Text("Belum punya akun? Hubungi Admin Imtiyaz Tour via tab Paket untuk mendaftar dan mendapatkan username/password.", fontSize = 10.sp, color = Color.Gray)
+    }
+}
+
 // FITUR 2 - tombol Galeri/Kamera sekarang benar-benar meng-upload ke /api/upload-bukti.
 // Sebelumnya onClick = {} (kosong total).
 @Composable
@@ -414,7 +560,17 @@ fun SayaScreen() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var jamaahId by remember { mutableStateOf(Prefs.getJamaahId(context)) }
+    var loggedIn by remember { mutableStateOf(Prefs.isLoggedIn(context)) }
+
+    if (!loggedIn) {
+        LoginScreen(onLoggedIn = { loggedIn = true })
+        return
+    }
+
+    val jamaahId = Prefs.getJamaahId(context)
+    val token = Prefs.getToken(context)
+    val nama = Prefs.getNama(context)
+
     var uploadStatus by remember { mutableStateOf("") }
     var isUploading by remember { mutableStateOf(false) }
     var showSkrining by remember { mutableStateOf(false) }
@@ -425,15 +581,24 @@ fun SayaScreen() {
     var sisa by remember { mutableStateOf("Rp 27.400.000") }
     var status by remember { mutableStateOf("Belum Lunas") }
 
+    fun handleUnauthorized(message: String?): Boolean {
+        // Kalau server bilang token tidak valid (kedaluwarsa / dipakai di perangkat lain
+        // setelah login ulang), paksa logout supaya jamaah login ulang -- jangan biarkan
+        // app tetap "kelihatan login" padahal sesinya sudah tidak berlaku di server.
+        if (message?.contains("Token login", ignoreCase = true) == true) {
+            Prefs.clearLogin(context); loggedIn = false; return true
+        }
+        return false
+    }
+
     fun doUpload(file: File) {
-        if (jamaahId.isBlank()) { uploadStatus = "Isi ID Jamaah dulu sebelum upload bukti"; return }
         isUploading = true
         scope.launch {
-            val result = uploadBuktiFile(context, jamaahId, file)
+            val result = uploadBuktiFile(context, jamaahId, token, file)
             isUploading = false
-            uploadStatus = result.fold(
-                onSuccess = { it.message ?: "Berhasil diupload" },
-                onFailure = { "Gagal upload: ${it.message}" }
+            result.fold(
+                onSuccess = { uploadStatus = it.message ?: "Berhasil diupload" },
+                onFailure = { if (!handleUnauthorized(it.message)) uploadStatus = "Gagal upload: ${it.message}" }
             )
         }
     }
@@ -459,23 +624,17 @@ fun SayaScreen() {
 
     LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item {
-            Text("Saya", fontWeight = FontWeight.Bold, fontSize = 22.sp)
-
-            // ID Jamaah - dibutuhkan agar upload bukti, checklist, dan skrining bisa
-            // dikaitkan ke data jamaah yang benar di WordPress (diberikan oleh admin).
-            Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(1.dp), modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
-                    Text("ID Jamaah", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    Text("Diberikan oleh admin saat pendaftaran", fontSize = 10.sp, color = Color.Gray)
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = jamaahId,
-                        onValueChange = { jamaahId = it; Prefs.setJamaahId(context, it) },
-                        label = { Text("Contoh: 123") },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(8.dp)
-                    )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column {
+                    Text("Saya", fontWeight = FontWeight.Bold, fontSize = 22.sp)
+                    if (nama.isNotBlank()) Text(nama, fontSize = 12.sp, color = Color.Gray)
                 }
+                OutlinedButton(onClick = {
+                    scope.launch {
+                        try { withContext(Dispatchers.IO) { ApiClient.service.logout(LogoutRequest(jamaahId, token)) } } catch (e: Exception) {}
+                        Prefs.clearLogin(context); loggedIn = false
+                    }
+                }) { Text("Keluar", fontSize = 12.sp) }
             }
 
             // FITUR 2 - Status Pembayaran
@@ -524,26 +683,26 @@ fun SayaScreen() {
                     if (!showSkrining) {
                         Button(onClick = { showSkrining = true }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)), shape = RoundedCornerShape(12.dp)) { Text("Mulai Skrining - 29 Pertanyaan") }
                     } else {
-                        SkriningForm(jamaahId = jamaahId, onClose = { showSkrining = false })
+                        SkriningForm(jamaahId = jamaahId, token = token, onClose = { showSkrining = false }, onUnauthorized = { handleUnauthorized("Token login") })
                     }
                 }
             }
             // Profil
             Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(1.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text("Imtiyaz Tour Jogja", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF0F7A5A))
-                    Text("PPIU U383/2021 • Jln. Pertapan, Tegal Cerme RT08, Baturetno, Banguntapan, Bantul", fontSize = 11.sp, color = Color.Gray)
-                    Text("Kontak: 0811-277-6543 • pastiumrah.com", fontSize = 11.sp, color = Color(0xFF0F7A5A))
+                    Text(AppData.kontak.nama_travel, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF0F7A5A))
+                    Text(AppData.kontak.alamat, fontSize = 11.sp, color = Color.Gray)
+                    Text("Kontak: ${AppData.kontak.kontak}", fontSize = 11.sp, color = Color(0xFF0F7A5A))
                 }
             }
         }
     }
 }
 
-// FITUR 8 - tombol "Kirim ke Admin" sekarang benar-benar POST ke /api/skrining.
-// Sebelumnya hanya memanggil onClose() tanpa mengirim data ke mana pun.
+// FITUR 8 - tombol "Kirim ke Admin" sekarang benar-benar POST ke /api/skrining, disertai
+// token login jamaah (sebelumnya hanya jamaah_id polos tanpa bukti kepemilikan token).
 @Composable
-fun SkriningForm(jamaahId: String, onClose: () -> Unit) {
+fun SkriningForm(jamaahId: String, token: String, onClose: () -> Unit, onUnauthorized: () -> Unit) {
     val scope = rememberCoroutineScope()
     var step by remember { mutableStateOf(1) }
     var nama by remember { mutableStateOf("") }
@@ -588,12 +747,12 @@ fun SkriningForm(jamaahId: String, onClose: () -> Unit) {
             } else {
                 Button(
                     onClick = {
-                        if (jamaahId.isBlank()) { sendResult = "Isi ID Jamaah dulu di atas sebelum mengirim"; return@Button }
                         isSending = true
                         scope.launch {
                             try {
                                 val body = mapOf(
                                     "jamaah_id" to jamaahId,
+                                    "token" to token,
                                     "nama_lengkap" to nama,
                                     "kontak_darurat" to kontakDarurat,
                                     "riwayat_penyakit" to penyakit,
@@ -606,7 +765,9 @@ fun SkriningForm(jamaahId: String, onClose: () -> Unit) {
                                 onClose()
                             } catch (e: Exception) {
                                 isSending = false
-                                sendResult = "Gagal mengirim: ${e.message}"
+                                val msg = e.message ?: ""
+                                if (msg.contains("401") || msg.contains("Token", ignoreCase = true)) { onUnauthorized() }
+                                else sendResult = "Gagal mengirim: $msg"
                             }
                         }
                     },
