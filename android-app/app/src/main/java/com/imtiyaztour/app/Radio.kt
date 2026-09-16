@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Headset
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -61,12 +62,14 @@ import java.util.Locale
 // Kanal dibuat & dikelola Admin sendiri (tab "Kanal Radio", LEPAS dari Paket
 // Umrah -- satu paket bisa punya banyak tanggal keberangkatan/kanal berbeda).
 //
-// DUA CARA jadi TL (boleh salah satu/keduanya, diatur Admin per kanal):
-// 1) Akun Login TL sendiri -- TIDAK perlu akun jamaah palsu. Login langsung
-//    berwenang siaran di kanal yang ditugaskan, tanpa perlu isi kode apa pun.
-// 2) Kode TL -- jamaah yang sudah login memasukkan kode untuk sementara jadi
-//    TL (mis. TL dadakan/pengganti). Diverifikasi INSTAN saat tombol "Aktifkan"
-//    ditekan (bukan menunggu kiriman audio pertama gagal seperti sebelumnya).
+// FIX: sesuai permintaan, akses bicara sekarang TERTUTUP TOTAL untuk jamaah
+// biasa. Jalur "Kode TL" (jamaah bisa jadi TL sementara dengan memasukkan
+// kode) sudah DIHAPUS. SATU-SATUNYA cara bicara adalah Akun Login TL -- login
+// dengan username/password sendiri (TIDAK perlu akun jamaah palsu), langsung
+// berwenang siaran di kanal yang ditugaskan tanpa perlu isi kode apa pun.
+// Jamaah yang login sebagai jamaah SELALU mode dengar saja -- ikon di layar
+// berubah jadi earphone (bukan mikrofon) untuk menegaskan mereka tidak bisa
+// bicara, sama sekali tidak ada tombol/gerbang untuk mencoba bicara.
 // ============================================================================
 
 data class RadioSendResponse(val success: Boolean? = null, val channel: String? = null, val error: String? = null)
@@ -78,21 +81,16 @@ data class RadioPollRequest(
 data class RadioPollResponse(
     val channel: String? = null, val channel_nama: String? = null, val nama_saya: String? = null, val my_jamaah_id: String? = null,
     val is_fallback_channel: Boolean? = null, val is_tl_session: Boolean? = null, val server_time: Long? = null,
-    val requires_tl_code: Boolean? = null, val messages: List<RadioMessage> = emptyList(), val error: String? = null
+    val messages: List<RadioMessage> = emptyList(), val error: String? = null
 )
 data class TlLoginRequest(val username: String, val password: String)
 data class TlLoginResponse(val success: Boolean? = null, val kanal_id: String? = null, val kanal_nama: String? = null, val token: String? = null, val error: String? = null)
 data class TlLogoutRequest(val kanal_id: String, val token: String)
-data class RadioVerifyCodeRequest(val jamaah_id: String, val token: String, val tl_code: String)
-data class RadioVerifyCodeResponse(val valid: Boolean? = null, val error: String? = null)
 
 interface RadioApiService {
     @Multipart
     @POST("api/radio/send")
     suspend fun send(
-        @Part("jamaah_id") jamaahId: okhttp3.RequestBody,
-        @Part("token") token: okhttp3.RequestBody,
-        @Part("tl_code") tlCode: okhttp3.RequestBody,
         @Part("tl_kanal_id") tlKanalId: okhttp3.RequestBody,
         @Part("tl_token") tlToken: okhttp3.RequestBody,
         @Part audio: MultipartBody.Part
@@ -100,9 +98,6 @@ interface RadioApiService {
 
     @POST("api/radio/poll")
     suspend fun poll(@Body body: RadioPollRequest): RadioPollResponse
-
-    @POST("api/radio/verify-code")
-    suspend fun verifyCode(@Body body: RadioVerifyCodeRequest): RadioVerifyCodeResponse
 
     @POST("api/tl-login")
     suspend fun tlLogin(@Body body: TlLoginRequest): TlLoginResponse
@@ -177,7 +172,6 @@ class RadioRecorder(private val context: Context) {
 }
 
 private fun formatWaktu(millis: Long): String = SimpleDateFormat("HH:mm", Locale("id","ID")).format(millis)
-private val EMPTY_BODY: okhttp3.RequestBody = "".toRequestBody("text/plain".toMediaTypeOrNull())
 private fun String.asBody(): okhttp3.RequestBody = this.toRequestBody("text/plain".toMediaTypeOrNull())
 
 // FIX: akun Login TL terpisah dari login jamaah -- Admin tidak perlu lagi
@@ -245,12 +239,7 @@ fun RadioScreen(onBack: () -> Unit) {
     // supaya TL yang tidak punya akun jamaah tetap bisa masuk lewat jalur sendiri.
     if (!isTlAccount && !isJamaah) {
         var choice by remember { mutableStateOf("") } // "", "jamaah", "tl"
-        // FIX (bug): sebelumnya tombol/gestur back sistem Android tidak ditangani sama
-        // sekali di sini -- menekannya langsung MENUTUP SELURUH APLIKASI (karena tidak
-        // ada back-stack, default-nya keluar dari Activity), bukan cuma mundur satu
-        // langkah. Sekarang back sistem: dari sub-layar login -> kembali ke pilihan;
-        // dari pilihan -> panggil onBack() (kembali ke Beranda), sama seperti tombol
-        // "← Kembali" yang sudah ada.
+        // Back sistem: dari sub-layar login -> kembali ke pilihan; dari pilihan -> onBack().
         androidx.activity.compose.BackHandler(enabled = true) {
             if (choice.isNotEmpty()) choice = "" else onBack()
         }
@@ -275,8 +264,7 @@ fun RadioScreen(onBack: () -> Unit) {
     // --- Kredensial: salah satu jalur berikut aktif, yang lain dikosongkan ---
     val jamaahId = if (isJamaah) Prefs.getJamaahId(context) else ""
     val jamaahToken = if (isJamaah) Prefs.getToken(context) else ""
-    // FIX (bug): sama seperti gerbang login di atas -- tanpa ini, back sistem dari
-    // layar radio yang sudah login akan menutup seluruh aplikasi, bukan kembali ke Beranda.
+    // Back sistem dari layar radio yang sudah login -> keluar ke Beranda, bukan tutup app.
     androidx.activity.compose.BackHandler(enabled = true) { onBack() }
     val tlKanalId = if (isTlAccount) Prefs.getTlKanalId(context) else ""
     val tlToken = if (isTlAccount) Prefs.getTlToken(context) else ""
@@ -291,7 +279,6 @@ fun RadioScreen(onBack: () -> Unit) {
     var channel by remember { mutableStateOf("") }
     var channelNama by remember { mutableStateOf(if (isTlAccount) Prefs.getTlKanalNama(context) else "") }
     var isFallbackChannel by remember { mutableStateOf(false) }
-    var requiresTlCode by remember { mutableStateOf(false) }
     var messages by remember { mutableStateOf(listOf<RadioMessage>()) }
     var lastAfter by remember { mutableStateOf(0L) }
     var myId by remember { mutableStateOf("") }
@@ -301,34 +288,20 @@ fun RadioScreen(onBack: () -> Unit) {
     val playedIds = remember { mutableSetOf<String>() }
     val recorder = remember { RadioRecorder(context) }
 
-    // Status "TL via kode" (jalur 2) -- HANYA relevan untuk jamaah biasa. Akun Login
-    // TL (jalur 1) tidak butuh ini sama sekali, langsung berwenang begitu login.
-    var tlCodeInput by remember { mutableStateOf("") }
-    var isTlByCode by remember { mutableStateOf(false) }
-    var tlCodeError by remember { mutableStateOf("") }
-    var verifyingCode by remember { mutableStateOf(false) }
-
     fun handleUnauthorized() {
         if (isTlAccount) { Prefs.clearTlLogin(context); isTlAccount = false }
         else { Prefs.clearLogin(context); isJamaah = false }
     }
 
-    // FIX (bug): sebelumnya SEMUA jenis error (termasuk gangguan jaringan sesaat,
-    // timeout, atau server sibuk) dianggap sama dengan "token/kode ditolak", langsung
-    // memaksa logout TL/reset status kode. Akibatnya TL yang sudah login benar bisa
-    // tiba-tiba "terlempar" ke halaman login lagi hanya karena koneksi sempat putus
-    // sedetik saat mengirim suara -- bukan karena sesinya benar-benar tidak valid.
-    // Sekarang HANYA respons 401/403 dari server (bukti token/kode memang ditolak)
-    // yang memicu logout; error lain (jaringan, timeout, dll) cukup ditampilkan
-    // sebagai pesan sementara, sesi TETAP AKTIF, dan boleh dicoba lagi.
+    // HANYA respons 401/403 dari server (bukti token memang ditolak) yang memicu
+    // logout; error lain (jaringan, timeout, dll) cukup ditampilkan sebagai pesan
+    // sementara, sesi TETAP AKTIF, dan boleh dicoba lagi.
     fun isAuthRejection(e: Exception): Boolean {
         val code = (e as? retrofit2.HttpException)?.code()
         return code == 401 || code == 403
     }
 
     // Polling loop -- ini yang menggantikan "streaming langsung" (lihat catatan di atas).
-    // Selalu kirim KEDUA jenis kredensial sekaligus (yang tidak dipakai dikosongkan);
-    // server yang menentukan jalur mana yang valid.
     LaunchedEffect(Unit) {
         while (isActive) {
             try {
@@ -339,12 +312,11 @@ fun RadioScreen(onBack: () -> Unit) {
                 channelNama = resp.channel_nama ?: channelNama
                 myId = resp.my_jamaah_id ?: myId
                 isFallbackChannel = resp.is_fallback_channel ?: false
-                requiresTlCode = resp.requires_tl_code ?: false
                 if (resp.messages.isNotEmpty()) {
                     messages = (messages + resp.messages).takeLast(30)
                     lastAfter = resp.messages.maxOf { it.time }
                     // Deteksi "pesan sendiri" (supaya tidak diputar ulang/gema) lewat ID unik
-                    // dari server (my_jamaah_id) -- valid untuk jalur jamaah MAUPUN akun TL.
+                    // dari server (my_jamaah_id).
                     for (m in resp.messages) {
                         if (m.id !in playedIds && m.jamaah_id != myId && m.audio != null) {
                             playedIds.add(m.id)
@@ -376,19 +348,13 @@ fun RadioScreen(onBack: () -> Unit) {
             try {
                 val part = MultipartBody.Part.createFormData("audio", file.name, file.asRequestBody("audio/mp4".toMediaTypeOrNull()))
                 withContext(Dispatchers.IO) {
-                    RadioApiClient.service.send(
-                        jamaahId.asBody(), jamaahToken.asBody(), tlCodeInput.asBody(),
-                        tlKanalId.asBody(), tlToken.asBody(), part
-                    )
+                    RadioApiClient.service.send(tlKanalId.asBody(), tlToken.asBody(), part)
                 }
-                tlCodeError = ""
                 statusMsg = ""
             } catch (e: Exception) {
                 if (isAuthRejection(e)) {
-                    // Server memang menolak (401/403) -- token/kode benar-benar tidak valid.
-                    if (isTlAccount) { handleUnauthorized() } else { isTlByCode = false; tlCodeError = "Kode TL ditolak server -- silakan verifikasi ulang" }
+                    handleUnauthorized()
                 } else {
-                    // Error lain (jaringan/timeout/dll) -- sesi TETAP AKTIF, cukup beri tahu & boleh coba lagi.
                     statusMsg = "Gagal mengirim (jaringan bermasalah) -- coba tekan & tahan lagi"
                 }
             }
@@ -434,7 +400,11 @@ fun RadioScreen(onBack: () -> Unit) {
                 if (channelNama.isNotEmpty()) "Kanal: $channelNama" else "Menghubungkan ke kanal...",
                 fontSize = 12.sp, color = Color.Gray
             )
-            if (isTlAccount) { Text("Masuk sebagai Tour Leader kanal ini", fontSize = 11.sp, color = Color(0xFF0F7A5A), fontWeight = FontWeight.Bold) }
+            if (isTlAccount) {
+                Text("Masuk sebagai Tour Leader kanal ini -- Anda bisa bicara", fontSize = 11.sp, color = Color(0xFF0F7A5A), fontWeight = FontWeight.Bold)
+            } else {
+                Text("Mode dengar -- hanya Tour Leader yang bisa bicara di kanal ini", fontSize = 11.sp, color = Color.Gray)
+            }
             if (isFallbackChannel) {
                 Spacer(Modifier.height(6.dp))
                 Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3CD)), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
@@ -464,50 +434,14 @@ fun RadioScreen(onBack: () -> Unit) {
             }
         }
 
-        when {
-            // Jalur 1: akun Login TL -- selalu berwenang di kanalnya sendiri, tanpa kode.
-            isTlAccount -> PushToTalkButton(isRecording, isSending, interactionSource)
-            // Kanal terbuka (Admin belum isi Kode TL untuk kanal ini) -> semua jamaah
-            // yang login boleh bicara, tombol PTT langsung tampil.
-            !requiresTlCode -> PushToTalkButton(isRecording, isSending, interactionSource)
-            // Jalur 2: jamaah biasa, kanal siaran & belum verifikasi kode -> tampilkan
-            // gerbang kode dengan verifikasi INSTAN (bukan menunggu kiriman pertama gagal).
-            !isTlByCode -> {
-                Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                    Text("Kanal siaran satu-arah -- hanya Tour Leader yang bisa bicara di kanal ini.", fontSize = 11.sp, color = Color.Gray)
-                    if (tlCodeError.isNotEmpty()) { Spacer(Modifier.height(4.dp)); Text(tlCodeError, fontSize = 11.sp, color = Color(0xFFDC2626)) }
-                    Spacer(Modifier.height(8.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedTextField(
-                            value = tlCodeInput, onValueChange = { tlCodeInput = it },
-                            label = { Text("Kode TL (khusus Tour Leader)") },
-                            modifier = Modifier.weight(1f), singleLine = true, shape = RoundedCornerShape(8.dp),
-                            enabled = !verifyingCode
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Button(
-                            onClick = {
-                                if (tlCodeInput.isBlank()) return@Button
-                                verifyingCode = true; tlCodeError = ""
-                                scope.launch {
-                                    try {
-                                        val resp = withContext(Dispatchers.IO) { RadioApiClient.service.verifyCode(RadioVerifyCodeRequest(jamaahId, jamaahToken, tlCodeInput)) }
-                                        if (resp.valid == true) { isTlByCode = true; tlCodeError = "" }
-                                        else tlCodeError = "Kode TL salah -- tidak bisa diaktifkan"
-                                    } catch (e: Exception) {
-                                        tlCodeError = "Gagal memverifikasi -- periksa koneksi internet"
-                                    }
-                                    verifyingCode = false
-                                }
-                            },
-                            enabled = !verifyingCode,
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A))
-                        ) { if (verifyingCode) CircularProgressIndicator(Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp) else Text("Aktifkan") }
-                    }
-                }
-            }
-            // Kode sudah diverifikasi valid -> tombol bicara.
-            else -> PushToTalkButton(isRecording, isSending, interactionSource)
+        // FIX: sesuai permintaan, jamaah TIDAK PERNAH bisa bicara -- tidak ada gerbang
+        // kode, tidak ada pengecualian. Hanya akun Login TL yang mendapat tombol
+        // bicara (ikon mikrofon); jamaah selalu melihat indikator dengar (ikon
+        // earphone) yang tidak bisa ditekan sama sekali.
+        if (isTlAccount) {
+            PushToTalkButton(isRecording, isSending, interactionSource)
+        } else {
+            ListenOnlyIndicator()
         }
     }
 }
@@ -528,6 +462,22 @@ private fun PushToTalkButton(isRecording: Boolean, isSending: Boolean, interacti
             contentAlignment = Alignment.Center
         ) {
             Icon(Icons.Default.Mic, contentDescription = "Tekan untuk bicara", tint = Color.White, modifier = Modifier.size(36.dp))
+        }
+    }
+}
+
+// Indikator untuk jamaah (mode dengar saja) -- ikon earphone, TIDAK ada modifier
+// clickable sama sekali, jadi tidak mungkin memicu perekaman dengan cara apa pun.
+@Composable
+private fun ListenOnlyIndicator() {
+    Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("Mode dengar", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(12.dp))
+        Box(
+            modifier = Modifier.size(84.dp).background(Color(0xFF9CA3AF), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Default.Headset, contentDescription = "Mode dengar", tint = Color.White, modifier = Modifier.size(36.dp))
         }
     }
 }
