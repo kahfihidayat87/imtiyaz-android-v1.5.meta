@@ -26,7 +26,7 @@ jobs:
           unzip -q tools.zip -d $ANDROID_HOME/cmdline-tools
           mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
           echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
           echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
           echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
@@ -53,3 +53,34 @@ jobs:
         with:
           name: Imtiyaz-APK
           path: android-app/app/build/outputs/apk/debug/*.apk
+
+      # ============================================================
+      # BUILD RILIS (AAB) UNTUK PLAY STORE -- hanya jalan kalau ke-4 Secret di
+      # bawah sudah diisi di Settings > Secrets and variables > Actions (lihat
+      # panduan listing Play Store). Kalau belum diisi, langkah ini otomatis
+      # dilewati -- build APK debug di atas tetap jalan seperti biasa, tidak
+      # terganggu.
+      # ============================================================
+      - name: Decode release keystore
+        if: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
+        working-directory: android-app
+        run: echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > app/release.keystore
+
+      - name: Build Release AAB (Play Store)
+        if: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
+        working-directory: android-app
+        env:
+          RELEASE_KEYSTORE_PATH: release.keystore
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          export ANDROID_HOME=$HOME/android-sdk
+          ./gradlew :app:bundleRelease --no-daemon --stacktrace
+
+      - name: Upload Release AAB
+        if: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Imtiyaz-AAB-PlayStore
+          path: android-app/app/build/outputs/bundle/release/*.aab

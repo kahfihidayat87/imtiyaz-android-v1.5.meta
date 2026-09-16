@@ -5,20 +5,40 @@ plugins {
 
 android {
     namespace 'com.imtiyaztour.app'
-    compileSdk 34
+    compileSdk 36
 
     defaultConfig {
         applicationId "com.imtiyaztour.app"
         minSdk 24
-        targetSdk 34
-        versionCode 10
-        versionName "2.10.1"
+        targetSdk 36
+        versionCode 11
+        versionName "3.0.0"
+    }
+
+    // FIX: Play Store MENOLAK build yang ditandatangani kunci debug (yang dipakai
+    // otomatis oleh assembleDebug selama ini) -- wajib kunci rilis sendiri. Kredensial
+    // diambil dari environment variable, BUKAN ditulis langsung di sini, supaya kunci
+    // rahasia tidak pernah tersimpan di repo Git. Diisi lewat GitHub Secrets saat CI
+    // (lihat build-apk.yml), atau lewat environment variable lokal kalau build manual.
+    // Kalau env var ini belum diisi (mis. saat cuma build APK debug biasa), signingConfig
+    // ini otomatis kosong -- tidak mengganggu assembleDebug sama sekali.
+    signingConfigs {
+        release {
+            def ksPath = System.getenv("RELEASE_KEYSTORE_PATH")
+            if (ksPath) {
+                storeFile file(ksPath)
+                storePassword System.getenv("RELEASE_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword System.getenv("RELEASE_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
         }
     }
 
@@ -35,10 +55,10 @@ android {
         compose true
     }
 
-    // Versi compiler Compose ini WAJIB cocok dengan versi plugin Kotlin (1.9.10) di build.gradle root.
+    // Versi compiler Compose ini WAJIB cocok dengan versi plugin Kotlin (1.9.24) di build.gradle root.
     // Referensi resmi: https://developer.android.com/jetpack/androidx/releases/compose-kotlin
     composeOptions {
-        kotlinCompilerExtensionVersion '1.5.3'
+        kotlinCompilerExtensionVersion '1.5.14'
     }
 
     packaging {

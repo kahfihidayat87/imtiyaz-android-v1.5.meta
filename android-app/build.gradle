@@ -1,4 +1,10 @@
 plugins {
-    id 'com.android.application' version '8.2.0' apply false
-    id 'org.jetbrains.kotlin.android' version '1.9.10' apply false
+    // FIX: Google mewajibkan app BARU menarget Android 16 (API 36) mulai 31 Agustus
+    // 2026 -- tanggal itu sudah lewat (sekarang di atas tanggal itu), jadi app ini
+    // TIDAK BISA disubmit ke Play Store dalam kondisi lama (compileSdk 34). AGP 8.2.0
+    // yang lama tidak mendukung compileSdk 36 -- dinaikkan ke 8.9.1 (rekomendasi resmi
+    // Google untuk compileSdk 36), yang mewajibkan Gradle minimal 8.11.1 (lihat
+    // gradle-wrapper.properties).
+    id 'com.android.application' version '8.9.1' apply false
+    id 'org.jetbrains.kotlin.android' version '1.9.24' apply false
 }
