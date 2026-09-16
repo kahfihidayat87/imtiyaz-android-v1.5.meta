@@ -243,24 +243,6 @@ object Prefs {
         get(context).edit().remove("jamaah_id").remove("jamaah_token").remove("jamaah_nama").apply()
     }
 
-    // FIX: sesi Tour Leader TERPISAH dari sesi jamaah -- TL tidak perlu akun
-    // jamaah palsu lagi untuk bisa siaran, login sendiri dengan username/password
-    // yang ditugaskan Admin ke satu kanal (lihat Radio.kt / TlLoginScreen).
-    fun getTlKanalId(context: Context): String = get(context).getString("tl_kanal_id", "") ?: ""
-    fun getTlToken(context: Context): String = get(context).getString("tl_token", "") ?: ""
-    fun getTlKanalNama(context: Context): String = get(context).getString("tl_kanal_nama", "") ?: ""
-    fun isTlLoggedIn(context: Context): Boolean = getTlKanalId(context).isNotBlank() && getTlToken(context).isNotBlank()
-    fun saveTlLogin(context: Context, kanalId: String, token: String, kanalNama: String) {
-        get(context).edit()
-            .putString("tl_kanal_id", kanalId)
-            .putString("tl_token", token)
-            .putString("tl_kanal_nama", kanalNama)
-            .apply()
-    }
-    fun clearTlLogin(context: Context) {
-        get(context).edit().remove("tl_kanal_id").remove("tl_token").remove("tl_kanal_nama").apply()
-    }
-
     fun getChecklist(context: Context, dokumenList: List<Dokumen>): MutableMap<String, Boolean> {
         val prefs = get(context)
         return dokumenList.associate { it.id to prefs.getBoolean("doc_${it.id}", false) }.toMutableMap()

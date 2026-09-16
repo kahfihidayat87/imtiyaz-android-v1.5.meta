@@ -26,7 +26,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
@@ -62,48 +61,37 @@ import java.util.Locale
 // Kanal dibuat & dikelola Admin sendiri (tab "Kanal Radio", LEPAS dari Paket
 // Umrah -- satu paket bisa punya banyak tanggal keberangkatan/kanal berbeda).
 //
-// FIX: sesuai permintaan, akses bicara sekarang TERTUTUP TOTAL untuk jamaah
-// biasa. Jalur "Kode TL" (jamaah bisa jadi TL sementara dengan memasukkan
-// kode) sudah DIHAPUS. SATU-SATUNYA cara bicara adalah Akun Login TL -- login
-// dengan username/password sendiri (TIDAK perlu akun jamaah palsu), langsung
-// berwenang siaran di kanal yang ditugaskan tanpa perlu isi kode apa pun.
-// Jamaah yang login sebagai jamaah SELALU mode dengar saja -- ikon di layar
-// berubah jadi earphone (bukan mikrofon) untuk menegaskan mereka tidak bisa
-// bicara, sama sekali tidak ada tombol/gerbang untuk mencoba bicara.
+// FIX BESAR: sistem "Login TL" terpisah (username/password sendiri, layar
+// login sendiri) DIHAPUS TOTAL -- setelah berkali-kali gagal di lapangan dan
+// tidak bisa dilacak akar masalahnya tanpa akses langsung ke server produksi.
+// Sekarang status Tour Leader HANYA berupa satu centang pada akun JAMAAH yang
+// login lewat jalur yang SUDAH TERBUKTI bekerja (tidak pernah dilaporkan
+// gagal). Tidak ada lagi layar/akun/token terpisah untuk TL -- login sekali
+// sebagai jamaah, dan kalau akun itu ditandai "Tour Leader" oleh Admin, tombol
+// bicara (ikon mikrofon) otomatis muncul. Jamaah biasa selalu melihat ikon
+// earphone -- mode dengar saja, tidak ada tombol/gerbang untuk mencoba bicara.
 // ============================================================================
 
 data class RadioSendResponse(val success: Boolean? = null, val channel: String? = null, val error: String? = null)
 data class RadioMessage(val id: String, val jamaah_id: String? = null, val nama: String, val time: Long, val audio: String? = null)
-data class RadioPollRequest(
-    val jamaah_id: String, val token: String, val after: Long,
-    val tl_kanal_id: String = "", val tl_token: String = ""
-)
+data class RadioPollRequest(val jamaah_id: String, val token: String, val after: Long)
 data class RadioPollResponse(
     val channel: String? = null, val channel_nama: String? = null, val nama_saya: String? = null, val my_jamaah_id: String? = null,
-    val is_fallback_channel: Boolean? = null, val is_tl_session: Boolean? = null, val server_time: Long? = null,
+    val is_fallback_channel: Boolean? = null, val is_tour_leader: Boolean? = null, val server_time: Long? = null,
     val messages: List<RadioMessage> = emptyList(), val error: String? = null
 )
-data class TlLoginRequest(val username: String, val password: String)
-data class TlLoginResponse(val success: Boolean? = null, val kanal_id: String? = null, val kanal_nama: String? = null, val token: String? = null, val error: String? = null)
-data class TlLogoutRequest(val kanal_id: String, val token: String)
 
 interface RadioApiService {
     @Multipart
     @POST("api/radio/send")
     suspend fun send(
-        @Part("tl_kanal_id") tlKanalId: okhttp3.RequestBody,
-        @Part("tl_token") tlToken: okhttp3.RequestBody,
+        @Part("jamaah_id") jamaahId: okhttp3.RequestBody,
+        @Part("token") token: okhttp3.RequestBody,
         @Part audio: MultipartBody.Part
     ): RadioSendResponse
 
     @POST("api/radio/poll")
     suspend fun poll(@Body body: RadioPollRequest): RadioPollResponse
-
-    @POST("api/tl-login")
-    suspend fun tlLogin(@Body body: TlLoginRequest): TlLoginResponse
-
-    @POST("api/tl-logout")
-    suspend fun tlLogout(@Body body: TlLogoutRequest): Map<String, Boolean>
 }
 
 object RadioApiClient {
@@ -174,100 +162,25 @@ class RadioRecorder(private val context: Context) {
 private fun formatWaktu(millis: Long): String = SimpleDateFormat("HH:mm", Locale("id","ID")).format(millis)
 private fun String.asBody(): okhttp3.RequestBody = this.toRequestBody("text/plain".toMediaTypeOrNull())
 
-// FIX: akun Login TL terpisah dari login jamaah -- Admin tidak perlu lagi
-// membuatkan akun "jamaah" palsu hanya supaya staf TL bisa masuk aplikasi.
-@Composable
-fun TlLoginScreen(onLoggedIn: () -> Unit, onBackToChoice: () -> Unit) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var username by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var isLoading by remember { mutableStateOf(false) }
-    var errorMsg by remember { mutableStateOf("") }
-
-    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {
-        Text("Login Tour Leader", fontWeight = FontWeight.Bold, fontSize = 22.sp, color = Color(0xFF0F7A5A))
-        Text("Username & password ini terpisah dari akun jamaah -- diberikan Admin khusus untuk memandu satu kanal radio.", fontSize = 12.sp, color = Color.Gray)
-        Spacer(Modifier.height(20.dp))
-        OutlinedTextField(value = username, onValueChange = { username = it }, label = { Text("Username TL") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp))
-        Spacer(Modifier.height(8.dp))
-        OutlinedTextField(
-            value = password, onValueChange = { password = it }, label = { Text("Password TL") },
-            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)
-        )
-        Spacer(Modifier.height(16.dp))
-        if (errorMsg.isNotEmpty()) { Text(errorMsg, fontSize = 12.sp, color = Color(0xFFDC2626)); Spacer(Modifier.height(8.dp)) }
-        Button(
-            onClick = {
-                if (username.isBlank() || password.isBlank()) { errorMsg = "Username dan password wajib diisi"; return@Button }
-                isLoading = true; errorMsg = ""
-                scope.launch {
-                    try {
-                        val resp = withContext(Dispatchers.IO) { RadioApiClient.service.tlLogin(TlLoginRequest(username.trim(), password)) }
-                        if (resp.success == true && resp.token != null && resp.kanal_id != null) {
-                            Prefs.saveTlLogin(context, resp.kanal_id, resp.token, resp.kanal_nama ?: resp.kanal_id)
-                            onLoggedIn()
-                        } else {
-                            errorMsg = resp.error ?: "Username atau password TL salah"
-                        }
-                    } catch (e: Exception) {
-                        errorMsg = "Username atau password TL salah, atau tidak ada koneksi internet"
-                    }
-                    isLoading = false
-                }
-            },
-            enabled = !isLoading,
-            modifier = Modifier.fillMaxWidth().height(50.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)),
-            shape = RoundedCornerShape(12.dp)
-        ) { if (isLoading) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp) else Text("Masuk sebagai TL", fontWeight = FontWeight.Bold) }
-        Spacer(Modifier.height(12.dp))
-        TextButton(onClick = onBackToChoice) { Text("← Kembali", fontSize = 12.sp) }
-    }
-}
-
 @Composable
 fun RadioScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var isTlAccount by remember { mutableStateOf(Prefs.isTlLoggedIn(context)) }
     var isJamaah by remember { mutableStateOf(Prefs.isLoggedIn(context)) }
 
-    // Belum login sama sekali (baik jamaah maupun TL) -> tawarkan dua pilihan,
-    // supaya TL yang tidak punya akun jamaah tetap bisa masuk lewat jalur sendiri.
-    if (!isTlAccount && !isJamaah) {
-        var choice by remember { mutableStateOf("") } // "", "jamaah", "tl"
-        // Back sistem: dari sub-layar login -> kembali ke pilihan; dari pilihan -> onBack().
-        androidx.activity.compose.BackHandler(enabled = true) {
-            if (choice.isNotEmpty()) choice = "" else onBack()
-        }
-        when (choice) {
-            "jamaah" -> LoginScreen(onLoggedIn = { isJamaah = true }, onCancel = { choice = "" })
-            "tl" -> TlLoginScreen(onLoggedIn = { isTlAccount = true }, onBackToChoice = { choice = "" })
-            else -> Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Text("Radio Tour Leader", fontWeight = FontWeight.Bold, fontSize = 18.sp, textAlign = TextAlign.Center)
-                Spacer(Modifier.height(8.dp))
-                Text("Pilih cara masuk sesuai peran Anda.", fontSize = 12.sp, color = Color.Gray, textAlign = TextAlign.Center)
-                Spacer(Modifier.height(20.dp))
-                Button(onClick = { choice = "jamaah" }, modifier = Modifier.fillMaxWidth().height(48.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)), shape = RoundedCornerShape(12.dp)) { Text("Saya Jamaah") }
-                Spacer(Modifier.height(10.dp))
-                OutlinedButton(onClick = { choice = "tl" }, modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(12.dp)) { Text("Saya Tour Leader") }
-                Spacer(Modifier.height(16.dp))
-                TextButton(onClick = onBack) { Text("← Kembali", fontSize = 12.sp) }
-            }
-        }
+    // Belum login -> gerbang login jamaah biasa (satu-satunya jalur sekarang; status
+    // Tour Leader ditentukan Admin lewat centang pada akun jamaah, bukan login terpisah).
+    if (!isJamaah) {
+        androidx.activity.compose.BackHandler(enabled = true) { onBack() }
+        LoginScreen(onLoggedIn = { isJamaah = true }, onCancel = onBack)
         return
     }
 
-    // --- Kredensial: salah satu jalur berikut aktif, yang lain dikosongkan ---
-    val jamaahId = if (isJamaah) Prefs.getJamaahId(context) else ""
-    val jamaahToken = if (isJamaah) Prefs.getToken(context) else ""
+    val jamaahId = Prefs.getJamaahId(context)
+    val jamaahToken = Prefs.getToken(context)
     // Back sistem dari layar radio yang sudah login -> keluar ke Beranda, bukan tutup app.
     androidx.activity.compose.BackHandler(enabled = true) { onBack() }
-    val tlKanalId = if (isTlAccount) Prefs.getTlKanalId(context) else ""
-    val tlToken = if (isTlAccount) Prefs.getTlToken(context) else ""
 
     var hasMicPermission by remember {
         mutableStateOf(context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
@@ -276,9 +189,9 @@ fun RadioScreen(onBack: () -> Unit) {
         hasMicPermission = granted
     }
 
-    var channel by remember { mutableStateOf("") }
-    var channelNama by remember { mutableStateOf(if (isTlAccount) Prefs.getTlKanalNama(context) else "") }
+    var channelNama by remember { mutableStateOf("") }
     var isFallbackChannel by remember { mutableStateOf(false) }
+    var isTourLeader by remember { mutableStateOf(false) }
     var messages by remember { mutableStateOf(listOf<RadioMessage>()) }
     var lastAfter by remember { mutableStateOf(0L) }
     var myId by remember { mutableStateOf("") }
@@ -288,10 +201,7 @@ fun RadioScreen(onBack: () -> Unit) {
     val playedIds = remember { mutableSetOf<String>() }
     val recorder = remember { RadioRecorder(context) }
 
-    fun handleUnauthorized() {
-        if (isTlAccount) { Prefs.clearTlLogin(context); isTlAccount = false }
-        else { Prefs.clearLogin(context); isJamaah = false }
-    }
+    fun handleUnauthorized() { Prefs.clearLogin(context); isJamaah = false }
 
     // HANYA respons 401/403 dari server (bukti token memang ditolak) yang memicu
     // logout; error lain (jaringan, timeout, dll) cukup ditampilkan sebagai pesan
@@ -306,12 +216,12 @@ fun RadioScreen(onBack: () -> Unit) {
         while (isActive) {
             try {
                 val resp = withContext(Dispatchers.IO) {
-                    RadioApiClient.service.poll(RadioPollRequest(jamaahId, jamaahToken, lastAfter, tlKanalId, tlToken))
+                    RadioApiClient.service.poll(RadioPollRequest(jamaahId, jamaahToken, lastAfter))
                 }
-                channel = resp.channel ?: channel
                 channelNama = resp.channel_nama ?: channelNama
                 myId = resp.my_jamaah_id ?: myId
                 isFallbackChannel = resp.is_fallback_channel ?: false
+                isTourLeader = resp.is_tour_leader ?: false
                 if (resp.messages.isNotEmpty()) {
                     messages = (messages + resp.messages).takeLast(30)
                     lastAfter = resp.messages.maxOf { it.time }
@@ -348,7 +258,7 @@ fun RadioScreen(onBack: () -> Unit) {
             try {
                 val part = MultipartBody.Part.createFormData("audio", file.name, file.asRequestBody("audio/mp4".toMediaTypeOrNull()))
                 withContext(Dispatchers.IO) {
-                    RadioApiClient.service.send(tlKanalId.asBody(), tlToken.asBody(), part)
+                    RadioApiClient.service.send(jamaahId.asBody(), jamaahToken.asBody(), part)
                 }
                 statusMsg = ""
             } catch (e: Exception) {
@@ -383,16 +293,8 @@ fun RadioScreen(onBack: () -> Unit) {
     }
 
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onBack) { Text("← Kembali") }
-            if (isTlAccount) {
-                TextButton(onClick = {
-                    scope.launch {
-                        try { withContext(Dispatchers.IO) { RadioApiClient.service.tlLogout(TlLogoutRequest(tlKanalId, tlToken)) } } catch (e: Exception) {}
-                        Prefs.clearTlLogin(context); isTlAccount = false
-                    }
-                }) { Text("Keluar (TL)", fontSize = 12.sp) }
-            }
         }
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
             Text("Radio Tour Leader", fontWeight = FontWeight.Bold, fontSize = 20.sp)
@@ -400,8 +302,8 @@ fun RadioScreen(onBack: () -> Unit) {
                 if (channelNama.isNotEmpty()) "Kanal: $channelNama" else "Menghubungkan ke kanal...",
                 fontSize = 12.sp, color = Color.Gray
             )
-            if (isTlAccount) {
-                Text("Masuk sebagai Tour Leader kanal ini -- Anda bisa bicara", fontSize = 11.sp, color = Color(0xFF0F7A5A), fontWeight = FontWeight.Bold)
+            if (isTourLeader) {
+                Text("Anda ditandai sebagai Tour Leader -- Anda bisa bicara di kanal ini", fontSize = 11.sp, color = Color(0xFF0F7A5A), fontWeight = FontWeight.Bold)
             } else {
                 Text("Mode dengar -- hanya Tour Leader yang bisa bicara di kanal ini", fontSize = 11.sp, color = Color.Gray)
             }
@@ -434,11 +336,11 @@ fun RadioScreen(onBack: () -> Unit) {
             }
         }
 
-        // FIX: sesuai permintaan, jamaah TIDAK PERNAH bisa bicara -- tidak ada gerbang
-        // kode, tidak ada pengecualian. Hanya akun Login TL yang mendapat tombol
-        // bicara (ikon mikrofon); jamaah selalu melihat indikator dengar (ikon
-        // earphone) yang tidak bisa ditekan sama sekali.
-        if (isTlAccount) {
+        // Status Tour Leader ditentukan Admin (centang pada akun jamaah), dikirim
+        // server lewat is_tour_leader -- TIDAK ADA cara lain untuk membukanya dari
+        // sisi aplikasi. Jamaah biasa selalu dapat ikon earphone, tanpa modifier
+        // apa pun yang bisa memicu perekaman.
+        if (isTourLeader) {
             PushToTalkButton(isRecording, isSending, interactionSource)
         } else {
             ListenOnlyIndicator()
