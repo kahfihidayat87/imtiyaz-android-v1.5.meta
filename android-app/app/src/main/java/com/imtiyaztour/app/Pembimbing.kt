@@ -32,6 +32,8 @@ import retrofit2.http.GET
 // tidak ada satu pun yang di-hardcode di aplikasi.
 // ============================================================================
 
+data class PembimbingAudio(val judul: String = "", val url: String = "")
+
 data class Pembimbing(
     val id: String,
     val nama: String,
@@ -39,7 +41,7 @@ data class Pembimbing(
     val pengalaman_tahun: Int? = null,
     val spesialisasi: String = "",
     val deskripsi: String = "",
-    val audio_url: String? = null
+    val audio_list: List<PembimbingAudio> = emptyList()
 )
 
 interface PembimbingApiService {
@@ -150,9 +152,10 @@ fun PembimbingListScreen(onPembimbingClick: (Pembimbing) -> Unit, onBack: () -> 
 
 @Composable
 fun PembimbingDetailScreen(pembimbing: Pembimbing, onBack: () -> Unit) {
-    val audioUrl = pembimbing.audio_url
-    val hasAudio = !audioUrl.isNullOrBlank()
-    val playing = hasAudio && AudioPlayerManager.currentlyPlayingUrl == audioUrl
+    // FIX: sebelumnya 1 audio per pembimbing -- sekarang bisa BANYAK (minimal 5 slot
+    // disediakan Admin), jadi ditampilkan sebagai daftar, bukan satu tombol. Slot yang
+    // judul & URL-nya kosong (belum diisi Admin) tidak ditampilkan sama sekali.
+    val audioItems = pembimbing.audio_list.filter { it.url.isNotBlank() }
     DisposableEffect(Unit) { onDispose { AudioPlayerManager.stop() } }
 
     LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -196,27 +199,34 @@ fun PembimbingDetailScreen(pembimbing: Pembimbing, onBack: () -> Unit) {
             }
         }
         item {
-            Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(1.dp), modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
-                    Text("Materi Ceramah", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF0F7A5A))
-                    Spacer(Modifier.height(6.dp))
-                    if (!hasAudio) {
-                        Text("Belum ada materi audio dari pembimbing ini.", fontSize = 12.sp, color = Color.Gray)
-                    } else {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(onClick = { AudioPlayerManager.toggle(audioUrl!!) }, modifier = Modifier.size(48.dp)) {
-                                Icon(
-                                    if (playing) Icons.Default.Stop else Icons.Default.PlayCircle,
-                                    contentDescription = "Putar materi ceramah",
-                                    tint = Color(0xFF0F7A5A), modifier = Modifier.size(40.dp)
-                                )
-                            }
-                            Spacer(Modifier.width(8.dp))
-                            Text(if (playing) "Sedang memutar..." else "Ketuk untuk dengar ceramah singkat", fontSize = 12.sp, color = Color.Gray)
+            Text("Materi Ceramah", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFF0F7A5A))
+            Spacer(Modifier.height(4.dp))
+            if (audioItems.isEmpty()) {
+                Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(1.dp), modifier = Modifier.fillMaxWidth()) {
+                    Text("Belum ada materi audio dari pembimbing ini.", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(16.dp))
+                }
+            }
+        }
+        items(audioItems) { audio ->
+            val playing = AudioPlayerManager.currentlyPlayingUrl == audio.url
+            Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(1.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { AudioPlayerManager.toggle(audio.url) }, modifier = Modifier.size(44.dp)) {
+                            Icon(
+                                if (playing) Icons.Default.Stop else Icons.Default.PlayCircle,
+                                contentDescription = "Putar materi ceramah",
+                                tint = Color(0xFF0F7A5A), modifier = Modifier.size(36.dp)
+                            )
                         }
-                        if (AudioPlayerManager.isLoading && playing) { Spacer(Modifier.height(6.dp)); LinearProgressIndicator(Modifier.fillMaxWidth()) }
-                        AudioPlayerManager.errorMessage?.let { if (playing) { Spacer(Modifier.height(6.dp)); Text(it, fontSize = 11.sp, color = Color(0xFFDC2626)) } }
+                        Spacer(Modifier.width(8.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(audio.judul.ifBlank { "Materi Ceramah" }, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF111827))
+                            Text(if (playing) "Sedang memutar..." else "Ketuk untuk dengar", fontSize = 11.sp, color = if (playing) Color(0xFF0F7A5A) else Color.Gray)
+                        }
                     }
+                    if (AudioPlayerManager.isLoading && playing) { Spacer(Modifier.height(4.dp)); LinearProgressIndicator(Modifier.fillMaxWidth()) }
+                    AudioPlayerManager.errorMessage?.let { if (playing) { Spacer(Modifier.height(4.dp)); Text(it, fontSize = 11.sp, color = Color(0xFFDC2626)) } }
                 }
             }
         }
