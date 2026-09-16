@@ -41,7 +41,16 @@ data class Pembimbing(
     val pengalaman_tahun: Int? = null,
     val spesialisasi: String = "",
     val deskripsi: String = "",
-    val audio_list: List<PembimbingAudio> = emptyList()
+    // FIX (bug nyata: app tertutup saat klik nama pembimbing): field ini sebelumnya
+    // non-null dengan default emptyList() -- tapi Gson (parser JSON di Android)
+    // MELEWATI nilai default Kotlin kalau field ini tidak ada di JSON (mis. data lama
+    // di WordPress yang tersimpan sebelum fitur banyak-audio ini ada, masih pakai
+    // skema lama 'audio_url' tunggal, tidak punya 'audio_list' sama sekali) --
+    // hasilnya field ini jadi BENAR-BENAR null saat runtime meski tipenya bilang tidak
+    // boleh null, dan App langsung crash (NullPointerException) begitu diakses. Sekarang
+    // dibuat nullable secara eksplisit dan SELALU di-null-check saat dipakai (lihat
+    // PembimbingDetailScreen) -- jadi baik data lama maupun baru sama-sama aman.
+    val audio_list: List<PembimbingAudio>? = null
 )
 
 interface PembimbingApiService {
@@ -155,7 +164,7 @@ fun PembimbingDetailScreen(pembimbing: Pembimbing, onBack: () -> Unit) {
     // FIX: sebelumnya 1 audio per pembimbing -- sekarang bisa BANYAK (minimal 5 slot
     // disediakan Admin), jadi ditampilkan sebagai daftar, bukan satu tombol. Slot yang
     // judul & URL-nya kosong (belum diisi Admin) tidak ditampilkan sama sekali.
-    val audioItems = pembimbing.audio_list.filter { it.url.isNotBlank() }
+    val audioItems = (pembimbing.audio_list ?: emptyList()).filter { it.url.isNotBlank() }
     DisposableEffect(Unit) { onDispose { AudioPlayerManager.stop() } }
 
     LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
