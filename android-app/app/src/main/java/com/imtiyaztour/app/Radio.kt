@@ -245,8 +245,17 @@ fun RadioScreen(onBack: () -> Unit) {
     // supaya TL yang tidak punya akun jamaah tetap bisa masuk lewat jalur sendiri.
     if (!isTlAccount && !isJamaah) {
         var choice by remember { mutableStateOf("") } // "", "jamaah", "tl"
+        // FIX (bug): sebelumnya tombol/gestur back sistem Android tidak ditangani sama
+        // sekali di sini -- menekannya langsung MENUTUP SELURUH APLIKASI (karena tidak
+        // ada back-stack, default-nya keluar dari Activity), bukan cuma mundur satu
+        // langkah. Sekarang back sistem: dari sub-layar login -> kembali ke pilihan;
+        // dari pilihan -> panggil onBack() (kembali ke Beranda), sama seperti tombol
+        // "← Kembali" yang sudah ada.
+        androidx.activity.compose.BackHandler(enabled = true) {
+            if (choice.isNotEmpty()) choice = "" else onBack()
+        }
         when (choice) {
-            "jamaah" -> LoginScreen(onLoggedIn = { isJamaah = true })
+            "jamaah" -> LoginScreen(onLoggedIn = { isJamaah = true }, onCancel = { choice = "" })
             "tl" -> TlLoginScreen(onLoggedIn = { isTlAccount = true }, onBackToChoice = { choice = "" })
             else -> Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Text("Radio Tour Leader", fontWeight = FontWeight.Bold, fontSize = 18.sp, textAlign = TextAlign.Center)
@@ -266,6 +275,9 @@ fun RadioScreen(onBack: () -> Unit) {
     // --- Kredensial: salah satu jalur berikut aktif, yang lain dikosongkan ---
     val jamaahId = if (isJamaah) Prefs.getJamaahId(context) else ""
     val jamaahToken = if (isJamaah) Prefs.getToken(context) else ""
+    // FIX (bug): sama seperti gerbang login di atas -- tanpa ini, back sistem dari
+    // layar radio yang sudah login akan menutup seluruh aplikasi, bukan kembali ke Beranda.
+    androidx.activity.compose.BackHandler(enabled = true) { onBack() }
     val tlKanalId = if (isTlAccount) Prefs.getTlKanalId(context) else ""
     val tlToken = if (isTlAccount) Prefs.getTlToken(context) else ""
 
@@ -299,6 +311,19 @@ fun RadioScreen(onBack: () -> Unit) {
     fun handleUnauthorized() {
         if (isTlAccount) { Prefs.clearTlLogin(context); isTlAccount = false }
         else { Prefs.clearLogin(context); isJamaah = false }
+    }
+
+    // FIX (bug): sebelumnya SEMUA jenis error (termasuk gangguan jaringan sesaat,
+    // timeout, atau server sibuk) dianggap sama dengan "token/kode ditolak", langsung
+    // memaksa logout TL/reset status kode. Akibatnya TL yang sudah login benar bisa
+    // tiba-tiba "terlempar" ke halaman login lagi hanya karena koneksi sempat putus
+    // sedetik saat mengirim suara -- bukan karena sesinya benar-benar tidak valid.
+    // Sekarang HANYA respons 401/403 dari server (bukti token/kode memang ditolak)
+    // yang memicu logout; error lain (jaringan, timeout, dll) cukup ditampilkan
+    // sebagai pesan sementara, sesi TETAP AKTIF, dan boleh dicoba lagi.
+    fun isAuthRejection(e: Exception): Boolean {
+        val code = (e as? retrofit2.HttpException)?.code()
+        return code == 401 || code == 403
     }
 
     // Polling loop -- ini yang menggantikan "streaming langsung" (lihat catatan di atas).
@@ -336,6 +361,9 @@ fun RadioScreen(onBack: () -> Unit) {
                 }
                 statusMsg = ""
             } catch (e: Exception) {
+                if (isAuthRejection(e)) {
+                    handleUnauthorized(); return@LaunchedEffect
+                }
                 statusMsg = "Tidak terhubung ke server -- akan mencoba lagi"
             }
             delay(2500)
@@ -354,10 +382,15 @@ fun RadioScreen(onBack: () -> Unit) {
                     )
                 }
                 tlCodeError = ""
-            } catch (e: Exception) {
-                // Kalau ternyata ditolak server (kode salah/sesi kedaluwarsa), turunkan ke mode dengar.
-                if (isTlAccount) { handleUnauthorized() } else { isTlByCode = false; tlCodeError = "Pengiriman ditolak server -- silakan verifikasi kode lagi" }
                 statusMsg = ""
+            } catch (e: Exception) {
+                if (isAuthRejection(e)) {
+                    // Server memang menolak (401/403) -- token/kode benar-benar tidak valid.
+                    if (isTlAccount) { handleUnauthorized() } else { isTlByCode = false; tlCodeError = "Kode TL ditolak server -- silakan verifikasi ulang" }
+                } else {
+                    // Error lain (jaringan/timeout/dll) -- sesi TETAP AKTIF, cukup beri tahu & boleh coba lagi.
+                    statusMsg = "Gagal mengirim (jaringan bermasalah) -- coba tekan & tahan lagi"
+                }
             }
             isSending = false
             file.delete()

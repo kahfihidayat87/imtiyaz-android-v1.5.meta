@@ -322,6 +322,27 @@ fun ImtiyazApp() {
     var showJadwal by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
+    // FIX (bug): sebelumnya TIDAK ADA satu pun layar di aplikasi ini yang menangani
+    // tombol/gestur back sistem Android -- menekannya di layar detail/sub-halaman
+    // manapun (Detail Paket, Detail Doa, Surat Quran, Itinerary, Radio, Jadwal
+    // Keberangkatan) langsung MENUTUP SELURUH APLIKASI, karena tidak ada back-stack
+    // yang di-pop (defaultnya keluar dari Activity). Sekarang back sistem mundur satu
+    // langkah dulu (balik ke Beranda/tab sebelumnya), sama seperti tombol "← Kembali"
+    // yang sudah ada di tiap layar -- baru di level Beranda/tab, back sistem berlaku
+    // seperti biasa (keluar aplikasi), sesuai perilaku standar Android.
+    androidx.activity.compose.BackHandler(
+        enabled = selectedPaket != null || selectedDoa != null || selectedSurah != null || showItinerary || showRadio || showJadwal
+    ) {
+        when {
+            selectedPaket != null -> selectedPaket = null
+            selectedDoa != null -> selectedDoa = null
+            selectedSurah != null -> selectedSurah = null
+            showItinerary -> showItinerary = false
+            showRadio -> showRadio = false
+            showJadwal -> showJadwal = false
+        }
+    }
+
     // Izin lokasi diminta SEKALI di awal (sebelum masuk ke halaman utama), bukan
     // lagi ditunda sampai user membuka fitur jadwal shalat -- sesuai permintaan.
     // Catatan: Android tidak mengizinkan permission dangerous (termasuk lokasi)
@@ -724,7 +745,7 @@ fun DetailDoaScreen(doa: Doa, onBack: () -> Unit) {
 // nama orang lain. Sekarang jamaah WAJIB login dengan username+password yang dibuat
 // Admin (lihat imtiyaz-connector.php) sebelum bisa mengakses fitur-fitur ini.
 @Composable
-fun LoginScreen(onLoggedIn: () -> Unit) {
+fun LoginScreen(onLoggedIn: () -> Unit, onCancel: (() -> Unit)? = null) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var username by remember { mutableStateOf("") }
@@ -733,6 +754,14 @@ fun LoginScreen(onLoggedIn: () -> Unit) {
     var errorMsg by remember { mutableStateOf("") }
 
     Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {
+        // FIX (bug): sebelumnya layar ini sama sekali tidak punya tombol keluar --
+        // satu-satunya cara "keluar" adalah pindah tab lain (tidak jelas/tidak terlihat)
+        // atau menutup aplikasi. Sekarang ada tombol "← Kembali" eksplisit kalau layar
+        // ini dibuka dari alur yang punya tujuan "kembali" yang jelas (mis. dari Radio).
+        if (onCancel != null) {
+            TextButton(onClick = onCancel) { Text("← Kembali") }
+            Spacer(Modifier.height(8.dp))
+        }
         Text("Login Jamaah", fontWeight = FontWeight.Bold, fontSize = 22.sp, color = Color(0xFF0F7A5A))
         Text("Username & password diberikan oleh Admin/petugas Imtiyaz Tour saat pendaftaran -- bukan dibuat sendiri.", fontSize = 12.sp, color = Color.Gray)
         Spacer(Modifier.height(20.dp))
