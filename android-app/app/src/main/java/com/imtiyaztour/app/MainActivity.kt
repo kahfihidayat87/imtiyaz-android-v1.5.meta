@@ -243,6 +243,24 @@ object Prefs {
         get(context).edit().remove("jamaah_id").remove("jamaah_token").remove("jamaah_nama").apply()
     }
 
+    // FIX: sesi Tour Leader TERPISAH dari sesi jamaah -- TL tidak perlu akun
+    // jamaah palsu lagi untuk bisa siaran, login sendiri dengan username/password
+    // yang ditugaskan Admin ke satu kanal (lihat Radio.kt / TlLoginScreen).
+    fun getTlKanalId(context: Context): String = get(context).getString("tl_kanal_id", "") ?: ""
+    fun getTlToken(context: Context): String = get(context).getString("tl_token", "") ?: ""
+    fun getTlKanalNama(context: Context): String = get(context).getString("tl_kanal_nama", "") ?: ""
+    fun isTlLoggedIn(context: Context): Boolean = getTlKanalId(context).isNotBlank() && getTlToken(context).isNotBlank()
+    fun saveTlLogin(context: Context, kanalId: String, token: String, kanalNama: String) {
+        get(context).edit()
+            .putString("tl_kanal_id", kanalId)
+            .putString("tl_token", token)
+            .putString("tl_kanal_nama", kanalNama)
+            .apply()
+    }
+    fun clearTlLogin(context: Context) {
+        get(context).edit().remove("tl_kanal_id").remove("tl_token").remove("tl_kanal_nama").apply()
+    }
+
     fun getChecklist(context: Context, dokumenList: List<Dokumen>): MutableMap<String, Boolean> {
         val prefs = get(context)
         return dokumenList.associate { it.id to prefs.getBoolean("doc_${it.id}", false) }.toMutableMap()
@@ -376,7 +394,7 @@ fun ImtiyazApp() {
                 showRadio -> RadioScreen(onBack = { showRadio = false })
                 showJadwal -> JadwalKeberangkatanScreen(onBack = { showJadwal = false })
                 else -> when (selectedTab) {
-                    0 -> BerandaScreen(onPaketClick = { selectedPaket = it }, onItineraryClick = { showItinerary = true }, onJadwalClick = { showJadwal = true })
+                    0 -> BerandaScreen(onPaketClick = { selectedPaket = it }, onItineraryClick = { showItinerary = true }, onJadwalClick = { showJadwal = true }, onRadioClick = { showRadio = true })
                     1 -> PaketListScreen(onPaketClick = { selectedPaket = it })
                     2 -> QuranScreen(onSurahClick = { selectedSurah = it })
                     3 -> DoaListScreen(onDoaClick = { selectedDoa = it })
@@ -402,7 +420,7 @@ fun SplashScreen() {
 }
 
 @Composable
-fun BerandaScreen(onPaketClick: (PaketUmrah) -> Unit, onItineraryClick: () -> Unit, onJadwalClick: () -> Unit) {
+fun BerandaScreen(onPaketClick: (PaketUmrah) -> Unit, onItineraryClick: () -> Unit, onJadwalClick: () -> Unit, onRadioClick: () -> Unit) {
     val context = LocalContext.current
     val namaJamaah = Prefs.getNama(context)
     LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -449,6 +467,27 @@ fun BerandaScreen(onPaketClick: (PaketUmrah) -> Unit, onItineraryClick: () -> Un
                     Column(Modifier.weight(1f)) {
                         Text("Jadwal Keberangkatan Terbaru", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         Text("Tanggal & harga live dari sistem", fontSize = 11.sp, color = Color.Gray)
+                    }
+                    Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF0F7A5A))
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            // FIX: sebelumnya Radio hanya bisa diakses lewat tombol di tab Saya, yang
+            // mensyaratkan login JAMAAH lebih dulu -- Tour Leader yang tidak punya akun
+            // jamaah jadi TIDAK BISA sama sekali mencapai layar Radio. Sekarang ada
+            // jalur langsung dari Beranda, terbuka untuk siapa saja (login jamaah ATAU
+            // login TL diminta di dalam layar Radio itu sendiri, bukan sebelum masuk).
+            Card(
+                shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(1.dp),
+                modifier = Modifier.fillMaxWidth().clickable { onRadioClick() }
+            ) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Mic, contentDescription = null, tint = Color(0xFF0F7A5A))
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Radio Tour Leader", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text("Dengarkan arahan TL secara langsung, atau masuk sebagai TL", fontSize = 11.sp, color = Color.Gray)
                     }
                     Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF0F7A5A))
                 }

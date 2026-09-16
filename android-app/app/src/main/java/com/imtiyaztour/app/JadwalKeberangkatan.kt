@@ -119,11 +119,6 @@ fun JadwalKeberangkatanScreen(onBack: () -> Unit) {
                             Text(j.harga_tampilan, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F7A5A))
                         }
                     }
-                    if (!j.url.isNullOrBlank()) {
-                        TextButton(onClick = {
-                            try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(j.url))) } catch (e: Exception) {}
-                        }) { Text("Detail", fontSize = 11.sp) }
-                    }
                 }
             }
         }
