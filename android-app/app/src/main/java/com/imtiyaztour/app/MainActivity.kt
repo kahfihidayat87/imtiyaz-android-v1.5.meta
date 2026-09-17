@@ -377,7 +377,7 @@ fun ImtiyazApp() {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Column { Text("Imtiyaz Tour", fontWeight = FontWeight.Bold, color = Color(0xFF0F7A5A)); Text("PPIU U383/2021 • Pilih Paket Umrah", fontSize = 11.sp, color = Color.Gray) } },
+                title = { Column { Text("Imtiyaz Tour", fontWeight = FontWeight.Bold, color = Color(0xFF0F7A5A)); Text("PPIU U383/2021 • Travel Umrah Nyaman Lansia", fontSize = 11.sp, color = Color.Gray) } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
             )
         },
@@ -444,7 +444,7 @@ fun BerandaScreen(onPaketClick: (PaketUmrah) -> Unit, onItineraryClick: () -> Un
                         namaJamaah.ifBlank { AppData.kontak.nama_travel },
                         color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp
                     )
-                    Text("Melayani Seperti Keluarga", color = Color(0xFFFFD700), fontSize = 12.sp)
+                    Text("Pilih Paket Umrah", color = Color(0xFFFFD700), fontSize = 12.sp)
                 }
             }
             Spacer(Modifier.height(16.dp))
@@ -529,7 +529,7 @@ fun BerandaScreen(onPaketClick: (PaketUmrah) -> Unit, onItineraryClick: () -> Un
 @Composable
 fun PaketListScreen(onPaketClick: (PaketUmrah) -> Unit) {
     LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { Text("Pilih Paket Umrah", fontWeight = FontWeight.Bold, fontSize = 20.sp); Text("Tanpa WebView, semua di APK", fontSize = 11.sp, color = Color.Gray); Spacer(Modifier.height(8.dp)) }
+        item { Text("Pilih Paket Umrah", fontWeight = FontWeight.Bold, fontSize = 20.sp); Text("Sesuaikan dengan kebutuhan", fontSize = 11.sp, color = Color.Gray); Spacer(Modifier.height(8.dp)) }
         items(AppData.paket) { paket -> PaketCard(paket = paket, onClick = { onPaketClick(paket) }) }
     }
 }
@@ -767,7 +767,7 @@ fun LoginScreen(onLoggedIn: () -> Unit, onCancel: (() -> Unit)? = null) {
             Spacer(Modifier.height(8.dp))
         }
         Text("Login Jamaah", fontWeight = FontWeight.Bold, fontSize = 22.sp, color = Color(0xFF0F7A5A))
-        Text("Username & password diberikan oleh Admin/petugas Imtiyaz Tour saat pendaftaran -- bukan dibuat sendiri.", fontSize = 12.sp, color = Color.Gray)
+        Text("Username & password diberikan oleh Admin Imtiyaz Tour saat pendaftaran -- bukan dibuat sendiri.", fontSize = 12.sp, color = Color.Gray)
         Spacer(Modifier.height(20.dp))
         OutlinedTextField(value = username, onValueChange = { username = it }, label = { Text("Username") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp))
         Spacer(Modifier.height(8.dp))
