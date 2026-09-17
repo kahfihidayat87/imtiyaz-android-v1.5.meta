@@ -8,6 +8,15 @@ on:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
+    # FIX (bug nyata: workflow gagal total di awal, sebelum step apa pun jalan):
+    # GitHub Actions TIDAK MENGIZINKAN context "secrets" dipakai langsung di dalam
+    # kondisi "if:" pada level step -- ini bukan cuma "tidak berfungsi seperti
+    # diharapkan", tapi benar-benar membuat GitHub menolak seluruh file workflow
+    # sebagai tidak valid (makanya tidak ada log sama sekali, gagal sebelum Action
+    # manapun dijalankan). Solusinya: nilai secret dicek di sini (level job, lewat
+    # "env:", yang BOLEH mengakses secrets), lalu tiap step cukup membaca env ini.
+    env:
+      HAS_RELEASE_KEYSTORE: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -62,12 +71,12 @@ jobs:
       # terganggu.
       # ============================================================
       - name: Decode release keystore
-        if: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
+        if: ${{ env.HAS_RELEASE_KEYSTORE == 'true' }}
         working-directory: android-app
         run: echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > app/release.keystore
 
       - name: Build Release AAB (Play Store)
-        if: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
+        if: ${{ env.HAS_RELEASE_KEYSTORE == 'true' }}
         working-directory: android-app
         env:
           RELEASE_KEYSTORE_PATH: release.keystore
@@ -79,7 +88,7 @@ jobs:
           ./gradlew :app:bundleRelease --no-daemon --stacktrace
 
       - name: Upload Release AAB
-        if: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
+        if: ${{ env.HAS_RELEASE_KEYSTORE == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: Imtiyaz-AAB-PlayStore
