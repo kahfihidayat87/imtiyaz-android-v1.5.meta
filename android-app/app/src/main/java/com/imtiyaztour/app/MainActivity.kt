@@ -302,6 +302,11 @@ fun ImtiyazApp() {
     var showItinerary by remember { mutableStateOf(false) }
     var showRadio by remember { mutableStateOf(false) }
     var showJadwal by remember { mutableStateOf(false) }
+    var showManasik by remember { mutableStateOf(false) }
+    var showJournalList by remember { mutableStateOf(false) }
+    var showJournalEdit by remember { mutableStateOf<JournalEntry?>(null) }
+    var showJournalEditActive by remember { mutableStateOf(false) }
+    var showReminder by remember { mutableStateOf(false) }
     var showPembimbingList by remember { mutableStateOf(false) }
     var selectedPembimbing by remember { mutableStateOf<Pembimbing?>(null) }
     val context = LocalContext.current
@@ -315,17 +320,24 @@ fun ImtiyazApp() {
     // yang sudah ada di tiap layar -- baru di level Beranda/tab, back sistem berlaku
     // seperti biasa (keluar aplikasi), sesuai perilaku standar Android.
     androidx.activity.compose.BackHandler(
-        enabled = selectedPaket != null || selectedDoa != null || selectedSurah != null || showItinerary || showRadio || showJadwal || showPembimbingList || selectedPembimbing != null
+        enabled = selectedPaket != null || selectedDoa != null || selectedSurah != null ||
+                  showItinerary || showRadio || showJadwal || showPembimbingList ||
+                  selectedPembimbing != null || showManasik || showJournalList ||
+                  showJournalEditActive || showReminder
     ) {
         when {
             selectedPaket != null -> selectedPaket = null
             selectedDoa != null -> selectedDoa = null
             selectedSurah != null -> selectedSurah = null
             selectedPembimbing != null -> selectedPembimbing = null
+            showJournalEditActive -> { showJournalEditActive = false; showJournalEdit = null }
             showItinerary -> showItinerary = false
             showRadio -> showRadio = false
             showJadwal -> showJadwal = false
             showPembimbingList -> showPembimbingList = false
+            showManasik -> showManasik = false
+            showJournalList -> showJournalList = false
+            showReminder -> showReminder = false
         }
     }
 
@@ -359,6 +371,10 @@ fun ImtiyazApp() {
         launch { try { AppData.kontak = ApiClient.service.getKontak() } catch (e: Exception) { /* pakai KontakInfo() default */ } }
         launch { try { AppData.wa = ApiClient.service.getWaAdmin() } catch (e: Exception) { /* pakai WaInfo() default */ } }
         launch { try { AppData.doaAudio = ApiClient.service.getDoaAudio() } catch (e: Exception) { /* tidak ada audio, tampilkan teks saja */ } }
+    }
+
+    LaunchedEffect(Unit) {
+        try { ReminderScheduler.rescheduleAll(context) } catch (e: Exception) {}
     }
 
     // Splash Compose -- durasi tampil logo dikontrol pasti (bukan cuma jeda cold-start
@@ -402,8 +418,28 @@ fun ImtiyazApp() {
                 showJadwal -> JadwalKeberangkatanScreen(onBack = { showJadwal = false })
                 selectedPembimbing != null -> PembimbingDetailScreen(pembimbing = selectedPembimbing!!, onBack = { selectedPembimbing = null })
                 showPembimbingList -> PembimbingListScreen(onPembimbingClick = { selectedPembimbing = it }, onBack = { showPembimbingList = false })
+                showManasik -> ManasikScreen(onBack = { showManasik = false })
+                showJournalEditActive -> JournalEditScreen(
+                    existing = showJournalEdit,
+                    onBack = { showJournalEditActive = false; showJournalEdit = null },
+                    onSaved = { showJournalEditActive = false; showJournalEdit = null; showJournalList = true }
+                )
+                showJournalList -> JournalListScreen(
+                    onBack = { showJournalList = false },
+                    onOpen = { entry -> showJournalEdit = entry; showJournalEditActive = true }
+                )
+                showReminder -> ReminderScreen(onBack = { showReminder = false })
                 else -> when (selectedTab) {
-                    0 -> BerandaScreen(onPaketClick = { selectedPaket = it }, onItineraryClick = { showItinerary = true }, onJadwalClick = { showJadwal = true }, onRadioClick = { showRadio = true }, onPembimbingClick = { showPembimbingList = true })
+                    0 -> BerandaScreen(
+                        onPaketClick = { selectedPaket = it },
+                        onItineraryClick = { showItinerary = true },
+                        onJadwalClick = { showJadwal = true },
+                        onRadioClick = { showRadio = true },
+                        onPembimbingClick = { showPembimbingList = true },
+                        onManasikClick = { showManasik = true },
+                        onJournalClick = { showJournalList = true },
+                        onReminderClick = { showReminder = true }
+                    )
                     1 -> PaketListScreen(onPaketClick = { selectedPaket = it })
                     2 -> QuranScreen(onSurahClick = { selectedSurah = it })
                     3 -> DoaListScreen(onDoaClick = { selectedDoa = it })
@@ -429,7 +465,16 @@ fun SplashScreen() {
 }
 
 @Composable
-fun BerandaScreen(onPaketClick: (PaketUmrah) -> Unit, onItineraryClick: () -> Unit, onJadwalClick: () -> Unit, onRadioClick: () -> Unit, onPembimbingClick: () -> Unit) {
+fun BerandaScreen(
+    onPaketClick: (PaketUmrah) -> Unit,
+    onItineraryClick: () -> Unit,
+    onJadwalClick: () -> Unit,
+    onRadioClick: () -> Unit,
+    onPembimbingClick: () -> Unit,
+    onManasikClick: () -> Unit,
+    onJournalClick: () -> Unit,
+    onReminderClick: () -> Unit
+) {
     val context = LocalContext.current
     val namaJamaah = Prefs.getNama(context)
     LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -513,6 +558,54 @@ fun BerandaScreen(onPaketClick: (PaketUmrah) -> Unit, onItineraryClick: () -> Un
                     Column(Modifier.weight(1f)) {
                         Text("Pembimbing Umrah", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         Text("Profil ustadz & materi ceramah singkat", fontSize = 11.sp, color = Color.Gray)
+                    }
+                    Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF0F7A5A))
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            Card(
+                shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(1.dp),
+                modifier = Modifier.fillMaxWidth().clickable { onManasikClick() }
+            ) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Checklist, contentDescription = null, tint = Color(0xFF0F7A5A))
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Panduan Manasik", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text("Langkah demi langkah + centang progres", fontSize = 11.sp, color = Color.Gray)
+                    }
+                    Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF0F7A5A))
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Card(
+                shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(1.dp),
+                modifier = Modifier.fillMaxWidth().clickable { onJournalClick() }
+            ) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Book, contentDescription = null, tint = Color(0xFF0F7A5A))
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Catatan Perjalanan", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text("Tulis momen & doa selama umrah (privat)", fontSize = 11.sp, color = Color.Gray)
+                    }
+                    Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF0F7A5A))
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Card(
+                shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(1.dp),
+                modifier = Modifier.fillMaxWidth().clickable { onReminderClick() }
+            ) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Alarm, contentDescription = null, tint = Color(0xFF0F7A5A))
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Pengingat Ibadah & Kesehatan", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text("Atur pengingat minum obat, air, istirahat", fontSize = 11.sp, color = Color.Gray)
                     }
                     Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF0F7A5A))
                 }

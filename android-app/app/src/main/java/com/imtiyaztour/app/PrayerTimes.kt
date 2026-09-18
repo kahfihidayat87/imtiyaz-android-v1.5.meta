@@ -3,6 +3,7 @@ package com.imtiyaztour.app
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Build
 import android.location.Location
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -193,6 +194,9 @@ fun PrayerTimesCard() {
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
         hasPermission = result.values.any { it }
     }
+    val notifPermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
 
     suspend fun loadTimes() {
         errorMsg = ""
@@ -208,7 +212,12 @@ fun PrayerTimesCard() {
         val tzHours = TimeZone.getDefault().rawOffset / 3600000.0
         val cal = Calendar.getInstance()
         val result = computePrayerTimes(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH), lat, lng, tzHours)
-        if (result == null) errorMsg = "Gagal menghitung jadwal untuk lokasi ini" else times = result
+        if (result == null) {
+            errorMsg = "Gagal menghitung jadwal untuk lokasi ini"
+        } else {
+            times = result
+            try { AdzanScheduler.scheduleAll(context, result) } catch (e: Exception) {}
+        }
     }
 
     LaunchedEffect(hasPermission) {
@@ -279,6 +288,38 @@ fun PrayerTimesCard() {
             }
             Spacer(Modifier.height(6.dp))
             Text("Estimasi Ummul Qura -- rujuk adzan Masjidil Haram/Nabawi setempat", fontSize = 8.sp, color = Color.LightGray)
+
+            Spacer(Modifier.height(10.dp))
+            Divider()
+            Row(
+                Modifier.fillMaxWidth().padding(top = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Notifikasi Adzan", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text("Dapat notifikasi otomatis di setiap waktu shalat",
+                        fontSize = 10.sp, color = Color.Gray)
+                }
+                var adzanOn by remember { mutableStateOf(AdzanPrefs.isEnabled(context)) }
+                Switch(
+                    checked = adzanOn,
+                    onCheckedChange = { v ->
+                        adzanOn = v
+                        AdzanPrefs.setEnabled(context, v)
+                        if (v) {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                                    != PackageManager.PERMISSION_GRANTED) {
+                                notifPermLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                            }
+                            times?.let { AdzanScheduler.scheduleAll(context, it) }
+                        } else {
+                            AdzanScheduler.cancelAll(context)
+                        }
+                    }
+                )
+            }
         }
     }
 }
