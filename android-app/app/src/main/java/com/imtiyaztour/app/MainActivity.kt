@@ -307,6 +307,7 @@ fun ImtiyazApp() {
     var showJournalEdit by remember { mutableStateOf<JournalEntry?>(null) }
     var showJournalEditActive by remember { mutableStateOf(false) }
     var showReminder by remember { mutableStateOf(false) }
+    var showAnnouncementDetail by remember { mutableStateOf(false) }
     var showPembimbingList by remember { mutableStateOf(false) }
     var selectedPembimbing by remember { mutableStateOf<Pembimbing?>(null) }
     val context = LocalContext.current
@@ -375,6 +376,7 @@ fun ImtiyazApp() {
 
     LaunchedEffect(Unit) {
         try { ReminderScheduler.rescheduleAll(context) } catch (e: Exception) {}
+        try { checkAnnouncements(context) } catch (e: Exception) {}
     }
 
     // Splash Compose -- durasi tampil logo dikontrol pasti (bukan cuma jeda cold-start
@@ -388,6 +390,13 @@ fun ImtiyazApp() {
     if (showSplash) {
         SplashScreen()
         return
+    }
+
+    if (showAnnouncementDetail) {
+        AnnouncementDetailDialog(onDismiss = {
+            markAnnouncementRead(context)
+            showAnnouncementDetail = false
+        })
     }
 
     Scaffold(
@@ -434,11 +443,11 @@ fun ImtiyazApp() {
                         onPaketClick = { selectedPaket = it },
                         onItineraryClick = { showItinerary = true },
                         onJadwalClick = { showJadwal = true },
-                        onRadioClick = { showRadio = true },
                         onPembimbingClick = { showPembimbingList = true },
                         onManasikClick = { showManasik = true },
                         onJournalClick = { showJournalList = true },
-                        onReminderClick = { showReminder = true }
+                        onReminderClick = { showReminder = true },
+                        onAnnouncementClick = { showAnnouncementDetail = true }
                     )
                     1 -> PaketListScreen(onPaketClick = { selectedPaket = it })
                     2 -> QuranScreen(onSurahClick = { selectedSurah = it })
@@ -469,16 +478,20 @@ fun BerandaScreen(
     onPaketClick: (PaketUmrah) -> Unit,
     onItineraryClick: () -> Unit,
     onJadwalClick: () -> Unit,
-    onRadioClick: () -> Unit,
     onPembimbingClick: () -> Unit,
     onManasikClick: () -> Unit,
     onJournalClick: () -> Unit,
-    onReminderClick: () -> Unit
+    onReminderClick: () -> Unit,
+    onAnnouncementClick: () -> Unit
 ) {
     val context = LocalContext.current
     val namaJamaah = Prefs.getNama(context)
     LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
+            if (AnnouncementStore.isUnread) {
+                AnnouncementCard(onClick = onAnnouncementClick)
+                Spacer(Modifier.height(12.dp))
+            }
             Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF0F7A5A)), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(20.dp)) {
                     // FIX: sebelumnya selalu menampilkan nama travel meski jamaah sudah login --
@@ -521,27 +534,6 @@ fun BerandaScreen(
                     Column(Modifier.weight(1f)) {
                         Text("Jadwal Keberangkatan Terbaru", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         Text("Tanggal & harga live dari sistem", fontSize = 11.sp, color = Color.Gray)
-                    }
-                    Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF0F7A5A))
-                }
-            }
-            Spacer(Modifier.height(16.dp))
-            // FIX: sebelumnya Radio hanya bisa diakses lewat tombol di tab Saya, yang
-            // mensyaratkan login JAMAAH lebih dulu -- Tour Leader yang tidak punya akun
-            // jamaah jadi TIDAK BISA sama sekali mencapai layar Radio. Sekarang ada
-            // jalur langsung dari Beranda, terbuka untuk siapa saja (login jamaah ATAU
-            // login TL diminta di dalam layar Radio itu sendiri, bukan sebelum masuk).
-            Card(
-                shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(1.dp),
-                modifier = Modifier.fillMaxWidth().clickable { onRadioClick() }
-            ) {
-                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Mic, contentDescription = null, tint = Color(0xFF0F7A5A))
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("Radio Tour Leader", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                        Text("Dengarkan arahan TL secara langsung, atau masuk sebagai TL", fontSize = 11.sp, color = Color.Gray)
                     }
                     Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF0F7A5A))
                 }

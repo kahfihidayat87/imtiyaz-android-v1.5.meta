@@ -206,8 +206,8 @@ fun PrayerTimesCard() {
             lat = loc.latitude; lng = loc.longitude
             locationLabel = "Berdasarkan lokasi Anda saat ini"
         } else {
-            lat = 21.4225; lng = 39.8262 // fallback: Masjidil Haram, Mekkah
-            locationLabel = if (hasPermission) "Lokasi tidak terdeteksi -- pakai Mekkah" else "Aktifkan lokasi untuk jadwal sesuai posisi Anda"
+            lat = -7.7956; lng = 110.3695 // fallback: Yogyakarta (kota asal jamaah)
+            locationLabel = if (hasPermission) "Lokasi tidak terdeteksi -- pakai Yogyakarta" else "Aktifkan lokasi untuk jadwal sesuai posisi Anda"
         }
         val tzHours = TimeZone.getDefault().rawOffset / 3600000.0
         val cal = Calendar.getInstance()
