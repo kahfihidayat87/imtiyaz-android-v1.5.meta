@@ -307,6 +307,7 @@ fun ImtiyazApp() {
     var showJournalEdit by remember { mutableStateOf<JournalEntry?>(null) }
     var showJournalEditActive by remember { mutableStateOf(false) }
     var showReminder by remember { mutableStateOf(false) }
+    var showFindJamaah by remember { mutableStateOf(false) }
     var showAnnouncementDetail by remember { mutableStateOf(false) }
     var showPembimbingList by remember { mutableStateOf(false) }
     var selectedPembimbing by remember { mutableStateOf<Pembimbing?>(null) }
@@ -324,7 +325,7 @@ fun ImtiyazApp() {
         enabled = selectedPaket != null || selectedDoa != null || selectedSurah != null ||
                   showItinerary || showRadio || showJadwal || showPembimbingList ||
                   selectedPembimbing != null || showManasik || showJournalList ||
-                  showJournalEditActive || showReminder
+                  showJournalEditActive || showReminder || showFindJamaah
     ) {
         when {
             selectedPaket != null -> selectedPaket = null
@@ -339,6 +340,7 @@ fun ImtiyazApp() {
             showManasik -> showManasik = false
             showJournalList -> showJournalList = false
             showReminder -> showReminder = false
+            showFindJamaah -> showFindJamaah = false
         }
     }
 
@@ -377,6 +379,14 @@ fun ImtiyazApp() {
     LaunchedEffect(Unit) {
         try { ReminderScheduler.rescheduleAll(context) } catch (e: Exception) {}
         try { checkAnnouncements(context) } catch (e: Exception) {}
+    }
+
+    // Fitur Tracking Lansia: nyalakan LocateService saat login
+    // (ditambahkan otomatis oleh patch-locate-effect.py)
+    LaunchedEffect(Unit) {
+        if (Prefs.isLoggedIn(context)) {
+            try { LocateService.start(context) } catch (e: Exception) { }
+        }
     }
 
     // Splash Compose -- durasi tampil logo dikontrol pasti (bukan cuma jeda cold-start
@@ -438,6 +448,7 @@ fun ImtiyazApp() {
                     onOpen = { entry -> showJournalEdit = entry; showJournalEditActive = true }
                 )
                 showReminder -> ReminderScreen(onBack = { showReminder = false })
+                showFindJamaah -> FindJamaahScreen(onBack = { showFindJamaah = false })
                 else -> when (selectedTab) {
                     0 -> BerandaScreen(
                         onPaketClick = { selectedPaket = it },
@@ -453,7 +464,7 @@ fun ImtiyazApp() {
                     2 -> QuranScreen(onSurahClick = { selectedSurah = it })
                     3 -> DoaListScreen(onDoaClick = { selectedDoa = it })
                     4 -> DokumenScreen()
-                    5 -> SayaScreen(onRadioClick = { showRadio = true })
+                    5 -> SayaScreen(onRadioClick = { showRadio = true }, onFindJamaahClick = { showFindJamaah = true })
                 }
             }
         }
@@ -895,7 +906,7 @@ fun LoginScreen(onLoggedIn: () -> Unit, onCancel: (() -> Unit)? = null) {
 // FITUR 2 - tombol Galeri/Kamera sekarang benar-benar meng-upload ke /api/upload-bukti.
 // Sebelumnya onClick = {} (kosong total).
 @Composable
-fun SayaScreen(onRadioClick: () -> Unit) {
+fun SayaScreen(onRadioClick: () -> Unit, onFindJamaahClick: () -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -1070,6 +1081,12 @@ fun SayaScreen(onRadioClick: () -> Unit) {
                     Text("Dengarkan arahan Tour Leader secara langsung selama prosesi umrah", fontSize = 11.sp, color = Color.Gray)
                     Spacer(Modifier.height(12.dp))
                     Button(onClick = onRadioClick, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)), shape = RoundedCornerShape(12.dp)) { Text("Buka Radio") }
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = { onFindJamaahClick() },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text("Cari Lokasi Jamaah") }
                 }
             }
         }
