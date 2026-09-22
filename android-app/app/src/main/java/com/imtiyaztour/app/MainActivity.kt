@@ -283,6 +283,10 @@ suspend fun uploadBuktiFile(context: Context, jamaahId: String, token: String, f
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // v2.12.0: inisialisasi osmdroid (WAJIB sebelum MapView dibuat)
+        org.osmdroid.config.Configuration.getInstance().userAgentValue = packageName
+        org.osmdroid.config.Configuration.getInstance().osmdroidBasePath = java.io.File(cacheDir, "osmdroid")
+        org.osmdroid.config.Configuration.getInstance().osmdroidTileCache = java.io.File(cacheDir, "osmdroid/tiles")
         // Tema splash (logo di windowBackground) hanya untuk menutup jeda cold-start.
         // Begitu Activity ini hidup, langsung kembali ke tema biasa -- splash Compose
         // di bawah (SplashScreen composable) yang mengatur durasi tampil logo sesungguhnya.

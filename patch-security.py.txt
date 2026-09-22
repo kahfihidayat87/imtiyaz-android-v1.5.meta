@@ -1,0 +1,73 @@
+#!/usr/bin/env python3
+"""
+Hapus 2 endpoint berbahaya dari app.js:
+- GET /api/jamaah      (list semua jamaah -- publik)
+- GET /api/jamaah/:id  (detail jamaah -- publik)
+
+Kedua endpoint tidak dipakai oleh Android app. Menghapusnya menutup
+kebocoran data pribadi jamaah.
+"""
+import sys, os, shutil
+
+APP = "app.js"
+if not os.path.isfile(APP):
+    print(f"ERROR: {APP} tidak ada di folder ini"); sys.exit(1)
+
+def read(p):
+    with open(p, "r", encoding="utf-8", newline="") as f:
+        return f.read().replace("\r\n", "\n").replace("\r", "\n")
+
+def write(p, c):
+    with open(p, "w", encoding="utf-8", newline="\n") as f:
+        f.write(c)
+
+c = read(APP)
+
+# Cek sudah dihapus atau belum
+if "// SECURITY: endpoint /api/jamaah dihapus" in c:
+    print("SKIP: sudah di-patch sebelumnya")
+    sys.exit(0)
+
+# Blok yang akan dihapus (dari komentar pembuka sampai akhir kedua endpoint)
+target = """// FIX: sebelumnya endpoint ini (dan WP REST-nya) terbuka tanpa autentikasi sama
+// sekali -> siapa pun bisa membaca data pribadi & status pembayaran seluruh jamaah
+// (kebocoran data / IDOR). Sekarang Node memakai Basic Auth (Application Password)
+// ke WordPress, DAN WP-nya (lihat imtiyaz-connector.php) mewajibkan user login.
+app.get('/api/jamaah/:id', async (req,res)=>{
+  try{ const r = await axios.get(`${WP_URL}/wp-json/imtiyaz/v1/jamaah/${req.params.id}`, { auth: WP_AUTH }); res.json(r.data); }
+  catch(e){ res.status(404).json({error:'Jamaah tidak ditemukan'}); }
+});
+
+app.get('/api/jamaah', async (req,res)=>{
+  try{ const r = await axios.get(`${WP_URL}/wp-json/imtiyaz/v1/jamaah`, { auth: WP_AUTH }); res.json(r.data); }
+  catch(e){ res.status(500).json({error:'Gagal load jamaah'}); }
+});"""
+
+replacement = """// SECURITY: endpoint /api/jamaah dihapus (v2.11.1).
+// Endpoint lama ini membaca data pribadi SELURUH jamaah TANPA cek autentikasi
+// di sisi Node -- siapa pun yang tahu URL bisa menarik semua data pembayaran,
+// paket, dan checklist jamaah. Tidak pernah dipakai oleh Android app (app hanya
+// pakai /api/me yang diverifikasi token), jadi aman untuk dihapus sepenuhnya.
+// Kalau ke depan butuh list jamaah, tambahkan endpoint admin dengan Basic Auth
+// ketat dan jangan pernah expose ke publik."""
+
+if target not in c:
+    print("ERROR: pola endpoint tidak ditemukan")
+    print("Kemungkinan sudah dihapus manual atau format berbeda.")
+    sys.exit(2)
+
+shutil.copy(APP, APP + ".bak-sec")
+print(f"Backup: {APP}.bak-sec")
+
+c = c.replace(target, replacement, 1)
+
+# Update versi
+c = c.replace("Imtiyaz Node API v2.11.0", "Imtiyaz Node API v2.11.1")
+c = c.replace(
+    "endpoints:['/api/paket','/api/dokumen','/api/jadwal-keberangkatan','/api/doa-audio','/api/pembimbing','/api/kontak','/api/announcements','/api/login','/api/logout','/api/me','/api/radio/send','/api/radio/poll','/api/jamaah/:id','/api/jamaah','/api/upload-bukti','/api/update-checklist','/api/skrining','/api/wa-admin','/api/find','/api/find/:id/status','/api/track-ping','/api/kanal-jamaah']",
+    "endpoints:['/api/paket','/api/dokumen','/api/jadwal-keberangkatan','/api/doa-audio','/api/pembimbing','/api/kontak','/api/announcements','/api/login','/api/logout','/api/me','/api/radio/send','/api/radio/poll','/api/upload-bukti','/api/update-checklist','/api/skrining','/api/wa-admin','/api/find','/api/find/:id/status','/api/track-ping','/api/kanal-jamaah']"
+)
+
+write(APP, c)
+print("OK: 2 endpoint berbahaya dihapus, versi naik ke v2.11.1")
+print("\nSelanjutnya upload app.js ke server, lalu restart Node.js.")

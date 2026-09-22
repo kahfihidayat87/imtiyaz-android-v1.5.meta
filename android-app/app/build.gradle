@@ -92,6 +92,8 @@ dependencies {
     // (Google Play Services) jauh lebih andal karena menggabungkan GPS+WiFi+seluler.
     // Dependency resmi Google, sangat umum dipakai, risiko gagal build sangat kecil.
     implementation 'com.google.android.gms:play-services-location:21.3.0'
+    // v2.12.0: peta inline OSM (OpenStreetMap) - gratis, tanpa API key
+    implementation 'org.osmdroid:osmdroid-android:6.1.18'
 
     debugImplementation 'androidx.compose.ui:ui-tooling'
 }

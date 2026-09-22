@@ -164,6 +164,17 @@ fun FindJamaahScreen(onBack: () -> Unit) {
                         val lat = r.latitude ?: 0.0; val lon = r.longitude ?: 0.0
                         Text("Lokasi ditemukan", fontWeight = FontWeight.Bold, color = Color(0xFF0F7A5A))
                         Spacer(Modifier.height(12.dp))
+
+                        // v2.12.0: peta inline dengan semua jamaah rombongan
+                        LokasiMapCard(
+                            jamaahId = jamaahId,
+                            token = token,
+                            tlLat = tlLocation?.latitude,
+                            tlLon = tlLocation?.longitude,
+                            highlightJamaahId = target.id,
+                            modifier = Modifier.padding(vertical = 4.dp),
+                        )
+                        Spacer(Modifier.height(12.dp))
                         val tl = tlLocation
                         if (tl != null) {
                             val jarak = hitungJarak(tl.latitude, tl.longitude, lat, lon)
