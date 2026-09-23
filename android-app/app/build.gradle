@@ -12,7 +12,7 @@ android {
         minSdk 24
         targetSdk 36
         versionCode 11
-        versionName "3.0.0"
+        versionName "2.11.0"
     }
 
     // FIX: Play Store MENOLAK build yang ditandatangani kunci debug (yang dipakai
