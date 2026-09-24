@@ -312,6 +312,7 @@ fun ImtiyazApp() {
     var showJournalEditActive by remember { mutableStateOf(false) }
     var showReminder by remember { mutableStateOf(false) }
     var showFindJamaah by remember { mutableStateOf(false) }
+    var showInvoiceList by remember { mutableStateOf(false) }
     var showAnnouncementDetail by remember { mutableStateOf(false) }
     var showPembimbingList by remember { mutableStateOf(false) }
     var selectedPembimbing by remember { mutableStateOf<Pembimbing?>(null) }
@@ -329,7 +330,7 @@ fun ImtiyazApp() {
         enabled = selectedPaket != null || selectedDoa != null || selectedSurah != null ||
                   showItinerary || showRadio || showJadwal || showPembimbingList ||
                   selectedPembimbing != null || showManasik || showJournalList ||
-                  showJournalEditActive || showReminder || showFindJamaah
+                  showJournalEditActive || showReminder || showFindJamaah || showInvoiceList
     ) {
         when {
             selectedPaket != null -> selectedPaket = null
@@ -345,6 +346,7 @@ fun ImtiyazApp() {
             showJournalList -> showJournalList = false
             showReminder -> showReminder = false
             showFindJamaah -> showFindJamaah = false
+            showInvoiceList -> showInvoiceList = false
         }
     }
 
@@ -453,6 +455,11 @@ fun ImtiyazApp() {
                 )
                 showReminder -> ReminderScreen(onBack = { showReminder = false })
                 showFindJamaah -> FindJamaahScreen(onBack = { showFindJamaah = false })
+                showInvoiceList -> InvoiceListScreen(
+                    jamaahId = Prefs.getJamaahId(context),
+                    token = Prefs.getToken(context),
+                    onBack = { showInvoiceList = false }
+                )
                 else -> when (selectedTab) {
                     0 -> BerandaScreen(
                         onPaketClick = { selectedPaket = it },
@@ -468,7 +475,11 @@ fun ImtiyazApp() {
                     2 -> QuranScreen(onSurahClick = { selectedSurah = it })
                     3 -> DoaListScreen(onDoaClick = { selectedDoa = it })
                     4 -> DokumenScreen()
-                    5 -> SayaScreen(onRadioClick = { showRadio = true }, onFindJamaahClick = { showFindJamaah = true })
+                    5 -> SayaScreen(
+                        onRadioClick = { showRadio = true },
+                        onFindJamaahClick = { showFindJamaah = true },
+                        onInvoiceClick = { showInvoiceList = true }
+                    )
                 }
             }
         }
@@ -910,7 +921,11 @@ fun LoginScreen(onLoggedIn: () -> Unit, onCancel: (() -> Unit)? = null) {
 // FITUR 2 - tombol Galeri/Kamera sekarang benar-benar meng-upload ke /api/upload-bukti.
 // Sebelumnya onClick = {} (kosong total).
 @Composable
-fun SayaScreen(onRadioClick: () -> Unit, onFindJamaahClick: () -> Unit = {}) {
+fun SayaScreen(
+    onRadioClick: () -> Unit,
+    onFindJamaahClick: () -> Unit = {},
+    onInvoiceClick: () -> Unit = {}
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -1057,6 +1072,17 @@ fun SayaScreen(onRadioClick: () -> Unit, onFindJamaahClick: () -> Unit = {}) {
                     if (isUploading) { Spacer(Modifier.height(8.dp)); LinearProgressIndicator(Modifier.fillMaxWidth()) }
                     if (uploadStatus.isNotEmpty()) { Spacer(Modifier.height(6.dp)); Text(uploadStatus, fontSize = 11.sp, color = Color(0xFF0F7A5A)) }
                     Text("Upload bukti transfer - akan diverifikasi admin", fontSize = 10.sp, color = Color.Gray)
+
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedButton(
+                        onClick = onInvoiceClick,
+                        modifier = Modifier.fillMaxWidth().height(42.dp),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Default.Receipt, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color(0xFF0F7A5A))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Lihat Invoice", fontSize = 12.sp, color = Color(0xFF0F7A5A), fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
