@@ -11,8 +11,8 @@ android {
         applicationId "com.imtiyaztour.app"
         minSdk 24
         targetSdk 36
-        versionCode 12
-        versionName "2.11.1"
+        versionCode 13
+        versionName "2.11.2"
     }
 
     // FIX: Play Store MENOLAK build yang ditandatangani kunci debug (yang dipakai

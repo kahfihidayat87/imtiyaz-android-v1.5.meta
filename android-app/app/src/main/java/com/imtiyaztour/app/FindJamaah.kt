@@ -3,6 +3,8 @@ package com.imtiyaztour.app
 import android.content.Intent
 import android.net.Uri
 import android.location.Location
+import androidx.compose.foundation.background
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
