@@ -149,23 +149,22 @@ class LocateService : Service() {
         } catch (e: Exception) { }
     }
 
+    @Suppress("MissingPermission")
     private suspend fun respondWithLocation(requestId: String) {
-        // Pakai LocationHelper: multi-sample (3x), HIGH_ACCURACY,
-        // target 50m, timeout 30s, adaptive by battery.
-        val fix = LocationHelper.getBestLocation(
-            context = this,
-            targetAccuracyM = LocationHelper.DEFAULT_TARGET_ACCURACY_M,
-            timeoutMs = LocationHelper.DEFAULT_TIMEOUT_MS,
-            maxSamples = LocationHelper.DEFAULT_MAX_SAMPLES,
-            adaptiveByBattery = true
-        )
+        val loc = try {
+            withTimeoutOrNull(15_000) {
+                suspendCancellableCoroutine<android.location.Location?> { cont ->
+                    val c = LocationServices.getFusedLocationProviderClient(this@LocateService)
+                    val cts = com.google.android.gms.tasks.CancellationTokenSource()
+                    c.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cts.token)
+                        .addOnSuccessListener { if (cont.isActive) cont.resume(it) }
+                        .addOnFailureListener { if (cont.isActive) cont.resume(null) }
+                    cont.invokeOnCancellation { cts.cancel() }
+                }
+            }
+        } catch (e: Exception) { null }
 
-        // Hanya kirim kalau ada fix. Kalau tidak ada / sangat jelek,
-        // TL akan timeout & pakai last-known location dari server.
-        val loc = fix.location ?: return
-        if (fix.status == LocationHelper.FixStatus.TIMEOUT) return
-        if (fix.status == LocationHelper.FixStatus.PERMISSION_DENIED) return
-        if (fix.status == LocationHelper.FixStatus.GPS_DISABLED) return
+        if (loc == null) return
 
         try {
             TrackApiClient.service.sendTrackPing(
@@ -176,7 +175,7 @@ class LocateService : Service() {
                     latitude = loc.latitude,
                     longitude = loc.longitude,
                     accuracy = loc.accuracy,
-                    battery = fix.batteryLevel
+                    battery = getBattery()
                 )
             )
         } catch (e: Exception) { }

@@ -80,18 +80,16 @@ object FindApiClient {
     }
 }
 
-// Posisi TL sendiri -- pakai LocationHelper (HIGH_ACCURACY, multi-sample).
-// Sebelumnya BALANCED_POWER_ACCURACY (~100m), sekarang setara dengan posisi jamaah.
 @Suppress("MissingPermission")
-private suspend fun getTLLocation(context: android.content.Context): Location? {
-    val fix = LocationHelper.getBestLocation(
-        context = context,
-        targetAccuracyM = LocationHelper.DEFAULT_TARGET_ACCURACY_M,
-        timeoutMs = LocationHelper.DEFAULT_TIMEOUT_MS,
-        maxSamples = LocationHelper.DEFAULT_MAX_SAMPLES,
-        adaptiveByBattery = true
-    )
-    return fix.location
+private suspend fun getTLLocation(context: android.content.Context): Location? = withTimeoutOrNull(10_000) {
+    suspendCancellableCoroutine { cont ->
+        val c = LocationServices.getFusedLocationProviderClient(context)
+        val cts = com.google.android.gms.tasks.CancellationTokenSource()
+        c.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, cts.token)
+            .addOnSuccessListener { if (cont.isActive) cont.resume(it) }
+            .addOnFailureListener { if (cont.isActive) cont.resume(null) }
+        cont.invokeOnCancellation { cts.cancel() }
+    }
 }
 
 private fun hitungJarak(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
@@ -184,43 +182,8 @@ fun FindJamaahScreen(onBack: () -> Unit) {
                             Spacer(Modifier.height(8.dp))
                         }
                         Text("Koordinat: ${"%.5f".format(lat)}, ${"%.5f".format(lon)}", fontSize = 12.sp)
-
-                        // Badge akurasi berwarna (v1.1)
-                        val accVal = r.accuracy?.toFloat()
-                        val accColor = Color(LocationHelper.accuracyColorHex(accVal))
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
-                            Box(
-                                modifier = Modifier
-                                    .background(accColor.copy(alpha = 0.15f), RoundedCornerShape(6.dp))
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
-                                Text(
-                                    "\u00b1${accVal?.toInt() ?: 0}m  ${LocationHelper.accuracyLabel(accVal)}",
-                                    fontSize = 12.sp,
-                                    color = accColor,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            Spacer(Modifier.width(8.dp))
-                            Text("Baterai: ${r.battery ?: 0}%", fontSize = 11.sp, color = Color.Gray)
-                        }
-
-                        // Warning kalau akurasi > 100m
-                        if (accVal != null && accVal > 100f) {
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3CD)),
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
-                            ) {
-                                Text(
-                                    "\u26a0 Akurasi rendah. Jamaah mungkin di dalam gedung. Titik di peta bisa meleset " +
-                                        "\u00b1${accVal.toInt()} meter dari lokasi sebenarnya.",
-                                    fontSize = 10.sp,
-                                    color = Color(0xFF92400E),
-                                    modifier = Modifier.padding(10.dp)
-                                )
-                            }
-                        }
+                        Text("Akurasi: ±${r.accuracy?.toInt() ?: 0} meter", fontSize = 11.sp, color = Color.Gray)
+                        Text("Baterai: ${r.battery ?: 0}%", fontSize = 11.sp, color = Color.Gray)
                         Spacer(Modifier.height(16.dp))
                         Button(
                             onClick = {
