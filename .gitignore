@@ -10,3 +10,7 @@ android-app/app/build/
 android-app/local.properties
 android-app/app/*.keystore
 android-app/app/*.jks
+
+# Patch scripts (tidak disimpan di repo)
+patch-*.py
+*.bak-*
