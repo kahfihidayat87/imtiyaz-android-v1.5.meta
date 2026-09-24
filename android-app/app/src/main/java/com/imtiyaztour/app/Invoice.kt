@@ -76,9 +76,11 @@ fun InvoiceListScreen(jamaahId: String, token: String, onBack: () -> Unit) {
     LaunchedEffect(Unit) {
         loading = true; errorMsg = ""
         try {
-            list = withContext(Dispatchers.IO) {
+            val all = withContext(Dispatchers.IO) {
                 InvoiceApiClient.service.listInvoice(mapOf("jamaah_id" to jamaahId, "token" to token))
             }
+            // Tampilkan HANYA invoice terbaru (sort by invoice_date desc, ambil 1)
+            list = all.sortedByDescending { it.invoice_date ?: 0L }.take(1)
         } catch (e: Exception) {
             errorMsg = "Gagal memuat invoice -- periksa koneksi internet"
         }
