@@ -1,0 +1,14 @@
+# Normalize line endings
+* text=auto
+
+# Force LF for scripts
+*.sh text eol=lf
+gradlew text eol=lf
+
+# Kotlin/Java/Gradle - LF also (Android convention)
+*.kt text eol=lf
+*.java text eol=lf
+*.gradle text eol=lf
+
+# Windows batch files
+*.bat text eol=crlf
