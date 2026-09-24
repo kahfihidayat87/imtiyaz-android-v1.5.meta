@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -224,14 +225,18 @@ fun FindJamaahScreen(onBack: () -> Unit) {
                             }
                         }
                         Spacer(Modifier.height(16.dp))
+
+                        // Tombol: Buka di Google Maps (via geo: intent + fallback browser silent)
                         Button(
-                            onClick = {
-                                val uri = Uri.parse("geo:$lat,$lon?q=$lat,$lon(${Uri.encode(target.nama)})")
-                                context.startActivity(Intent(Intent.ACTION_VIEW, uri))
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A))
-                        ) { Text("Buka di Peta") }
+                            onClick = { openInMapsApp(context, lat, lon, target.nama) },
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.Map, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Buka di Google Maps", fontWeight = FontWeight.Bold)
+                        }
                         Spacer(Modifier.height(8.dp))
                         OutlinedButton(
                             onClick = { activeFind = null; findResult = null },
@@ -296,5 +301,53 @@ fun FindJamaahScreen(onBack: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+// ============================================================================
+// HELPER: Buka lokasi di Google Maps (fallback browser kalau app tidak ada)
+// ============================================================================
+private fun openInMapsApp(
+    context: android.content.Context,
+    lat: Double,
+    lon: Double,
+    label: String
+) {
+    val encoded = Uri.encode(label)
+
+    // Prioritas 1: buka di aplikasi Google Maps lewat geo: intent
+    val geoIntent = Intent(
+        Intent.ACTION_VIEW,
+        Uri.parse("geo:$lat,$lon?q=$lat,$lon($encoded)")
+    ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+
+    try {
+        context.startActivity(geoIntent)
+        return
+    } catch (e: android.content.ActivityNotFoundException) {
+        // Tidak ada app peta terinstall -> lanjut fallback browser
+    } catch (e: Exception) {
+        android.widget.Toast.makeText(
+            context,
+            "Gagal membuka peta: ${e.message}",
+            android.widget.Toast.LENGTH_SHORT
+        ).show()
+        return
+    }
+
+    // Prioritas 2 (fallback silent): buka di browser
+    val browserIntent = Intent(
+        Intent.ACTION_VIEW,
+        Uri.parse("https://www.google.com/maps/search/?api=1&query=$lat,$lon")
+    ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+
+    try {
+        context.startActivity(browserIntent)
+    } catch (e: Exception) {
+        android.widget.Toast.makeText(
+            context,
+            "Tidak ada aplikasi peta atau browser di perangkat ini.",
+            android.widget.Toast.LENGTH_LONG
+        ).show()
     }
 }
