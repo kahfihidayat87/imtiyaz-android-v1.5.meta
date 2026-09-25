@@ -78,7 +78,11 @@ object TrackingStore {
         TRACKING_KATEGORI.forEach { k ->
             k.items.forEach { item ->
                 if (item.type == "counter" && item.id == "quran_pages") points += item.points * quranPages
-                else if (checked[item.id] == true) points += item.points
+                else if (checked[item.id] == true) {
+                    points += item.points
+                    // Jamaah bonus (kalau checkbox "Berjamaah" dicentang)
+                    if (item.jamaahBonus && checked["${item.id}_jamaah"] == true) points += 5
+                }
             }
         }
         val oldLog = old.logs[today]
@@ -118,7 +122,8 @@ data class TrackingAmalan(
     val sub: String? = null,
     val points: Int,
     val type: String = "check", // "check" | "counter"
-    val max: Int = 20
+    val max: Int = 20,
+    val jamaahBonus: Boolean = false // true = ada toggle "Berjamaah" +5 poin
 )
 
 data class TrackingKategori(
@@ -131,11 +136,11 @@ data class TrackingKategori(
 
 val TRACKING_KATEGORI: List<TrackingKategori> = listOf(
     TrackingKategori("sholat", "Sholat Wajib & Sunnah", "\uD83D\uDD4C", "Fondasi hari - 5 waktu + sunnah", listOf(
-        TrackingAmalan("subuh", "Subuh", null, 10),
-        TrackingAmalan("dzuhur", "Dzuhur", null, 10),
-        TrackingAmalan("ashar", "Ashar", null, 10),
-        TrackingAmalan("maghrib", "Maghrib", null, 10),
-        TrackingAmalan("isya", "Isya", null, 10),
+        TrackingAmalan("subuh", "Subuh", null, 5, jamaahBonus = true),
+        TrackingAmalan("dzuhur", "Dzuhur", null, 5, jamaahBonus = true),
+        TrackingAmalan("ashar", "Ashar", null, 5, jamaahBonus = true),
+        TrackingAmalan("maghrib", "Maghrib", null, 5, jamaahBonus = true),
+        TrackingAmalan("isya", "Isya", null, 5, jamaahBonus = true),
         TrackingAmalan("rawatib", "Rawatib 10 rakaat", "Qabliyah & Ba'diyah", 5),
         TrackingAmalan("tahajud", "Tahajud 2 rakaat + Witir", "Qiyamullail", 20),
         TrackingAmalan("dhuha", "Dhuha 2-8 rakaat", null, 15)
@@ -163,16 +168,16 @@ val TRACKING_KATEGORI: List<TrackingKategori> = listOf(
     )),
     TrackingKategori("kajian", "Kajian", "\uD83D\uDCDA", "Menjaga ilmu pasca Umrah", listOf(
         TrackingAmalan("baca_buku", "Baca buku agama 15 menit", null, 10),
-        TrackingAmalan("kultum", "Dengar kultum / kajian", null, 10),
-        TrackingAmalan("menulis", "Menulis pengalaman Umrah", "Hikmah hari ini", 15)
+        TrackingAmalan("kultum", "Dengar kultum / kajian", "Cek kajian di menu Pembimbing Umrah", 10),
+        TrackingAmalan("menulis", "Menulis resume kajian", "Ringkasan materi yang dipelajari", 15)
     )),
     TrackingKategori("muhasabah", "Muhasabah Malam", "\uD83C\uDF0C", "Jurnal refleksi 2 menit", listOf(
         TrackingAmalan("jurnal", "Jurnal refleksi 2 menit", "Apa yang Allah mudahkan hari ini?", 15),
-        TrackingAmalan("self_accounting", "Self-accounting", "Evaluasi dosa & syukur", 10)
+        TrackingAmalan("self_accounting", "Meminta maaf & memaafkan", "Bersihkan hati sebelum tidur", 10)
     )),
     TrackingKategori("nilai", "Nilai Umrah", "\uD83D\uDD4B", "Akhlaq dari tanah suci", listOf(
-        TrackingAmalan("sederhana", "Kesederhanaan", "Tidak berlebihan", 10),
-        TrackingAmalan("sabar", "Kesabaran", "Menahan emosi", 10),
-        TrackingAmalan("suci", "Kesucian Hati", "Tidak ghibah, husnudzon", 10)
+        TrackingAmalan("sederhana", "Tidak rafats", "Menjauhi perkataan kotor saat ihram & sesudahnya", 10),
+        TrackingAmalan("sabar", "Tidak fasiq", "Menjauhi perbuatan maksiat & durhaka", 10),
+        TrackingAmalan("suci", "Tidak berdebat", "Menghindari pertengkaran & jidal saat ihram", 10)
     ))
 )

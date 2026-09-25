@@ -36,7 +36,10 @@ private fun kategoriPoints(k: TrackingKategori, checked: Map<String, Boolean>, q
     var total = 0
     k.items.forEach { item ->
         if (item.type == "counter" && item.id == "quran_pages") total += item.points * quranPages
-        else if (checked[item.id] == true) total += item.points
+        else if (checked[item.id] == true) {
+            total += item.points
+            if (item.jamaahBonus && checked["${item.id}_jamaah"] == true) total += 5
+        }
     }
     return total
 }
@@ -45,7 +48,7 @@ private fun kategoriPoints(k: TrackingKategori, checked: Map<String, Boolean>, q
 fun TrackingIstiqamahScreen() {
     val context = LocalContext.current
     var state by remember { mutableStateOf(TrackingStore.load(context)) }
-    var checked by remember { mutableStateOf(state.todayChecked().toMutableMap()) }
+    var checked by remember { mutableStateOf<Map<String, Boolean>>(state.todayChecked()) }
     var quranPages by remember { mutableStateOf(state.todayQuranPages()) }
     var expandedId by remember { mutableStateOf<String?>("sholat") }
     var showHistori by remember { mutableStateOf(false) }
@@ -56,7 +59,10 @@ fun TrackingIstiqamahScreen() {
         TRACKING_KATEGORI.forEach { k ->
             k.items.forEach { item ->
                 if (item.type == "counter" && item.id == "quran_pages") total += item.points * quranPages
-                else if (checked[item.id] == true) total += item.points
+                else if (checked[item.id] == true) {
+                    total += item.points
+                    if (item.jamaahBonus && checked["${item.id}_jamaah"] == true) total += 5
+                }
             }
         }
         total
@@ -227,23 +233,55 @@ fun TrackingIstiqamahScreen() {
                                     }
                                 } else {
                                     val isChecked = checked[item.id] == true
-                                    Row(
-                                        Modifier.fillMaxWidth()
-                                            .background(if (isChecked) TR_HIJAU_MUDA else Color(0xFFF7F9F7), RoundedCornerShape(10.dp))
-                                            .clickable { checked[item.id] = !isChecked }
-                                            .padding(6.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Checkbox(
-                                            checked = isChecked,
-                                            onCheckedChange = { checked[item.id] = it },
-                                            colors = CheckboxDefaults.colors(checkedColor = TR_HIJAU)
-                                        )
-                                        Column(Modifier.weight(1f)) {
-                                            Text(item.label, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                            item.sub?.let { Text(it, fontSize = 10.sp, color = TR_ABU) }
+                                    val isJamaah = checked["${item.id}_jamaah"] == true
+                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Row(
+                                            Modifier.fillMaxWidth()
+                                                .background(if (isChecked) TR_HIJAU_MUDA else Color(0xFFF7F9F7), RoundedCornerShape(10.dp))
+                                                .clickable {
+                                                    checked = checked.toMutableMap().apply { put(item.id, !isChecked) }
+                                                }
+                                                .padding(6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Checkbox(
+                                                checked = isChecked,
+                                                onCheckedChange = { v ->
+                                                    checked = checked.toMutableMap().apply { put(item.id, v) }
+                                                },
+                                                colors = CheckboxDefaults.colors(checkedColor = TR_HIJAU)
+                                            )
+                                            Column(Modifier.weight(1f)) {
+                                                Text(item.label, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                                item.sub?.let { Text(it, fontSize = 10.sp, color = TR_ABU) }
+                                            }
+                                            Text("+${item.points}", fontSize = 10.sp, color = TR_HIJAU, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 8.dp))
                                         }
-                                        Text("+${item.points}", fontSize = 10.sp, color = TR_HIJAU, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 8.dp))
+                                        // Toggle "Berjamaah" — hanya muncul kalau sholat sudah dicentang
+                                        if (item.jamaahBonus && isChecked) {
+                                            Row(
+                                                Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(start = 32.dp)
+                                                    .background(if (isJamaah) TR_HIJAU.copy(alpha = 0.08f) else Color.Transparent, RoundedCornerShape(8.dp))
+                                                    .clickable {
+                                                        checked = checked.toMutableMap().apply { put("${item.id}_jamaah", !isJamaah) }
+                                                    }
+                                                    .padding(4.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Checkbox(
+                                                    checked = isJamaah,
+                                                    onCheckedChange = { v ->
+                                                        checked = checked.toMutableMap().apply { put("${item.id}_jamaah", v) }
+                                                    },
+                                                    colors = CheckboxDefaults.colors(checkedColor = TR_HIJAU)
+                                                )
+                                                Text("\uD83D\uDD4C Berjamaah", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TR_HIJAU)
+                                                Spacer(Modifier.weight(1f))
+                                                Text("+5", fontSize = 10.sp, color = TR_HIJAU, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 8.dp))
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -258,7 +296,7 @@ fun TrackingIstiqamahScreen() {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 Button(
                     onClick = {
-                        val newState = TrackingStore.saveToday(context, checked.toMap(), quranPages)
+                        val newState = TrackingStore.saveToday(context, checked, quranPages)
                         state = newState
                         toastMsg = "Alhamdulillah! $todayPoints poin tersimpan hari ini."
                     },
@@ -285,11 +323,11 @@ fun TrackingIstiqamahScreen() {
                     Text("MUHASABAH HARI INI", color = Color.White.copy(alpha = 0.7f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "\"Umrah selesai, perjalanan kembali kepada Allah baru dimulai. Istiqomah lebih dicintai daripada banyak tapi terputus.\"",
-                        color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold
+                        "\"Barang siapa yang hari ini lebih baik dari hari kemarin, dialah tergolong orang yang beruntung, (dan) barang siapa yang hari ini sama dengan hari kemarin dialah tergolong orang yang merugi dan bahkan, barang siapa yang hari ini lebih buruk dari hari kemarin dialah tergolong orang yang celaka.\"",
+                        color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold
                     )
                     Spacer(Modifier.height(8.dp))
-                    Text("- HR. Muslim", color = Color.White.copy(alpha = 0.8f), fontSize = 10.sp)
+                    Text("(HR. Al Hakim)", color = Color.White.copy(alpha = 0.8f), fontSize = 10.sp)
                 }
             }
         }
