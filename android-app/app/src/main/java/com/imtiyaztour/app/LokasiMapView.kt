@@ -37,8 +37,8 @@ import retrofit2.http.POST
 data class JamaahLocation(
     val jamaah_id: String,
     val nama: String,
-    val latitude: Double,
-    val longitude: Double,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
     val accuracy: Double = 0.0,
     val battery: Int = -1,
     val updated_at: Long = 0L,
@@ -111,10 +111,12 @@ fun LokasiMapView(
             points.add(GeoPoint(tlLat, tlLon))
         }
 
-        // Jamaah markers
+        // Jamaah markers — hanya yang punya lokasi (skip null)
         allJamaah.forEach { j ->
+            val lat = j.latitude ?: return@forEach
+            val lon = j.longitude ?: return@forEach
             val marker = Marker(mapView).apply {
-                position = GeoPoint(j.latitude, j.longitude)
+                position = GeoPoint(lat, lon)
                 title = j.nama
                 val batText = if (j.battery >= 0) "Baterai ${j.battery}%" else "Baterai -"
                 val accText = if (j.accuracy > 0) "\u00b1${j.accuracy.toInt()}m" else "-"
@@ -123,7 +125,7 @@ fun LokasiMapView(
                 setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
             }
             mapView.overlays.add(marker)
-            points.add(GeoPoint(j.latitude, j.longitude))
+            points.add(GeoPoint(lat, lon))
         }
 
         // Center peta ke rata-rata titik
