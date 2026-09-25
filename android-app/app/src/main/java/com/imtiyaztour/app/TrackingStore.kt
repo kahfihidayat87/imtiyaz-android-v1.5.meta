@@ -23,7 +23,8 @@ data class TrackingState(
     val currentStreak: Int = 0,
     val longestStreak: Int = 0,
     val totalPoints: Int = 0,
-    val logs: Map<String, TrackingDailyLog> = emptyMap()
+    val logs: Map<String, TrackingDailyLog> = emptyMap(),
+    val alarmEnabled: Map<String, Boolean> = emptyMap()
 ) {
     fun todayChecked(): Map<String, Boolean> = logs[todayKey()]?.checked ?: emptyMap()
     fun todayQuranPages(): Int = logs[todayKey()]?.quranPages ?: 0
@@ -70,6 +71,9 @@ object TrackingStore {
                 .apply()
         } catch (e: Exception) { }
     }
+
+    /** Dipakai oleh TrackingAlarmHelper untuk persist perubahan alarm. */
+    fun saveAlarmState(ctx: Context, state: TrackingState) = save(ctx, state)
 
     fun saveToday(ctx: Context, checked: Map<String, Boolean>, quranPages: Int): TrackingState {
         val old = load(ctx)
@@ -176,8 +180,72 @@ val TRACKING_KATEGORI: List<TrackingKategori> = listOf(
         TrackingAmalan("self_accounting", "Meminta maaf & memaafkan", "Bersihkan hati sebelum tidur", 10)
     )),
     TrackingKategori("nilai", "Nilai Umrah", "\uD83D\uDD4B", "Akhlaq dari tanah suci", listOf(
-        TrackingAmalan("sederhana", "Tidak rafats", "Menjauhi perkataan kotor saat ihram & sesudahnya", 10),
+        TrackingAmalan("sederhana", "Tidak rafats", "Menjauhi perkataan kotor", 10),
         TrackingAmalan("sabar", "Tidak fasiq", "Menjauhi perbuatan maksiat & durhaka", 10),
-        TrackingAmalan("suci", "Tidak berdebat", "Menghindari pertengkaran & jidal saat ihram", 10)
+        TrackingAmalan("suci", "Tidak berdebat", "Menghindari pertengkaran & debat", 10)
     ))
 )
+
+
+// ============================================================================
+// HELPER: Alarm "Ingatkan Aku" untuk kategori Tracking Istiqamah
+// Reuse ReminderScheduler existing — jangan bikin scheduler baru.
+// ============================================================================
+
+/**
+ * Daftar alarm per kategori. Total 3 kategori aktif = 4 alarm.
+ * - dzikir   → 05:00 (pagi) + 17:00 (petang)
+ * - sedekah  → 10:00
+ * - muhasabah → 21:00
+ */
+fun trackingAlarmsFor(kategoriId: String): List<ReminderItem> = when (kategoriId) {
+    "dzikir" -> listOf(
+        ReminderItem("tracking_dzikir_pagi", "Dzikir Pagi", "Waktunya dzikir pagi (8 doa)", 5, 0),
+        ReminderItem("tracking_dzikir_petang", "Dzikir Petang", "Waktunya dzikir petang (8 doa)", 17, 0)
+    )
+    "sedekah" -> listOf(
+        ReminderItem("tracking_sedekah", "Sedekah Hari Ini", "Jangan lupa sedekah pagi ini", 10, 0)
+    )
+    "muhasabah" -> listOf(
+        ReminderItem("tracking_muhasabah", "Muhasabah Malam", "Refleksi 2 menit sebelum tidur", 21, 0)
+    )
+    else -> emptyList()
+}
+
+fun trackingAlarmTimesText(kategoriId: String): String = when (kategoriId) {
+    "dzikir" -> "05:00 & 17:00"
+    "sedekah" -> "10:00"
+    "muhasabah" -> "21:00"
+    else -> ""
+}
+
+object TrackingAlarmHelper {
+    /** Kategori yang punya toggle alarm. */
+    val ALARM_KATEGORI = setOf("dzikir", "sedekah", "muhasabah")
+
+    /** Toggle ON/OFF alarm untuk kategori. Return state baru. */
+    fun toggle(ctx: Context, kategoriId: String, enable: Boolean): TrackingState {
+        val old = TrackingStore.load(ctx)
+        val newMap = old.alarmEnabled.toMutableMap().apply { put(kategoriId, enable) }
+        val newState = old.copy(alarmEnabled = newMap)
+        TrackingStore.saveAlarmState(ctx, newState)
+
+        trackingAlarmsFor(kategoriId).forEach { item ->
+            if (enable) ReminderScheduler.schedule(ctx, item)
+            else ReminderScheduler.cancel(ctx, item)
+        }
+        return newState
+    }
+
+    /** Re-schedule semua alarm yang ON (dipanggil saat app dibuka). */
+    fun rescheduleAll(ctx: Context) {
+        val state = TrackingStore.load(ctx)
+        state.alarmEnabled.forEach { (kategoriId, enabled) ->
+            if (enabled) {
+                trackingAlarmsFor(kategoriId).forEach { item ->
+                    ReminderScheduler.schedule(ctx, item)
+                }
+            }
+        }
+    }
+}

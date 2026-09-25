@@ -1,6 +1,12 @@
 package com.imtiyaztour.app
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -68,6 +74,41 @@ fun TrackingIstiqamahScreen() {
         total
     }
     val levelInfo = levelFromPoints(state.totalPoints + todayPoints)
+
+    // Re-schedule alarm saat layar dibuka (safety: device restart)
+    LaunchedEffect(Unit) {
+        try { TrackingAlarmHelper.rescheduleAll(context) } catch (e: Exception) { }
+    }
+
+    // Permission launcher notifikasi (Android 13+)
+    var pendingToggle by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
+    val notifPermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        val pending = pendingToggle
+        pendingToggle = null
+        if (granted && pending != null) {
+            state = TrackingAlarmHelper.toggle(context, pending.first, pending.second)
+            toastMsg = if (pending.second) "Alarm aktif" else "Alarm dimatikan"
+        } else if (!granted) {
+            toastMsg = "Izin notifikasi ditolak. Aktifkan di Pengaturan HP."
+        }
+    }
+
+    fun onToggleAlarm(kategoriId: String, enable: Boolean) {
+        if (enable && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val granted = context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                pendingToggle = kategoriId to enable
+                notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                return
+            }
+        }
+        state = TrackingAlarmHelper.toggle(context, kategoriId, enable)
+        toastMsg = if (enable) {
+            "Alarm ${kategoriId.replaceFirstChar { it.uppercase() }} aktif - ${trackingAlarmTimesText(kategoriId)}"
+        } else "Alarm dimatikan"
+    }
 
     LazyColumn(
         Modifier.fillMaxSize().background(Color(0xFFF7F9F7)).padding(16.dp),
@@ -195,6 +236,9 @@ fun TrackingIstiqamahScreen() {
                             contentAlignment = Alignment.Center
                         ) { Text(kategori.icon, fontSize = 18.sp) }
                         Spacer(Modifier.width(12.dp))
+                        val canAlarm = kategori.id in TrackingAlarmHelper.ALARM_KATEGORI
+                        val alarmOn = state.alarmEnabled[kategori.id] == true
+
                         Column(Modifier.weight(1f)) {
                             Text(kategori.title, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                             Text(kategori.desc, fontSize = 10.sp, color = TR_ABU)
@@ -202,6 +246,37 @@ fun TrackingIstiqamahScreen() {
                                 "$checkedCount / ${kategori.items.size} - ${kategoriPoints(kategori, checked, quranPages)} poin",
                                 fontSize = 10.sp, color = TR_HIJAU, fontWeight = FontWeight.Bold
                             )
+                            if (canAlarm && alarmOn) {
+                                Text(
+                                    "\u23F0 Alarm: ${trackingAlarmTimesText(kategori.id)}",
+                                    fontSize = 10.sp, color = TR_HIJAU, fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                        if (canAlarm) {
+                            Box(
+                                Modifier
+                                    .background(
+                                        if (alarmOn) TR_HIJAU else Color.Transparent,
+                                        RoundedCornerShape(20.dp)
+                                    )
+                                    .border(
+                                        1.dp,
+                                        if (alarmOn) TR_HIJAU else TR_ABU.copy(alpha = 0.5f),
+                                        RoundedCornerShape(20.dp)
+                                    )
+                                    .clickable { onToggleAlarm(kategori.id, !alarmOn) }
+                                    .padding(horizontal = 10.dp, vertical = 5.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("\uD83D\uDD14", fontSize = 11.sp)
+                                    if (alarmOn) {
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("ON", fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                            Spacer(Modifier.width(8.dp))
                         }
                         Icon(
                             if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
