@@ -316,7 +316,29 @@ fun ImtiyazApp() {
     var showAnnouncementDetail by remember { mutableStateOf(false) }
     var showPembimbingList by remember { mutableStateOf(false) }
     var selectedPembimbing by remember { mutableStateOf<Pembimbing?>(null) }
+    var showDokumen by remember { mutableStateOf(false) }
     val context = LocalContext.current
+
+    // Helper: reset semua sub-page state supaya klik tab = langsung pindah
+    val resetSubPages: () -> Unit = {
+        selectedPaket = null
+        selectedDoa = null
+        selectedSurah = null
+        showItinerary = false
+        showRadio = false
+        showJadwal = false
+        showManasik = false
+        showJournalList = false
+        showJournalEdit = null
+        showJournalEditActive = false
+        showReminder = false
+        showFindJamaah = false
+        showInvoiceList = false
+        showPembimbingList = false
+        selectedPembimbing = null
+        showAnnouncementDetail = false
+        showDokumen = false
+    }
 
     // FIX (bug): sebelumnya TIDAK ADA satu pun layar di aplikasi ini yang menangani
     // tombol/gestur back sistem Android -- menekannya di layar detail/sub-halaman
@@ -330,7 +352,8 @@ fun ImtiyazApp() {
         enabled = selectedPaket != null || selectedDoa != null || selectedSurah != null ||
                   showItinerary || showRadio || showJadwal || showPembimbingList ||
                   selectedPembimbing != null || showManasik || showJournalList ||
-                  showJournalEditActive || showReminder || showFindJamaah || showInvoiceList
+                  showJournalEditActive || showReminder || showFindJamaah || showInvoiceList ||
+                  showDokumen
     ) {
         when {
             selectedPaket != null -> selectedPaket = null
@@ -347,6 +370,7 @@ fun ImtiyazApp() {
             showReminder -> showReminder = false
             showFindJamaah -> showFindJamaah = false
             showInvoiceList -> showInvoiceList = false
+            showDokumen -> showDokumen = false
         }
     }
 
@@ -424,12 +448,12 @@ fun ImtiyazApp() {
         },
         bottomBar = {
             NavigationBar(containerColor = Color.White) {
-                NavigationBarItem(selected = selectedTab == 0, onClick = { selectedTab = 0; selectedPaket = null; selectedDoa = null; selectedSurah = null }, icon = { Icon(Icons.Default.Home, null) }, label = { Text("Beranda", fontSize = 9.sp) })
-                NavigationBarItem(selected = selectedTab == 1, onClick = { selectedTab = 1; selectedPaket = null; selectedDoa = null; selectedSurah = null }, icon = { Icon(Icons.Default.List, null) }, label = { Text("Paket", fontSize = 9.sp) })
-                NavigationBarItem(selected = selectedTab == 2, onClick = { selectedTab = 2; selectedPaket = null; selectedDoa = null; selectedSurah = null }, icon = { Icon(Icons.Default.MenuBook, null) }, label = { Text("Quran", fontSize = 9.sp) })
-                NavigationBarItem(selected = selectedTab == 3, onClick = { selectedTab = 3; selectedPaket = null; selectedDoa = null; selectedSurah = null }, icon = { Icon(Icons.Default.Favorite, null) }, label = { Text("Doa", fontSize = 9.sp) })
-                NavigationBarItem(selected = selectedTab == 4, onClick = { selectedTab = 4; selectedPaket = null; selectedDoa = null; selectedSurah = null }, icon = { Icon(Icons.Default.CheckCircle, null) }, label = { Text("Dokumen", fontSize = 9.sp) })
-                NavigationBarItem(selected = selectedTab == 5, onClick = { selectedTab = 5; selectedPaket = null; selectedDoa = null; selectedSurah = null }, icon = { Icon(Icons.Default.Person, null) }, label = { Text("Saya", fontSize = 9.sp) })
+                NavigationBarItem(selected = selectedTab == 0, onClick = { resetSubPages(); selectedTab = 0 }, icon = { Icon(Icons.Default.Home, null) }, label = { Text("Beranda", fontSize = 9.sp) })
+                NavigationBarItem(selected = selectedTab == 1, onClick = { resetSubPages(); selectedTab = 1 }, icon = { Icon(Icons.Default.List, null) }, label = { Text("Paket", fontSize = 9.sp) })
+                NavigationBarItem(selected = selectedTab == 2, onClick = { resetSubPages(); selectedTab = 2 }, icon = { Icon(Icons.Default.MenuBook, null) }, label = { Text("Quran", fontSize = 9.sp) })
+                NavigationBarItem(selected = selectedTab == 3, onClick = { resetSubPages(); selectedTab = 3 }, icon = { Icon(Icons.Default.Favorite, null) }, label = { Text("Doa", fontSize = 9.sp) })
+                NavigationBarItem(selected = selectedTab == 4, onClick = { resetSubPages(); selectedTab = 4 }, icon = { Icon(Icons.Default.DateRange, null) }, label = { Text("Tracking", fontSize = 9.sp) })
+                NavigationBarItem(selected = selectedTab == 5, onClick = { resetSubPages(); selectedTab = 5 }, icon = { Icon(Icons.Default.Person, null) }, label = { Text("Saya", fontSize = 9.sp) })
             }
         }
     ) { padding ->
@@ -460,6 +484,7 @@ fun ImtiyazApp() {
                     token = Prefs.getToken(context),
                     onBack = { showInvoiceList = false }
                 )
+                showDokumen -> DokumenScreen(onBack = { showDokumen = false })
                 else -> when (selectedTab) {
                     0 -> BerandaScreen(
                         onPaketClick = { selectedPaket = it },
@@ -474,11 +499,12 @@ fun ImtiyazApp() {
                     1 -> PaketListScreen(onPaketClick = { selectedPaket = it })
                     2 -> QuranScreen(onSurahClick = { selectedSurah = it })
                     3 -> DoaListScreen(onDoaClick = { selectedDoa = it })
-                    4 -> DokumenScreen()
+                    4 -> TrackingIstiqamahScreen()
                     5 -> SayaScreen(
                         onRadioClick = { showRadio = true },
                         onFindJamaahClick = { showFindJamaah = true },
-                        onInvoiceClick = { showInvoiceList = true }
+                        onInvoiceClick = { showInvoiceList = true },
+                        onDokumenClick = { showDokumen = true }
                     )
                 }
             }
@@ -716,11 +742,12 @@ fun DetailPaketScreen(paket: PaketUmrah, onBack: () -> Unit) {
 // menampilkan keterangan "Lengkap/Tidak/Belum Diperiksa" per dokumen -- dan karena
 // ini data pribadi jamaah, layar ini sekarang digerbang login juga.
 @Composable
-fun DokumenScreen() {
+fun DokumenScreen(onBack: () -> Unit = {}) {
     val context = LocalContext.current
 
     if (!Prefs.isLoggedIn(context)) {
         Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            TextButton(onClick = onBack) { Text("<- Kembali", color = Color(0xFF0F7A5A)) }
             Text("Checklist Dokumen hanya bisa diakses setelah login", fontWeight = FontWeight.Bold, fontSize = 16.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             Spacer(Modifier.height(8.dp))
             Text("Silakan login lewat tab Saya terlebih dahulu.", fontSize = 12.sp, color = Color.Gray, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
@@ -749,6 +776,7 @@ fun DokumenScreen() {
     val lengkapCount = AppData.dokumen.count { checklist[it.id] == true }
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
+        TextButton(onClick = onBack) { Text("<- Kembali", color = Color(0xFF0F7A5A)) }
         Text("Checklist Dokumen", fontWeight = FontWeight.Bold, fontSize = 20.sp)
         Text("Diperiksa & diperbarui oleh Admin -- bukan diisi sendiri", fontSize = 12.sp, color = Color.Gray)
         Spacer(Modifier.height(12.dp))
@@ -924,7 +952,8 @@ fun LoginScreen(onLoggedIn: () -> Unit, onCancel: (() -> Unit)? = null) {
 fun SayaScreen(
     onRadioClick: () -> Unit,
     onFindJamaahClick: () -> Unit = {},
-    onInvoiceClick: () -> Unit = {}
+    onInvoiceClick: () -> Unit = {},
+    onDokumenClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -1117,6 +1146,22 @@ fun SayaScreen(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
                     ) { Text("Cari Lokasi Jamaah") }
+                }
+            }
+        }
+
+        item {
+            Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(2.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text("Checklist Dokumen", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text("Lihat status kelengkapan dokumen Anda (diperiksa admin)", fontSize = 11.sp, color = Color.Gray)
+                    Spacer(Modifier.height(12.dp))
+                    Button(
+                        onClick = onDokumenClick,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text("Buka Checklist Dokumen") }
                 }
             }
         }
