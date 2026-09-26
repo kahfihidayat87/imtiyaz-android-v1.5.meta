@@ -317,6 +317,7 @@ fun ImtiyazApp() {
     var showPembimbingList by remember { mutableStateOf(false) }
     var selectedPembimbing by remember { mutableStateOf<Pembimbing?>(null) }
     var showDokumen by remember { mutableStateOf(false) }
+    var showMatsurat by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     // Helper: reset semua sub-page state supaya klik tab = langsung pindah
@@ -338,6 +339,7 @@ fun ImtiyazApp() {
         selectedPembimbing = null
         showAnnouncementDetail = false
         showDokumen = false
+        showMatsurat = false
     }
 
     // FIX (bug): sebelumnya TIDAK ADA satu pun layar di aplikasi ini yang menangani
@@ -353,7 +355,7 @@ fun ImtiyazApp() {
                   showItinerary || showRadio || showJadwal || showPembimbingList ||
                   selectedPembimbing != null || showManasik || showJournalList ||
                   showJournalEditActive || showReminder || showFindJamaah || showInvoiceList ||
-                  showDokumen
+                  showDokumen || showMatsurat
     ) {
         when {
             selectedPaket != null -> selectedPaket = null
@@ -371,6 +373,7 @@ fun ImtiyazApp() {
             showFindJamaah -> showFindJamaah = false
             showInvoiceList -> showInvoiceList = false
             showDokumen -> showDokumen = false
+            showMatsurat -> showMatsurat = false
         }
     }
 
@@ -452,7 +455,7 @@ fun ImtiyazApp() {
                 NavigationBarItem(selected = selectedTab == 1, onClick = { resetSubPages(); selectedTab = 1 }, icon = { Icon(Icons.Default.List, null) }, label = { Text("Paket", fontSize = 9.sp) })
                 NavigationBarItem(selected = selectedTab == 2, onClick = { resetSubPages(); selectedTab = 2 }, icon = { Icon(Icons.Default.MenuBook, null) }, label = { Text("Quran", fontSize = 9.sp) })
                 NavigationBarItem(selected = selectedTab == 3, onClick = { resetSubPages(); selectedTab = 3 }, icon = { Icon(Icons.Default.Favorite, null) }, label = { Text("Doa", fontSize = 9.sp) })
-                NavigationBarItem(selected = selectedTab == 4, onClick = { resetSubPages(); selectedTab = 4 }, icon = { Icon(Icons.Default.DateRange, null) }, label = { Text("Tracking", fontSize = 9.sp) })
+                NavigationBarItem(selected = selectedTab == 4, onClick = { resetSubPages(); selectedTab = 4 }, icon = { Icon(Icons.Default.Edit, null) }, label = { Text("Quiz", fontSize = 9.sp) })
                 NavigationBarItem(selected = selectedTab == 5, onClick = { resetSubPages(); selectedTab = 5 }, icon = { Icon(Icons.Default.Person, null) }, label = { Text("Saya", fontSize = 9.sp) })
             }
         }
@@ -485,6 +488,7 @@ fun ImtiyazApp() {
                     onBack = { showInvoiceList = false }
                 )
                 showDokumen -> DokumenScreen(onBack = { showDokumen = false })
+                showMatsurat -> AlMatsuratScreen(onBack = { showMatsurat = false })
                 else -> when (selectedTab) {
                     0 -> BerandaScreen(
                         onPaketClick = { selectedPaket = it },
@@ -497,9 +501,15 @@ fun ImtiyazApp() {
                         onAnnouncementClick = { showAnnouncementDetail = true }
                     )
                     1 -> PaketListScreen(onPaketClick = { selectedPaket = it })
-                    2 -> QuranScreen(onSurahClick = { selectedSurah = it })
-                    3 -> DoaListScreen(onDoaClick = { selectedDoa = it })
-                    4 -> TrackingIstiqamahScreen()
+                    2 -> QuranScreen(
+                        onSurahClick = { selectedSurah = it },
+                        onHafalanClick = { resetSubPages(); selectedTab = 4 }
+                    )
+                    3 -> DoaListScreen(
+                        onDoaClick = { selectedDoa = it },
+                        onMatsuratClick = { showMatsurat = true }
+                    )
+                    4 -> HafalanQuranScreen(onBack = { selectedTab = 0 })
                     5 -> SayaScreen(
                         onRadioClick = { showRadio = true },
                         onFindJamaahClick = { showFindJamaah = true },
@@ -815,13 +825,30 @@ fun DokumenScreen(onBack: () -> Unit = {}) {
 }
 
 @Composable
-fun DoaListScreen(onDoaClick: (Doa) -> Unit) {
+fun DoaListScreen(onDoaClick: (Doa) -> Unit, onMatsuratClick: () -> Unit = {}) {
     LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
             Text("Panduan Doa", fontWeight = FontWeight.Bold, fontSize = 20.sp)
             Text("Bisa dibaca tanpa internet", fontSize = 12.sp, color = Color.Gray)
             Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFF0FDF4)), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) { Text("✅ Offline Mode - Tanpa internet di pesawat / Masjidil Haram", fontSize = 10.sp, color = Color(0xFF0F7A5A), modifier = Modifier.padding(8.dp)) }
             Spacer(Modifier.height(8.dp))
+
+            // Card Hijau - Al-Ma'tsurat Sughra (dzikir pagi & petang)
+            Card(
+                shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF0F7A5A)),
+                modifier = Modifier.fillMaxWidth().clickable { onMatsuratClick() }
+            ) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.WbSunny, contentDescription = null, tint = Color.White)
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Al-Ma'tsurat Sughra", fontWeight = FontWeight.Bold, fontSize = 13.5.sp, color = Color.White)
+                        Text("Dzikir pagi & petang lengkap", fontSize = 10.5.sp, color = Color(0xFFD1FAE5))
+                    }
+                    Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color.White)
+                }
+            }
+            Spacer(Modifier.height(10.dp))
         }
         items(listDoa) { doa ->
             val hasAudio = AppData.doaAudio.containsKey(doa.id)
