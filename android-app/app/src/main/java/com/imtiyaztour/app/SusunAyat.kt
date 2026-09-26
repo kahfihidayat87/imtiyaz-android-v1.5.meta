@@ -2,6 +2,8 @@ package com.imtiyaztour.app
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -136,6 +138,12 @@ private fun ColumnScope.RondeSusunAyat(ronde: List<AyatItem>, onRondeSelesai: ()
             }
         }
 
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+        ) {
         Spacer(Modifier.height(16.dp))
         Text("Potongan ayat (acak):", fontSize = 11.5.sp, color = Color.Gray)
         Spacer(Modifier.height(6.dp))
@@ -181,6 +189,7 @@ private fun ColumnScope.RondeSusunAyat(ronde: List<AyatItem>, onRondeSelesai: ()
             Button(onClick = onRondeSelesai, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)), modifier = Modifier.fillMaxWidth()) {
                 Text("Lanjut")
             }
+        }
         }
     }
 }

@@ -234,6 +234,31 @@ fun SelesaiSurahCard(namaSurah: String, onBack: () -> Unit) {
 }
 
 /**
+ * Bangun soal tebak kata: sembunyikan SATU kata di TENGAH ayat (bukan awal/akhir).
+ * Return null jika ayat terlalu pendek (tidak ada kata tengah yang memenuhi syarat).
+ */
+private fun buatSoalTebakKata(ayat: AyatItem, semuaAyatSurah: List<AyatItem>): Triple<String, String, List<String>>? {
+    val kataAyat = ayat.teksArab.split(" ").filter { it.isNotBlank() }
+    if (kataAyat.size < 4) return null
+
+    // Hanya kata tengah: index 1 s/d n-2 (skip kata pertama & terakhir)
+    val kandidatIndex = (1 until kataAyat.size - 1).filter { kataAyat[it].length >= 3 }
+    if (kandidatIndex.isEmpty()) return null
+
+    val idxDisembunyikan = kandidatIndex.random()
+    val kataBenar = kataAyat[idxDisembunyikan]
+
+    val kataLain = semuaAyatSurah.filter { it.nomorAyat != ayat.nomorAyat }
+        .flatMap { it.teksArab.split(" ") }
+        .filter { it.isNotBlank() && it.length >= 3 && it != kataBenar }
+        .distinct()
+    val pengecoh = if (kataLain.size >= 2) kataLain.shuffled().take(2) else listOf("\u0644\u0644\u0647", "\u0645\u0650\u0646\u0652").filter { it != kataBenar }
+
+    val tampilan = kataAyat.mapIndexed { i, k -> if (i == idxDisembunyikan) "____" else k }.joinToString(" ")
+    return Triple(tampilan, kataBenar, (pengecoh + kataBenar).shuffled())
+}
+
+/**
  * Sembunyikan SATU kata dari ayat ini, pilihan jawaban = kata asli + 2 kata
  * lain yang diambil dari ayat-ayat LAIN pada surah yang SAMA (bukan dikarang) -
  * jadi walau pilihan yang salah, tetap kata yang benar-benar ada di surah itu.
@@ -243,20 +268,11 @@ private fun TebakKataCard(ayat: AyatItem, semuaAyatSurah: List<AyatItem>, onBena
     var terjawab by remember(ayat.nomorAyat) { mutableStateOf(false) }
     var pilihanUser by remember(ayat.nomorAyat) { mutableStateOf<String?>(null) }
 
-    val soal = remember(ayat.nomorAyat) {
-        val kataAyat = ayat.teksArab.split(" ").filter { it.isNotBlank() }
-        val kandidatIndex = kataAyat.indices.filter { kataAyat[it].length >= 3 }
-        val idxDisembunyikan = if (kandidatIndex.isNotEmpty()) kandidatIndex.random() else kataAyat.indices.random()
-        val kataBenar = kataAyat.getOrElse(idxDisembunyikan) { kataAyat.first() }
-
-        val kataLain = semuaAyatSurah.filter { it.nomorAyat != ayat.nomorAyat }
-            .flatMap { it.teksArab.split(" ") }
-            .filter { it.isNotBlank() && it.length >= 3 && it != kataBenar }
-            .distinct()
-        val pengecoh = if (kataLain.size >= 2) kataLain.shuffled().take(2) else listOf("\u0644\u0644\u0647", "\u0645ِنْ").filter { it != kataBenar }
-
-        val tampilan = kataAyat.mapIndexed { i, k -> if (i == idxDisembunyikan) "____" else k }.joinToString(" ")
-        Triple(tampilan, kataBenar, (pengecoh + kataBenar).shuffled())
+    val soal = remember(ayat.nomorAyat) { buatSoalTebakKata(ayat, semuaAyatSurah) }
+    if (soal == null) {
+        // Ayat terlalu pendek untuk dibuat soal - lewati otomatis ke ayat berikutnya
+        LaunchedEffect(ayat.nomorAyat) { onBenar() }
+        return
     }
     val (teksSoal, jawabanBenar, pilihan) = soal
 
