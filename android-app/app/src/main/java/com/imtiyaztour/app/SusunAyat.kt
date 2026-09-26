@@ -91,7 +91,7 @@ fun SusunAyatScreen(nomorSurah: Int, onBack: () -> Unit) {
 
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
-private fun RondeSusunAyat(ronde: List<AyatItem>, onRondeSelesai: () -> Unit) {
+private fun ColumnScope.RondeSusunAyat(ronde: List<AyatItem>, onRondeSelesai: () -> Unit) {
     // slotIsi[i] = nomorAyat yang menempati slot urutan ke-i (index 0-based), null kalau kosong.
     val slotIsi = remember(ronde) { mutableStateListOf(*arrayOfNulls<Int>(ronde.size)) }
     val slotBounds = remember(ronde) { mutableStateMapOf<Int, Rect>() } // slot index -> posisi di layar
