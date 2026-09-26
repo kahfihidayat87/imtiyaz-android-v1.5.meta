@@ -1,6 +1,6 @@
 # Imtiyaz Tour — Project Handoff Document
 
-**Terakhir update:** 24 Sep 2026
+**Terakhir update:** 26 Sep 2026
 **Repo utama:** https://github.com/kahfihidayat87/imtiyaz-android-v1.5.meta
 **Local path:** C:\Users\DELL\Documents\GitHub\imtiyaz-android-v1.5.meta
 
@@ -11,10 +11,10 @@
 | Item | Nilai |
 |---|---|
 | Versi aktif (App Jamaah) | **2.12.0** (versionCode 14) |
-| Commit terakhir | `aca2c24` chore: bump versi ke 2.12.0 |
+| Commit terakhir | `944a669` fix: add ColumnScope receiver to RondeSusunAyat |
 | Branch | `main` |
 | CI | GitHub Actions hijau |
-| Total file Kotlin | 15 file (~7.500 baris) |
+| Total file Kotlin | **22 file** |
 | Warna tema | Hijau `#0F7A5A` |
 
 ---
@@ -48,28 +48,33 @@
 
 ---
 
-## File Kotlin di App Jamaah
+## File Kotlin di App Jamaah (22 file, per 26 Sep 2026)
 
 | File | Fungsi |
 |---|---|
 | MainActivity.kt | Entry point, navigasi 6 tab, splash |
-| ApiConfig.kt | Base URL API |
-| PrayerTimes.kt | Jadwal shalat Ummul Qura |
 | Adzan.kt | Notifikasi adzan otomatis |
-| Quran.kt | 114 surat via equran.id v2 |
-| AudioPlayer.kt | MediaPlayer shared helper |
-| Manasik.kt | 14 langkah interaktif + progress |
-| Journal.kt | Catatan perjalanan lokal |
-| Reminder.kt | Pengingat ibadah & kesehatan |
+| AlMatsurat.kt | Al-Ma'tsurat Sughra (NEW) |
 | Announcement.kt | Info dari admin + notif |
-| Radio.kt | Voice note TL (polling 2.5s) |
-| LocateService.kt | Foreground service ntfy tracking |
-| LocationHelper.kt | GPS multi-sample + adaptive battery |
+| AudioPlayer.kt | MediaPlayer shared helper |
 | FindJamaah.kt | UI TL cari jamaah + tombol peta |
-| LokasiMapView.kt | Peta inline OSM (osmdroid) |
-| Pembimbing.kt | Profil ustadz + audio ceramah |
+| HafalanQuran.kt | Quiz Hafalan Juz 30 (NEW) |
+| Invoice.kt | Daftar invoice PDF jamaah (NEW) |
 | Itinerary.kt | Rencana perjalanan 9 hari |
 | JadwalKeberangkatan.kt | Trip real-time WP Travel Engine |
+| Journal.kt | Catatan perjalanan lokal |
+| LocateService.kt | Foreground service ntfy tracking |
+| LocationHelper.kt | GPS multi-sample + adaptive battery |
+| LokasiMapView.kt | Peta inline OSM (osmdroid) |
+| Manasik.kt | 14 langkah interaktif + progress |
+| Pembimbing.kt | Profil ustadz + audio ceramah |
+| PrayerTimes.kt | Jadwal shalat Ummul Qura |
+| Quran.kt | 114 surat via equran.id v2 |
+| Radio.kt | Voice note TL (polling 2.5s) |
+| Reminder.kt | Pengingat ibadah & kesehatan |
+| SusunAyat.kt | Fitur susun potongan ayat per ronde (NEW) |
+
+Catatan: fitur Tracking Istiqamah (8 kategori) terintegrasi di MainActivity/Reminder, tidak ada file terpisah.
 
 ---
 
@@ -89,6 +94,12 @@
 12. Checklist Dokumen (diisi admin)
 13. Upload Bukti Transfer
 14. Skrining Kesehatan 29 pertanyaan
+15. **Susun Ayat** — susun potongan ayat per ronde (NEW)
+16. **Quiz Hafalan Juz 30** (NEW)
+17. **Al-Ma'tsurat Sughra** — card di DoaListScreen (NEW)
+18. **Tracking Istiqamah** — 8 kategori + alarm Dzikir/Sedekah/Muhasabah (NEW)
+19. **Dokumen ke Saya** — akses invoice PDF jamaah (NEW)
+20. **Peta Multi-Jamaah** — semua jamaah di kanal, skip marker tanpa lokasi (NEW)
 
 ---
 
@@ -96,49 +107,75 @@
 
 ### TAHAP 1 - Fix CI Workflow (SELESAI)
 - File: `.github/workflows/build-apk.yml`
-- Masalah: GitHub Actions menolak workflow karena `secrets` dipakai di `if:` level step
-- Solusi: Pindahkan ke `env:` di level job (`HAS_RELEASE_KEYSTORE`)
-- Status: Selesai
+- Masalah: `secrets` dipakai di `if:` level step
+- Solusi: Pindah ke `env:` di level job (`HAS_RELEASE_KEYSTORE`)
 
 ### TAHAP 2 - Polish Tombol Peta (SELESAI)
 - File: `FindJamaah.kt`
-- Perubahan: Tombol tunggal "Buka di Peta" jadi tombol "Buka di Google Maps"
-- Helper baru: `openInMapsApp(context, lat, lon, label)` dengan fallback browser silent
+- Tombol "Buka di Google Maps" + helper `openInMapsApp(context, lat, lon, label)`
 - Commit: `9a2b0fe`
-- Catatan: Tombol Waze & Browser dihapus, fallback browser tetap ada (silent)
 
-### TAHAP 2.5 - Bump Versi (SELESAI)
+### TAHAP 2.5 - Bump Versi 2.12.0 (SELESAI)
 - File: `android-app/app/build.gradle`
-- Perubahan: versionCode 13 jadi 14, versionName 2.11.2 jadi 2.12.0
+- versionCode 13 → 14, versionName 2.11.2 → 2.12.0
 - Commit: `aca2c24`
 
-### TAHAP 3 - Belum Ditentukan
+### TAHAP 3 - Find Jamaah Scrollable (SELESAI)
+- Commit: `fdee216`
+
+### TAHAP 4 - Invoice Jamaah PDF (SELESAI)
+- Commit: `1d0a56e`, `d6c8c4d`
+- Hanya tampilkan invoice terbaru (sorted by date desc)
+
+### TAHAP 5 - Peta Multi-Jamaah (SELESAI)
+- Commit: `e7cc984`
+- Tampilkan semua jamaah di kanal, skip marker tanpa lokasi
+
+### TAHAP 6 - Tracking Istiqamah (SELESAI)
+- Commit: `bd0a1d7`, `97fcaf0`, `cbf6012`
+- Tab Tracking 8 kategori, Dokumen ke Saya, navigasi tab instan
+- Toggle berjamaah sholat, konten islami, fix reactivity poin
+- Toggle alarm "Ingatkan Aku" (Dzikir/Sedekah/Muhasabah)
+
+### TAHAP 7 - Quiz + Al-Ma'tsurat (SELESAI)
+- Commit: `9b0acf2`
+- Quiz Hafalan Juz 30 + Al-Ma'tsurat Sughra
+
+### TAHAP 8 - Hotfix ColumnScope (SELESAI)
+- Commit: `944a669`
+- File: `SusunAyat.kt`
+- Masalah: `Modifier.weight()` error karena `RondeSusunAyat` tidak punya receiver `ColumnScope`
+- Solusi: tambah `ColumnScope.` di signature fungsi (baris 94)
+- CI: hijau
+
+### TAHAP 9 - Belum Ditentukan
 Kandidat:
-- A. Quick action di layar hasil Find Jamaah (copy koordinat, share WA)
-- B. RBAC & keamanan App Admin
-- C. Offline resilience (cache shalat/manasik, retry queue)
-- D. Polish UI menyeluruh
-- E. Lanjut ke repo imtiyaz-admin-android
+- A. Update HANDOFF.md berkala (dokumen ini)
+- B. Quick action layar Find Jamaah (copy koordinat, share WA)
+- C. RBAC & keamanan App Admin
+- D. Offline resilience (cache shalat/manasik, retry queue)
+- E. Polish UI menyeluruh
+- F. Lanjut ke repo `imtiyaz-admin-android`
 
 ---
 
 ## File Kritis
 
-- MainActivity.kt (Jamaah) - semua navigasi & layar
-- MainActivity.kt (Admin) - RBAC filter tab
-- PrayerTimes.kt - hitung jadwal astronomis
-- LocateService.kt - service ntfy tracking
-- app.js (Node) - proxy utama
-- imtiyaz-connector.php - plugin WP utama
-- .env (server) - credentials WP, RAHASIA
+- `MainActivity.kt` (Jamaah) - semua navigasi & layar
+- `MainActivity.kt` (Admin) - RBAC filter tab
+- `PrayerTimes.kt` - hitung jadwal astronomis
+- `LocateService.kt` - service ntfy tracking
+- `app.js` (Node) - proxy utama
+- `imtiyaz-connector.php` - plugin WP utama
+- `.env` (server) - credentials WP, RAHASIA
 
 ---
 
 ## Environment
 
 - Local: Windows 11, Git Bash (MINGW64)
-- Repo path: C:/Users/DELL/Documents/GitHub/imtiyaz-android-v1.5.meta
-- Remote: https://github.com/kahfihidayat87/imtiyaz-android-v1.5.meta.git
+- Repo path: `C:/Users/DELL/Documents/GitHub/imtiyaz-android-v1.5.meta`
+- Remote: `https://github.com/kahfihidayat87/imtiyaz-android-v1.5.meta.git`
 - Server: Hostinger (Node.js + WordPress)
 - Tools: Git Bash, Python, gh CLI
 
@@ -146,11 +183,12 @@ Kandidat:
 
 ## Konvensi
 
-1. Script patch disimpan lokal (patch-*.py), TIDAK di-commit
-2. File backup *.bak-*, TIDAK di-commit
-3. Line endings: LF (via .gitattributes)
+1. Script patch disimpan lokal (`patch-*.py`), TIDAK di-commit
+2. File backup `*.bak-*`, TIDAK di-commit
+3. Line endings: LF (via `.gitattributes`)
 4. Signing release: env variable (GitHub Secrets)
 5. Version bump setiap rilis
+6. Commit kecil per tahap, tunggu CI hijau sebelum lanjut
 
 ---
 
@@ -160,4 +198,8 @@ Kandidat:
 2. Format jawaban disukai: Bahasa Indonesia, tabel ringkas, step-by-step Git Bash
 3. Preferensi: commit kecil per tahap, tunggu CI hijau sebelum lanjut
 4. Hindari: emoji berlebihan, penjelasan bertele-tele
-5. Selalu tanya konteks TAHAP 1 kalau belum jelas
+5. Update dokumen ini setiap kali ada batch fitur baru (jangan sampai 9 commit tertinggal lagi)
+6. Checklist verifikasi saat mulai chat:
+   - `git log --oneline -10`
+   - `gh run list --limit 3`
+   - `sed -n '1,30p' HANDOFF.md`
