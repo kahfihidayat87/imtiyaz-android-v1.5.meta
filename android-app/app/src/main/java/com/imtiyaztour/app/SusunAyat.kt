@@ -202,31 +202,58 @@ private fun PotonganAyatDraggable(
     onDropDiSlot: (Int) -> Unit
 ) {
     var offset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
-    var posisiSekarang by remember { mutableStateOf<Rect?>(null) }
+    var posisiAwalItem by remember { mutableStateOf<Rect?>(null) }
+    var posisiJariWindow by remember { mutableStateOf<androidx.compose.ui.geometry.Offset?>(null) }
     var sedangDiseret by remember { mutableStateOf(false) }
 
     Box(
         Modifier
             .offset { IntOffset(offset.x.roundToInt(), offset.y.roundToInt()) }
-            .onGloballyPositioned { coords -> posisiSekarang = coords.boundsInWindow() }
+            .onGloballyPositioned { coords ->
+                // Simpan bounds awal hanya ketika TIDAK sedang drag,
+                // supaya referensi posisi jari tetap stabil.
+                if (!sedangDiseret) posisiAwalItem = coords.boundsInWindow()
+            }
             .background(if (sedangDiseret) Color(0xFFFFF8E1) else Color.White, RoundedCornerShape(10.dp))
             .then(
                 Modifier.pointerInput(teks) {
                     detectDragGestures(
-                        onDragStart = { sedangDiseret = true },
-                        onDrag = { change, dragAmount -> change.consume(); offset += dragAmount },
+                        onDragStart = { startOffset ->
+                            sedangDiseret = true
+                            // Konversi posisi jari dari lokal Box ke koordinat window
+                            posisiAwalItem?.let { r ->
+                                posisiJariWindow = androidx.compose.ui.geometry.Offset(
+                                    r.left + startOffset.x,
+                                    r.top + startOffset.y
+                                )
+                            }
+                        },
+                        onDrag = { change, dragAmount ->
+                            change.consume()
+                            offset += dragAmount
+                            posisiJariWindow = posisiJariWindow?.let {
+                                androidx.compose.ui.geometry.Offset(it.x + dragAmount.x, it.y + dragAmount.y)
+                            }
+                        },
                         onDragEnd = {
                             sedangDiseret = false
-                            val pusat = posisiSekarang?.center
-                            val slotTujuan = if (pusat != null) {
-                                slotBounds.entries.firstOrNull { (idx, rect) -> rect.contains(pusat) && !slotTerisi(idx) }?.key
+                            // Deteksi drop pakai POSISI JARI (tidak ter-clip parent scroll),
+                            // bukan pusat item (yang bisa terpotong oleh scroll container).
+                            val posJari = posisiJariWindow
+                            val slotTujuan = if (posJari != null) {
+                                slotBounds.entries.firstOrNull { (idx, rect) ->
+                                    rect.contains(posJari) && !slotTerisi(idx)
+                                }?.key
                             } else null
-                            if (slotTujuan != null) {
-                                onDropDiSlot(slotTujuan)
-                            }
+                            if (slotTujuan != null) onDropDiSlot(slotTujuan)
                             offset = androidx.compose.ui.geometry.Offset.Zero
+                            posisiJariWindow = null
                         },
-                        onDragCancel = { sedangDiseret = false; offset = androidx.compose.ui.geometry.Offset.Zero }
+                        onDragCancel = {
+                            sedangDiseret = false
+                            offset = androidx.compose.ui.geometry.Offset.Zero
+                            posisiJariWindow = null
+                        }
                     )
                 }
             )
