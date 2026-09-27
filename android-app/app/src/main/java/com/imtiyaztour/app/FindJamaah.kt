@@ -1,5 +1,6 @@
 package com.imtiyaztour.app
 
+import com.google.firebase.firestore.FirebaseFirestore
 import android.content.Intent
 import android.net.Uri
 import android.location.Location
@@ -140,17 +141,42 @@ fun FindJamaahScreen(onBack: () -> Unit) {
         loading = false
     }
 
+    // v2.13.0: ganti polling /status dengan Firestore real-time listener.
+    // TL kirim FCM ke jamaah via /api/find, jamaah balas dengan menulis GPS ke
+    // Firestore, kita cukup dengar perubahan dokumen.
     LaunchedEffect(activeFind?.second) {
         val reqId = activeFind?.second ?: return@LaunchedEffect
+        val targetId = activeFind?.first?.id ?: return@LaunchedEffect
+
+        var sudahRespons = false
+        val listener = FirebaseFirestore.getInstance()
+            .collection("lokasi_jamaah")
+            .document(targetId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null || !snapshot.exists()) return@addSnapshotListener
+                val data = snapshot.data ?: return@addSnapshotListener
+                if ((data["request_id"] as? String) == reqId) {
+                    sudahRespons = true
+                    findResult = FindStatus(
+                        status = "responded",
+                        latitude = data["latitude"] as? Double,
+                        longitude = data["longitude"] as? Double,
+                        accuracy = data["accuracy"] as? Double,
+                        battery = (data["battery"] as? Long)?.toInt(),
+                        responded_at = data["updated_at"] as? Long
+                    )
+                }
+            }
+
+        // Tunggu maksimal 60 detik atau sampai jamaah merespons
         val start = System.currentTimeMillis()
-        while (System.currentTimeMillis() - start < 60_000) {
-            try {
-                val s = withContext(Dispatchers.IO) { FindApiClient.service.getFindStatus(reqId) }
-                if (s.status == "responded") { findResult = s; return@LaunchedEffect }
-            } catch (e: Exception) { }
-            delay(5000)
+        while (!sudahRespons && System.currentTimeMillis() - start < 60_000) {
+            delay(1000)
         }
-        findResult = FindStatus(status = "timeout")
+        if (!sudahRespons) {
+            findResult = FindStatus(status = "timeout")
+        }
+        listener.remove()
     }
 
     if (activeFind != null) {

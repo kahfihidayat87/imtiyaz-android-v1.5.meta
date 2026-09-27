@@ -2,6 +2,9 @@
 
 package com.imtiyaztour.app
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.tasks.await
+import com.google.firebase.messaging.FirebaseMessaging
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -953,6 +956,17 @@ fun LoginScreen(onLoggedIn: () -> Unit, onCancel: (() -> Unit)? = null) {
                         val resp = withContext(Dispatchers.IO) { ApiClient.service.login(LoginRequest(username.trim(), password)) }
                         if (resp.success == true && resp.token != null && resp.jamaah_id != null) {
                             Prefs.saveLogin(context, resp.jamaah_id.toString(), resp.token, resp.nama ?: "")
+                            // FCM: subscribe ke topic jamaah supaya bisa terima "minta-lokasi"
+                            CoroutineScope(Dispatchers.IO).launch {
+                                try {
+                                    FirebaseMessaging.getInstance()
+                                        .subscribeToTopic("imtiyaz-loc-j${resp.jamaah_id}")
+                                        .await()
+                                    android.util.Log.d("MainActivity", "FCM subscribed: imtiyaz-loc-j${resp.jamaah_id}")
+                                } catch (e: Exception) {
+                                    android.util.Log.e("MainActivity", "Gagal subscribe FCM", e)
+                                }
+                            }
                             onLoggedIn()
                         } else {
                             errorMsg = resp.error ?: "Username atau password salah"
