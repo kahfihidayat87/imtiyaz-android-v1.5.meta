@@ -113,7 +113,10 @@ fun LokasiMapView(
         }
 
         // Jamaah markers — hanya yang punya lokasi (skip null)
-        allJamaah.forEach { j ->
+        // v2.13.0 FIX: sort supaya marker "highlight" (target yang dicari) di-add
+        // paling akhir -> muncul paling atas saat marker bertumpuk.
+        val sortedJamaah = allJamaah.sortedBy { it.jamaah_id == highlightJamaahId }
+        sortedJamaah.forEach { j ->
             val lat = j.latitude ?: return@forEach
             val lon = j.longitude ?: return@forEach
             val marker = Marker(mapView).apply {
