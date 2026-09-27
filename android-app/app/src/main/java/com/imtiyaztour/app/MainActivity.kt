@@ -436,13 +436,8 @@ fun ImtiyazApp() {
         try { checkAnnouncements(context) } catch (e: Exception) {}
     }
 
-    // Fitur Tracking Lansia: nyalakan LocateService saat login
-    // (ditambahkan otomatis oleh patch-locate-effect.py)
-    LaunchedEffect(Unit) {
-        if (Prefs.isLoggedIn(context)) {
-            try { LocateService.start(context) } catch (e: Exception) { }
-        }
-    }
+    // DEPRECATED v2.13.0: LocateService (ntfy.sh) sudah digantikan FCM + Firestore.
+    // Tracking lokasi dipicu oleh FcmService saat terima pesan "minta-lokasi".
 
     // Splash Compose -- durasi tampil logo dikontrol pasti (bukan cuma jeda cold-start
     // sekilas dari tema Android). Lihat juga windowBackground di AndroidManifest untuk

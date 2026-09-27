@@ -66,6 +66,7 @@ object TrackApiClient {
     }
 }
 
+@Deprecated("Digantikan FCM + Firestore sejak v2.13.0. Akan dihapus di v2.14.0.")
 class LocateService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val client = OkHttpClient.Builder()

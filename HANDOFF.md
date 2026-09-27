@@ -277,3 +277,25 @@ Kandidat:
 - GitHub Secrets: https://github.com/kahfihidayat87/imtiyaz-android-v1.5.meta/settings/secrets/actions
 - Firebase Console: https://console.firebase.google.com/project/imtiyaztourapp
 - Firestore: https://console.firebase.google.com/project/imtiyaztourapp/firestore
+
+---
+
+## Deprecation Log
+
+- **v2.13.0 (TAHAP 15)**: `LocateService.kt` (ntfy.sh) di-deprecate.
+  - Call `LocateService.start()` di `MainActivity.kt` dihapus.
+  - `<service android:name=".LocateService" />` dihapus dari `AndroidManifest.xml`.
+  - Class ditandai `@Deprecated` — file tetap ada untuk 1 rilis.
+  - Tracking lokasi sepenuhnya via **FcmService** (`KirimLokasiHelper` → Firestore `lokasi_jamaah/{jamaahId}`).
+  - **Akan dihapus total di v2.14.0.**
+
+## Roadmap TAHAP 15 Lanjutan
+
+| Batch | Isi | Status |
+|---|---|---|
+| 2 | Deprecate LocateService | ✅ |
+| 3 | FCM high-priority + data-only (server `app.js`) | ⏳ |
+| 4 | LocationCache + KirimLokasiHelper v2 (kirim 2×) | ⏳ |
+| 5 | Battery whitelist + wake-lock | ⏳ |
+
+Target: lokasi TL muncul < 5 detik, HP tetap bangun di merek agresif (Xiaomi/Oppo/Vivo/Samsung).

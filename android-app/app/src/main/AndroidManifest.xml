@@ -45,11 +45,7 @@
         <!-- Fitur Pengingat Ibadah -->
         <receiver android:name=".ReminderReceiver" android:exported="false" />
 
-        <!-- Tracking Lansia: foreground service siaga ntfy -->
-        <service
-            android:name=".LocateService"
-            android:exported="false"
-            android:foregroundServiceType="location" />
+        <!-- DEPRECATED v2.13.0: LocateService (ntfy.sh) dihapus. Tracking via FcmService. -->
 
         <!-- v2.13.0: FCM Service untuk tracking real-time -->
         <service
