@@ -1,6 +1,6 @@
 # Imtiyaz Tour — Project Handoff Document
 
-**Terakhir update:** 27 Sep 2026
+**Terakhir update:** 27 Sep 2026 (v2.13.0-dev)
 **Repo utama:** https://github.com/kahfihidayat87/imtiyaz-android-v1.5.meta
 **Local path:** C:\Users\DELL\Documents\GitHub\imtiyaz-android-v1.5.meta
 
@@ -10,13 +10,15 @@
 
 | Item | Nilai |
 |---|---|
-| Versi aktif (App Jamaah) | **2.12.0** (versionCode 14) |
-| Commit terakhir | `1c47343` fix(quiz): drag ghost overlay + workflow release APK |
+| Versi aktif (App Jamaah) | **2.12.0** (versionCode 14) — perlu bump ke 2.13.0 setelah uji FCM |
+| Commit terakhir | Lihat `git log --oneline -5` |
 | Branch | `main` |
 | CI | GitHub Actions hijau |
-| Total file Kotlin | **22 file** |
+| Total file Kotlin | **26 file** (22 lama + 4 FCM) |
 | Warna tema | Hijau `#0F7A5A` |
 | Distribusi | Play Store (AAB) + APK Release signed (langsung) |
+| **Tracking lokasi** | **FCM + Firestore** (menggantikan ntfy.sh) |
+| **Firebase project** | `imtiyaztourapp` |
 
 ---
 
@@ -24,9 +26,8 @@
 
 ### 1. App Jamaah — `imtiyaz-android-v1.5.meta`
 - Package: `com.imtiyaztour.app`
-- Distribusi: Play Store (via AAB) + APK signed via GitHub Release
+- Distribusi: Play Store (AAB) + APK signed via GitHub Release
 - Warna: Hijau `#0F7A5A`
-- Status: Sedang dikerjakan aktif
 
 ### 2. App Admin — `imtiyaz-admin-android`
 - Package: `com.imtiyaztour.admin`
@@ -42,29 +43,31 @@
 
 ### 4. Node.js Proxy — `api.pastiumrah.com`
 - File: `app.js` v2.12.0 (~700 baris)
-- Host: Hostinger (~/domains/api.pastiumrah.com/)
-- Fungsi: Proxy + cache + upload handler
-- Cache: 5 menit konten publik, 30 detik announcement
+- Host: Hostinger (Node.js LiteSpeed + CloudLinux)
+- Port: 3000
+- Node binary: `/opt/alt/alt-nodejs24/root/usr/bin/node`
+- Python binary: `/opt/alt/python311/bin/python3.11`
+- Fungsi: Proxy + cache + upload handler + **FCM sender**
 - Endpoint kunci: `/api/find`, `/api/track-ping`, `/api/kanal-jamaah`, `/api/radio/send`, `/api/radio/poll`
 
 ---
 
-## File Kotlin di App Jamaah (22 file, per 27 Sep 2026)
+## File Kotlin di App Jamaah (26 file, per 27 Sep 2026)
 
 | File | Fungsi |
 |---|---|
-| MainActivity.kt | Entry point, navigasi 6 tab, splash |
+| MainActivity.kt | Entry point, navigasi 6 tab, splash, FCM subscribe |
 | Adzan.kt | Notifikasi adzan otomatis |
 | AlMatsurat.kt | Al-Ma'tsurat Sughra |
 | Announcement.kt | Info dari admin + notif |
 | AudioPlayer.kt | MediaPlayer shared helper |
-| FindJamaah.kt | UI TL cari jamaah + tombol peta |
+| FindJamaah.kt | UI TL cari jamaah + Firestore listener |
 | HafalanQuran.kt | Quiz Tebak Kata + Susun Ayat (Juz 30) |
 | Invoice.kt | Daftar invoice PDF jamaah |
 | Itinerary.kt | Rencana perjalanan 9 hari |
 | JadwalKeberangkatan.kt | Trip real-time WP Travel Engine |
 | Journal.kt | Catatan perjalanan lokal |
-| LocateService.kt | Foreground service ntfy tracking |
+| LocateService.kt | Foreground service tracking (legacy ntfy) |
 | LocationHelper.kt | GPS multi-sample + adaptive battery |
 | LokasiMapView.kt | Peta inline OSM (osmdroid) |
 | Manasik.kt | 14 langkah interaktif + progress |
@@ -74,6 +77,10 @@
 | Radio.kt | Voice note TL (polling 2.5s) |
 | Reminder.kt | Pengingat ibadah & kesehatan |
 | SusunAyat.kt | Susun potongan ayat per ronde (drag & drop) |
+| FcmService.kt | Penerima FCM: onNewToken + onMessageReceived |
+| FcmTokenStore.kt | Simpan token & kirim ke Firestore |
+| KirimLokasiHelper.kt | Kirim GPS ke Firestore saat dapat FCM |
+| NotifikasiHelper.kt | Tampilkan notifikasi lokal |
 
 ---
 
@@ -87,160 +94,159 @@
 6. Reminder (ibadah + kesehatan)
 7. Pengumuman (dari admin)
 8. Radio Tour Leader (push-to-talk via polling)
-9. Tracking Lansia (TL cari lokasi jamaah)
+9. Tracking Lansia via FCM + Firestore (menggantikan ntfy)
 10. Pembimbing (profil + audio ceramah)
 11. Itinerary & Jadwal Keberangkatan
 12. Checklist Dokumen (diisi admin)
 13. Upload Bukti Transfer
 14. Skrining Kesehatan 29 pertanyaan
-15. Susun Ayat — susun potongan ayat per ronde (drag & drop)
+15. Susun Ayat
 16. Quiz Hafalan Juz 30
-17. Al-Ma'tsurat Sughra — card di DoaListScreen
-18. Tracking Istiqamah — 8 kategori + alarm Dzikir/Sedekah/Muhasabah
-19. Dokumen ke Saya — akses invoice PDF jamaah
-20. Peta Multi-Jamaah — semua jamaah di kanal, skip marker tanpa lokasi
+17. Al-Ma'tsurat Sughra
+18. Tracking Istiqamah
+19. Dokumen ke Saya
+20. Peta Multi-Jamaah
 
 ---
 
 ## Riwayat TAHAP
 
-### TAHAP 1 - Fix CI Workflow (SELESAI)
-- File: `.github/workflows/build-apk.yml`
-- Masalah: `secrets` dipakai di `if:` level step
-- Solusi: Pindah ke `env:` di level job (`HAS_RELEASE_KEYSTORE`)
+### TAHAP 1-2.5 - Fix CI & Polish Peta (SELESAI)
+- 9a2b0fe, aca2c24
 
-### TAHAP 2 - Polish Tombol Peta (SELESAI)
-- File: `FindJamaah.kt`
-- Tombol "Buka di Google Maps" + helper `openInMapsApp(context, lat, lon, label)`
-- Commit: `9a2b0fe`
+### TAHAP 3-7 - Fitur Tracking, Invoice, Peta, Quiz (SELESAI)
+- fdee216, 1d0a56e, d6c8c4d, e7cc984, bd0a1d7, 97fcaf0, cbf6012, 9b0acf2
 
-### TAHAP 2.5 - Bump Versi 2.12.0 (SELESAI)
-- versionCode 13 → 14, versionName 2.11.2 → 2.12.0
-- Commit: `aca2c24`
+### TAHAP 8 - Hotfix ColumnScope di SusunAyat.kt (SELESAI)
+- Commit: 944a669
 
-### TAHAP 3 - Find Jamaah Scrollable (SELESAI)
-- Commit: `fdee216`
-
-### TAHAP 4 - Invoice Jamaah PDF (SELESAI)
-- Commit: `1d0a56e`, `d6c8c4d`
-
-### TAHAP 5 - Peta Multi-Jamaah (SELESAI)
-- Commit: `e7cc984`
-
-### TAHAP 6 - Tracking Istiqamah (SELESAI)
-- Commit: `bd0a1d7`, `97fcaf0`, `cbf6012`
-
-### TAHAP 7 - Quiz + Al-Ma'tsurat (SELESAI)
-- Commit: `9b0acf2`
-
-### TAHAP 8 - Hotfix ColumnScope (SELESAI)
-- Commit: `944a669`
-- File: `SusunAyat.kt` — tambah `ColumnScope.` di signature `RondeSusunAyat`
-
-### TAHAP 9 - Update HANDOFF.md (SELESAI)
-- Commit: `6b82eef`
-- Update 22 file Kotlin, TAHAP 3-8
+### TAHAP 9 - Update HANDOFF.md v1 (SELESAI)
+- Commit: 6b82eef
 
 ### TAHAP 10 - Quiz Polish (SELESAI)
-- Commit: `8860c05`, `c074a4e`, `1c47343`
-- **Fix 1:** Scroll area potongan ayat (wrapper `Column` + `verticalScroll`)
-- **Fix 2:** Tebak Kata skip kata awal/akhir (hanya index 1..n-2, skip ayat <4 kata)
-- **Fix 3:** Deteksi drop pakai posisi jari (bukan pusat item) → hindari clip scroll
-- **Fix 4:** Drag ghost overlay — item didrag muncul di depan slot/placeholder
+- Commit: 8860c05, c074a4e, 1c47343
 
 ### TAHAP 11 - Build APK Release Signed (SELESAI)
-- File: `.github/workflows/build-apk.yml`
-- Tambah 3 step: `Build Release APK`, `Upload Release APK`, `Create GitHub Release`
-- APK rilis otomatis di-upload ke GitHub Releases sebagai artifact publik
-- Link download permanen: `https://github.com/kahfihidayat87/imtiyaz-android-v1.5.meta/releases/latest`
+- File: .github/workflows/build-apk.yml
+- Link: https://github.com/kahfihidayat87/imtiyaz-android-v1.5.meta/releases/latest
 
-### TAHAP 12 - Belum Ditentukan
-Kandidat:
-- A. Quick action layar Find Jamaah (copy koordinat, share WA)
-- B. RBAC & keamanan App Admin
-- C. Offline resilience (cache shalat/manasik, retry queue)
-- D. Polish UI menyeluruh
-- E. Lanjut ke repo `imtiyaz-admin-android`
-- F. Migrasi signing ke Play App Signing (kalau mau publish Play Store)
+### TAHAP 12 - Fix Tracking Lokasi via API (SELESAI)
+- Server: fix EADDRINUSE, rate limit 30s->10s, pesan 429 ramah
+- Android: polling 2s->5s, durasi 90s->60s, disable tombol saat loading
+- Commit: d52b6e7
+
+### TAHAP 13 - Migrasi ke FCM + Firestore (SELESAI)
+- Alasan: ntfy.sh limit 250/hari + 502 error + single point of failure
+- FASE 1: Firebase project imtiyaztourapp, Firestore asia-southeast2
+- FASE 2: Gradle plugin google-services 4.4.2, Firebase BOM 33.7.0
+- FASE 3: 4 file Kotlin baru (FcmService, FcmTokenStore, KirimLokasiHelper, NotifikasiHelper)
+- FASE 4: FindJamaah.kt ganti polling dengan addSnapshotListener
+- FASE 6: Node.js install firebase-admin@14.5.0, modular import, spawn manual
+- FASE 7: MainActivity subscribe topic imtiyaz-loc-j{jamaahId}
+- Firestore Rules: allow read/write if true (DEV ONLY)
+
+### TAHAP 14 - Uji End-to-End FCM (SEDANG DIUJI)
+Kandidat lanjutan:
+- A. Firebase Custom Auth (production-ready)
+- B. Bump versi ke 2.13.0 + changelog
+- C. Supervisor auto-respawn Node.js
+- D. Deprecate LocateService.kt (ntfy legacy)
+- E. Quick action layar Find Jamaah
+- F. RBAC & keamanan App Admin
 
 ---
 
 ## File Kritis
 
-- `MainActivity.kt` (Jamaah) - semua navigasi & layar
-- `MainActivity.kt` (Admin) - RBAC filter tab
-- `PrayerTimes.kt` - hitung jadwal astronomis
-- `LocateService.kt` - service ntfy tracking
-- `SusunAyat.kt` - quiz drag & drop (baru 27 Sep)
-- `HafalanQuran.kt` - quiz Tebak Kata + Susun Ayat
-- `app.js` (Node) - proxy utama
-- `imtiyaz-connector.php` - plugin WP utama
-- `.github/workflows/build-apk.yml` - CI: debug + AAB + APK release signed
-- `.env` (server) - credentials WP, RAHASIA
-- `imtiyaz-release-key.jks` (LOKAL, JANGAN COMMIT) - keystore signing
+- MainActivity.kt (Jamaah) — navigasi, FCM subscribe
+- FindJamaah.kt — UI TL + Firestore listener
+- FcmService.kt — penerima FCM
+- PrayerTimes.kt — hitung jadwal astronomis
+- LocateService.kt — service ntfy (legacy)
+- app.js (Node) — proxy + FCM sender
+- imtiyaz-connector.php — plugin WP utama
+- .github/workflows/build-apk.yml — CI
+- android-app/app/google-services.json — Firebase config
+- service-account.json (server) — JANGAN COMMIT
+- imtiyaz-release-key.jks (LOKAL) — signing keystore
+- .env (server) — credentials WP + FIREBASE
 
 ---
 
 ## Distribution & Release
 
 ### Play Store (AAB)
-- Upload AAB dari artifact `Imtiyaz-AAB-PlayStore` di setiap GitHub Actions run
+- Upload AAB dari artifact Imtiyaz-AAB-PlayStore
 
-### APK Release (Langsung, Tanpa Play Store)
-- APK signed otomatis dibuat setiap push ke `main`
-- Link GitHub Release: https://github.com/kahfihidayat87/imtiyaz-android-v1.5.meta/releases/latest
-- File: `app-release.apk` (signed dengan release keystore)
-- Cocok untuk distribusi cepat ke jamaah via WhatsApp/Google Drive
+### APK Release (Langsung)
+- Otomatis dibuat setiap push ke main
+- Link: https://github.com/kahfihidayat87/imtiyaz-android-v1.5.meta/releases/latest
 
-### Secrets GitHub yang Diperlukan
-- `RELEASE_KEYSTORE_BASE64` - keystore di-encode base64
-- `RELEASE_KEYSTORE_PASSWORD` - password keystore
-- `RELEASE_KEY_ALIAS` - alias key (`imtiyaz-key`)
-- `RELEASE_KEY_PASSWORD` - password key
+### Secrets GitHub
+- RELEASE_KEYSTORE_BASE64
+- RELEASE_KEYSTORE_PASSWORD
+- RELEASE_KEY_ALIAS
+- RELEASE_KEY_PASSWORD
 
 ---
 
 ## Environment
 
-- Local: Windows 11, Git Bash (MINGW64)
-- Repo path: `C:/Users/DELL/Documents/GitHub/imtiyaz-android-v1.5.meta`
-- Remote: `https://github.com/kahfihidayat87/imtiyaz-android-v1.5.meta.git`
-- Server: Hostinger (Node.js + WordPress)
-- Tools: Git Bash, Python, gh CLI, pyyaml
+### Lokal
+- Windows 11, Git Bash (MINGW64)
+- Repo: C:/Users/DELL/Documents/GitHub/imtiyaz-android-v1.5.meta
+- Tools: Git Bash, Python 3.14, gh CLI, scp, ssh
+
+### Server Hostinger
+- SSH: ssh -p 65002 u120369480@153.92.10.222
+- Node: /opt/alt/alt-nodejs24/root/usr/bin/node (v24.6.0)
+- NPM: /opt/alt/alt-nodejs24/root/usr/bin/npm
+- Python: /opt/alt/python311/bin/python3.11
+- App dir: ~/domains/api.pastiumrah.com/hbuilds/current/nodejs/
+- Logs: console.log, stderr.log
+- LiteSpeed TIDAK auto-respawn - kill = server mati total
+
+### Firebase
+- Project ID: imtiyaztourapp
+- Firestore region: asia-southeast2
+- Console: https://console.firebase.google.com/project/imtiyaztourapp
 
 ---
 
 ## Konvensi
 
-1. Script patch disimpan lokal (`patch-*.py`), TIDAK di-commit
-2. File backup `*.bak-*`, TIDAK di-commit
-3. Line endings: LF (via `.gitattributes`)
+1. Script patch disimpan lokal (patch-*.py), TIDAK di-commit
+2. File backup *.bak-*, TIDAK di-commit
+3. Line endings: LF
 4. Signing release: env variable (GitHub Secrets)
 5. Version bump setiap rilis
-6. Commit kecil per tahap, tunggu CI hijau sebelum lanjut
-7. **JANGAN pernah paste token / password ke chat atau commit**
-8. Update HANDOFF.md setiap batch fitur baru (jangan menumpuk >5 commit)
+6. Commit kecil per tahap, tunggu CI hijau
+7. JANGAN paste token/password/service-account.json ke chat
+8. Update HANDOFF.md setiap batch fitur baru
+9. JANGAN paste Kotlin/XML langsung ke Git Bash
+10. Verifikasi brace balance sebelum commit Kotlin
 
 ---
 
 ## Catatan untuk Percakapan Berikutnya
 
-1. Konteks hilang setiap mulai chat baru - kirim file ini + repo link
-2. Format jawaban disukai: Bahasa Indonesia, tabel ringkas, step-by-step Git Bash
-3. Preferensi: commit kecil per tahap, tunggu CI hijau sebelum lanjut
-4. Hindari: emoji berlebihan, penjelasan bertele-tele
-5. **Jangan paste snippet Kotlin/XML langsung ke Git Bash** - selalu gunakan wrapper `cat > patch.py << 'PYEOF'`
-6. Setiap edit kode Kotlin: verifikasi brace balance (`python -c "..."`) sebelum commit
-7. Checklist verifikasi saat mulai chat:
-   - `git log --oneline -10`
-   - `gh run list --limit 5`
-   - `gh secret list`
-   - `sed -n '1,40p' HANDOFF.md`
+1. Konteks hilang setiap chat baru - kirim file ini + repo link
+2. Format: Bahasa Indonesia, tabel, step-by-step Git Bash
+3. Commit kecil, tunggu CI hijau
+4. Hindari emoji berlebihan
+5. Checklist verifikasi saat mulai chat:
+   - git log --oneline -10
+   - gh run list --limit 5
+   - gh secret list
+   - sed -n '1,40p' HANDOFF.md
+   - ssh -p 65002 u120369480@153.92.10.222 "ps aux | grep api.pastiumrah | grep -v grep"
 
 ---
 
 ## Link Penting
 
 - GitHub Actions: https://github.com/kahfihidayat87/imtiyaz-android-v1.5.meta/actions
-- GitHub Releases (APK download): https://github.com/kahfihidayat87/imtiyaz-android-v1.5.meta/releases
+- GitHub Releases: https://github.com/kahfihidayat87/imtiyaz-android-v1.5.meta/releases
 - GitHub Secrets: https://github.com/kahfihidayat87/imtiyaz-android-v1.5.meta/settings/secrets/actions
+- Firebase Console: https://console.firebase.google.com/project/imtiyaztourapp
+- Firestore: https://console.firebase.google.com/project/imtiyaztourapp/firestore
