@@ -19,6 +19,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
+import com.google.firebase.firestore.FirebaseFirestore
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
@@ -151,34 +152,41 @@ fun LokasiMapCard(
     tlLat: Double?,
     tlLon: Double?,
     highlightJamaahId: String?,
+    daftarJamaahKanal: Map<String, String> = emptyMap(),  // v2.13.0: id -> nama
     modifier: Modifier = Modifier,
 ) {
     var locations by remember { mutableStateOf<List<JamaahLocation>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
 
-    suspend fun loadLocations() {
-        try {
-            val list = withContext(Dispatchers.IO) {
-                KanalLokasiClient.service.getKanalLokasi(
-                    mapOf("jamaah_id" to jamaahId, "token" to token)
-                )
+    // v2.13.0: baca dari Firestore real-time (konsisten dengan tombol Google Maps).
+    // Sebelumnya pakai /api/kanal-lokasi yang di-update via ntfy -- sekarang deprecated.
+    DisposableEffect(daftarJamaahKanal) {
+        val registration = FirebaseFirestore.getInstance()
+            .collection("lokasi_jamaah")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    loading = false
+                    return@addSnapshotListener
+                }
+                val list = snapshot?.documents?.mapNotNull { doc ->
+                    val data = doc.data ?: return@mapNotNull null
+                    val jid = doc.id
+                    // Filter: hanya tampilkan jamaah yang ada di kanal TL ini
+                    if (!daftarJamaahKanal.containsKey(jid)) return@mapNotNull null
+                    JamaahLocation(
+                        jamaah_id = jid,
+                        nama = daftarJamaahKanal[jid] ?: "Jamaah",
+                        latitude = data["latitude"] as? Double,
+                        longitude = data["longitude"] as? Double,
+                        accuracy = (data["accuracy"] as? Double) ?: 0.0,
+                        battery = (data["battery"] as? Long)?.toInt() ?: -1,
+                        updated_at = (data["updated_at"] as? Long) ?: 0L,
+                    )
+                } ?: emptyList()
+                locations = list
+                loading = false
             }
-            locations = list
-        } catch (e: Exception) {
-            // Diamkan -- akan retry otomatis
-        }
-        loading = false
-    }
-
-    // Load awal
-    LaunchedEffect(Unit) { loadLocations() }
-
-    // Auto-refresh tiap 30 detik
-    LaunchedEffect(Unit) {
-        while (isActive) {
-            delay(30_000)
-            loadLocations()
-        }
+        onDispose { registration.remove() }
     }
 
     Card(
@@ -213,7 +221,7 @@ fun LokasiMapCard(
 
             Spacer(Modifier.height(6.dp))
             Text(
-                "Auto-refresh tiap 30 detik \u2022 Ketuk marker untuk info",
+                "Real-time \u2022 Ketuk marker untuk info",
                 fontSize = 10.sp,
                 color = Color.Gray,
             )

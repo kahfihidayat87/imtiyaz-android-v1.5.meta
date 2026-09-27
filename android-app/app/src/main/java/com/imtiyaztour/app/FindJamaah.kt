@@ -212,6 +212,7 @@ fun FindJamaahScreen(onBack: () -> Unit) {
                             tlLat = tlLocation?.latitude,
                             tlLon = tlLocation?.longitude,
                             highlightJamaahId = target.id,
+                            daftarJamaahKanal = list.associate { it.id to it.nama },
                             modifier = Modifier.padding(vertical = 4.dp),
                         )
                         Spacer(Modifier.height(12.dp))
