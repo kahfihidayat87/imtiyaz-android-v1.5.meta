@@ -2,6 +2,7 @@
 
 package com.imtiyaztour.app
 
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.tasks.await
 import com.google.firebase.messaging.FirebaseMessaging
@@ -294,6 +295,24 @@ class MainActivity : ComponentActivity() {
         // Begitu Activity ini hidup, langsung kembali ke tema biasa -- splash Compose
         // di bawah (SplashScreen composable) yang mengatur durasi tampil logo sesungguhnya.
         setTheme(android.R.style.Theme_Material_Light_NoActionBar)
+
+        // v2.13.0: re-subscribe FCM topic kalau user sudah login.
+        // User lama yang baru update app tidak akan subscribe sampai login ulang,
+        // jadi kita subscribe di sini supaya selalu aktif.
+        val existingJamaahId = Prefs.getJamaahId(this)
+        if (existingJamaahId.isNotBlank()) {
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    com.google.firebase.messaging.FirebaseMessaging.getInstance()
+                        .subscribeToTopic("imtiyaz-loc-j$existingJamaahId")
+                        .await()
+                    Log.d("MainActivity", "FCM re-subscribed: imtiyaz-loc-j$existingJamaahId")
+                } catch (e: Exception) {
+                    Log.e("MainActivity", "Gagal re-subscribe FCM", e)
+                }
+            }
+        }
+
         setContent { ImtiyazApp() }
     }
 }
