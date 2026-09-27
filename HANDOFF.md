@@ -299,3 +299,21 @@ Kandidat:
 | 5 | Battery whitelist + wake-lock | ⏳ |
 
 Target: lokasi TL muncul < 5 detik, HP tetap bangun di merek agresif (Xiaomi/Oppo/Vivo/Samsung).
+
+---
+
+## Prosedur Restart Node.js (Battle-Tested)
+
+**Script:** `bash scripts/restart-node.sh`
+**SSH:** `ssh -p 65002 u120369480@153.92.10.222`
+**App dir:** `~/domains/api.pastiumrah.com/hbuilds/current/nodejs`
+**Node binary:** `/opt/alt/alt-nodejs24/root/usr/bin/node`
+
+**Karakteristik:** Node di-spawn manual via `nohup` — **tidak auto-respawn**. Setelah edit `app.js`, wajib jalankan script restart.
+
+**Startup sukses ditandai dengan:**
+- `[FCM] Firebase Admin SDK initialized`
+- `Imtiyaz API v2.12.0 jalan di port 3000`
+- `stderr.log` kosong
+
+**Catatan:** Restart manual menggantikan proses `lsnode` (LiteSpeed wrapper). Setelah restart, pastikan hanya **1 PID** `node app.js` aktif — hindari duplikasi instance yang rebutan port 3000.
