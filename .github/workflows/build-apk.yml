@@ -8,6 +8,8 @@ on:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     # FIX (bug nyata: workflow gagal total di awal, sebelum step apa pun jalan):
     # GitHub Actions TIDAK MENGIZINKAN context "secrets" dipakai langsung di dalam
     # kondisi "if:" pada level step -- ini bukan cuma "tidak berfungsi seperti
@@ -93,3 +95,45 @@ jobs:
         with:
           name: Imtiyaz-AAB-PlayStore
           path: android-app/app/build/outputs/bundle/release/*.aab
+
+      # ============================================================
+      # APK RILIS untuk DISTRIBUSI LANGSUNG (tanpa Play Store)
+      # Ditandatangani dengan release keystore yang sama seperti AAB.
+      # Bisa dibagikan ke jamaah via link GitHub Release di bawah.
+      # ============================================================
+      - name: Build Release APK (signed)
+        if: ${{ env.HAS_RELEASE_KEYSTORE == 'true' }}
+        working-directory: android-app
+        env:
+          RELEASE_KEYSTORE_PATH: release.keystore
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          export ANDROID_HOME=$HOME/android-sdk
+          ./gradlew :app:assembleRelease --no-daemon --stacktrace
+
+      - name: Upload Release APK
+        if: ${{ env.HAS_RELEASE_KEYSTORE == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Imtiyaz-Release-APK
+          path: android-app/app/build/outputs/apk/release/*.apk
+
+      - name: Create GitHub Release
+        if: ${{ env.HAS_RELEASE_KEYSTORE == 'true' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v2.12.0-build${{ github.run_number }}
+          name: Imtiyaz Tour v2.12.0 (build ${{ github.run_number }})
+          body: |
+            APK rilis Imtiyaz Tour versi 2.12.0.
+            Dibangun otomatis dari commit ${{ github.sha }}.
+
+            **Cara install:**
+            1. Download file APK di bawah
+            2. Buka file manager, tap file APK
+            3. Izinkan "Install unknown apps" jika diminta
+            4. Tap Install
+          files: android-app/app/build/outputs/apk/release/app-release.apk
+          generate_release_notes: true
