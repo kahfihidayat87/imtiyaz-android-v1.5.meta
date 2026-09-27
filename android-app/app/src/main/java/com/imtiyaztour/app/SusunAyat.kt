@@ -1,6 +1,7 @@
 package com.imtiyaztour.app
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.border
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -101,9 +102,21 @@ private fun ColumnScope.RondeSusunAyat(ronde: List<AyatItem>, onRondeSelesai: ()
     var selesaiDicek by remember(ronde) { mutableStateOf(false) }
     var semuaBenar by remember(ronde) { mutableStateOf(false) }
 
+    // State untuk drag ghost overlay - agar item yang didrag muncul di depan semua konten
+    var dragAktif by remember { mutableStateOf(false) }
+    var dragTeks by remember { mutableStateOf("") }
+    var dragWindow by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    var boxWindow by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+
     fun ayatOf(nomor: Int) = ronde.first { it.nomorAyat == nomor }
 
-    Column(Modifier.weight(1f).fillMaxWidth()) {
+    Box(
+        Modifier
+            .weight(1f)
+            .fillMaxWidth()
+            .onGloballyPositioned { boxWindow = it.boundsInWindow().topLeft }
+    ) {
+    Column(Modifier.fillMaxSize()) {
         Text("Seret tiap ayat ke urutan yang benar:", fontSize = 11.5.sp, color = Color.Gray)
         Spacer(Modifier.height(10.dp))
 
@@ -162,7 +175,14 @@ private fun ColumnScope.RondeSusunAyat(ronde: List<AyatItem>, onRondeSelesai: ()
                     onDropDiSlot = { i ->
                         slotIsi[i] = nomorAyat
                         potonganTray.remove(nomorAyat)
-                    }
+                    },
+                    onDragMulai = { teks, posAwal ->
+                        dragAktif = true
+                        dragTeks = teks
+                        dragWindow = posAwal
+                    },
+                    onDragUpdate = { delta -> dragWindow += delta },
+                    onDragSelesai = { dragAktif = false }
                 )
             }
         }
@@ -192,6 +212,26 @@ private fun ColumnScope.RondeSusunAyat(ronde: List<AyatItem>, onRondeSelesai: ()
         }
         }
     }
+
+    // Drag ghost overlay - di luar Column/scroll, tidak ter-clip, berada di depan semua
+    if (dragAktif) {
+        Text(
+            dragTeks,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier
+                .offset {
+                    IntOffset(
+                        (dragWindow.x - boxWindow.x).roundToInt(),
+                        (dragWindow.y - boxWindow.y).roundToInt()
+                    )
+                }
+                .background(Color(0xFFFFF8E1), RoundedCornerShape(10.dp))
+                .border(1.5.dp, Color(0xFF0F7A5A), RoundedCornerShape(10.dp))
+                .padding(horizontal = 14.dp, vertical = 10.dp)
+        )
+    }
+    }
 }
 
 @Composable
@@ -199,22 +239,24 @@ private fun PotonganAyatDraggable(
     teks: String,
     slotBounds: Map<Int, Rect>,
     slotTerisi: (Int) -> Boolean,
-    onDropDiSlot: (Int) -> Unit
+    onDropDiSlot: (Int) -> Unit,
+    onDragMulai: (teks: String, posAwalWindow: androidx.compose.ui.geometry.Offset) -> Unit,
+    onDragUpdate: (delta: androidx.compose.ui.geometry.Offset) -> Unit,
+    onDragSelesai: () -> Unit
 ) {
-    var offset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
     var posisiAwalItem by remember { mutableStateOf<Rect?>(null) }
     var posisiJariWindow by remember { mutableStateOf<androidx.compose.ui.geometry.Offset?>(null) }
     var sedangDiseret by remember { mutableStateOf(false) }
 
     Box(
         Modifier
-            .offset { IntOffset(offset.x.roundToInt(), offset.y.roundToInt()) }
+            .alpha(if (sedangDiseret) 0f else 1f)
             .onGloballyPositioned { coords ->
                 // Simpan bounds awal hanya ketika TIDAK sedang drag,
                 // supaya referensi posisi jari tetap stabil.
                 if (!sedangDiseret) posisiAwalItem = coords.boundsInWindow()
             }
-            .background(if (sedangDiseret) Color(0xFFFFF8E1) else Color.White, RoundedCornerShape(10.dp))
+            .background(Color.White, RoundedCornerShape(10.dp))
             .then(
                 Modifier.pointerInput(teks) {
                     detectDragGestures(
@@ -226,14 +268,15 @@ private fun PotonganAyatDraggable(
                                     r.left + startOffset.x,
                                     r.top + startOffset.y
                                 )
+                                onDragMulai(teks, androidx.compose.ui.geometry.Offset(r.left, r.top))
                             }
                         },
                         onDrag = { change, dragAmount ->
                             change.consume()
-                            offset += dragAmount
                             posisiJariWindow = posisiJariWindow?.let {
                                 androidx.compose.ui.geometry.Offset(it.x + dragAmount.x, it.y + dragAmount.y)
                             }
+                            onDragUpdate(dragAmount)
                         },
                         onDragEnd = {
                             sedangDiseret = false
@@ -246,12 +289,12 @@ private fun PotonganAyatDraggable(
                                 }?.key
                             } else null
                             if (slotTujuan != null) onDropDiSlot(slotTujuan)
-                            offset = androidx.compose.ui.geometry.Offset.Zero
+                            onDragSelesai()
                             posisiJariWindow = null
                         },
                         onDragCancel = {
                             sedangDiseret = false
-                            offset = androidx.compose.ui.geometry.Offset.Zero
+                            onDragSelesai()
                             posisiJariWindow = null
                         }
                     )
