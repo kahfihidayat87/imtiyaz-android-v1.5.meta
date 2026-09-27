@@ -317,3 +317,27 @@ Target: lokasi TL muncul < 5 detik, HP tetap bangun di merek agresif (Xiaomi/Opp
 - `stderr.log` kosong
 
 **Catatan:** Restart manual menggantikan proses `lsnode` (LiteSpeed wrapper). Setelah restart, pastikan hanya **1 PID** `node app.js` aktif — hindari duplikasi instance yang rebutan port 3000.
+
+### TAHAP 15 - Batch 3 (SELESAI): FCM High-Priority + CollapseKey
+
+**Server:** `~/domains/api.pastiumrah.com/hbuilds/current/nodejs/app.js`
+
+**Patch `fcmMintaLokasi()` (line 408-430):**
+- ✅ Hapus fallback `ntfyPublish()` — error langsung `throw` (biar terlihat di log & response `/api/find`)
+- ✅ Tambah `collapseKey: 'minta-lokasi-j${jamaahId}'` — cegah FCM duplikat kalau TL tap Find berkali-kali dalam <60s
+- ✅ Sudah ada sebelumnya: `priority: 'high'`, `ttl: 60000`, data-only payload
+
+**Target:** lokasi TL muncul < 5 s. HP jamaah bangun meski Doze mode (FCM high-priority menembus Doze).
+
+**Backup:** `/tmp/app.js.20260927-150538.bak` (di server)
+
+**Catatan server:**
+- Runtime: `node app.js` spawn manual via `nohup`, TIDAK auto-respawn
+- **Ditemukan PID eksternal** (`381103`) saat restart — kemungkinan spawn dari LiteSpeed wrapper. Perlu investigasi kandidat C (Supervisor auto-respawn).
+- Restart via `bash scripts/restart-node.sh`
+
+**Verifikasi:**
+- `node --check app.js` → Syntax OK
+- Startup log: `[FCM] Firebase Admin SDK initialized` + `Imtiyaz API v2.12.0 jalan di port 3000`
+- Stderr kosong
+- PID tunggal (`607949`), health endpoint OK
