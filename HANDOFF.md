@@ -1,6 +1,6 @@
 # Imtiyaz Tour — Project Handoff Document
 
-**Terakhir update:** 27 Sep 2026 (v2.13.0-dev)
+**Terakhir update:** 27 Sep 2026 (v2.13.0-dev, TAHAP 14 SELESAI)
 **Repo utama:** https://github.com/kahfihidayat87/imtiyaz-android-v1.5.meta
 **Local path:** C:\Users\DELL\Documents\GitHub\imtiyaz-android-v1.5.meta
 
@@ -145,14 +145,41 @@
 - FASE 7: MainActivity subscribe topic imtiyaz-loc-j{jamaahId}
 - Firestore Rules: allow read/write if true (DEV ONLY)
 
-### TAHAP 14 - Uji End-to-End FCM (SEDANG DIUJI)
-Kandidat lanjutan:
-- A. Firebase Custom Auth (production-ready)
-- B. Bump versi ke 2.13.0 + changelog
-- C. Supervisor auto-respawn Node.js
-- D. Deprecate LocateService.kt (ntfy legacy)
-- E. Quick action layar Find Jamaah
-- F. RBAC & keamanan App Admin
+### TAHAP 14 - Uji End-to-End FCM + Fix Peta (SELESAI)
+**Uji end-to-end FCM sukses:**
+- HP TL tap Cari -> server kirim FCM ke HP jamaah -> jamaah kirim GPS ke Firestore -> TL terima real-time
+- Tracking lokasi end-to-end berjalan dengan baik
+
+**Fix 1 - Peta inline baca Firestore real-time:**
+- Sebelumnya: peta inline pakai API /api/kanal-lokasi (WordPress DB, lambat, cache)
+- Tombol Google Maps pakai Firestore (real-time)
+- Efek: koordinat peta beda dengan tombol Google Maps
+- Solusi: LokasiMapView.kt ganti ke addSnapshotListener Firestore
+- Filter: hanya tampilkan jamaah dari kanal TL (daftarJamaahKanal map)
+- Label UI: Auto-refresh 30 detik -> Real-time
+
+**Fix 2 - Format geo: intent Google Maps:**
+- Sebelumnya: geo:lat,lon?q=lat,lon(label) - tidak reliable
+- Efek: Google Maps kadang abaikan koordinat dan pakai lokasi user
+- Solusi: geo:0,0?q=lat,lon(label) - format standar yang reliable
+- Tambah safeLabel (max 50 char) untuk cegah URL rusak
+
+**Fix 3 - Marker overlap di peta:**
+- Dua jamaah di lokasi berdekatan -> tooltip marker salah (nampil nama jamaah lain)
+- Solusi: sortedBy jamaah_id == highlightJamaahId - marker target di-add paling akhir
+- Marker target muncul di atas saat marker bertumpuk
+
+**Commit:** lihat git log --oneline -5
+
+### TAHAP 15 - Belum Ditentukan
+Kandidat:
+- A. Firebase Custom Auth (production-ready, gantikan rules terbuka)
+- B. Bump versi ke 2.13.0 + changelog rilis
+- C. Supervisor auto-respawn Node.js (LiteSpeed tidak auto-respawn)
+- D. Deprecate LocateService.kt (ntfy legacy, sudah tidak dipakai)
+- E. Quick action layar Find Jamaah (copy koordinat, share WA)
+- F. RBAC dan keamanan App Admin
+- G. Update HANDOFF.md otomatis via CI
 
 ---
 
