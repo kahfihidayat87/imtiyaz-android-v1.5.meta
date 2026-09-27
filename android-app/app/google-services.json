@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "325872182765",
+    "project_id": "imtiyaztourapp",
+    "storage_bucket": "imtiyaztourapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:325872182765:android:68855e6d1f4d28342f33e4",
+        "android_client_info": {
+          "package_name": "com.imtiyaztour.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBaHfYf65P95yp1khoPJIS8WNaOINnhG2g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

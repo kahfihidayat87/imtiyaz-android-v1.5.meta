@@ -50,5 +50,14 @@
             android:name=".LocateService"
             android:exported="false"
             android:foregroundServiceType="location" />
+
+        <!-- v2.13.0: FCM Service untuk tracking real-time -->
+        <service
+            android:name=".FcmService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

@@ -1,6 +1,7 @@
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
+    id 'com.google.gms.google-services'  // FCM
 }
 
 android {
@@ -94,6 +95,12 @@ dependencies {
     implementation 'com.google.android.gms:play-services-location:21.3.0'
     // v2.12.0: peta inline OSM (OpenStreetMap) - gratis, tanpa API key
     implementation 'org.osmdroid:osmdroid-android:6.1.18'
+
+    // v2.13.0: Firebase Cloud Messaging + Firestore untuk tracking real-time
+    implementation platform('com.google.firebase:firebase-bom:33.7.0')
+    implementation 'com.google.firebase:firebase-messaging-ktx'
+    implementation 'com.google.firebase:firebase-firestore-ktx'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3'
 
     debugImplementation 'androidx.compose.ui:ui-tooling'
 }
