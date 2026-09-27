@@ -123,6 +123,8 @@ fun FindJamaahScreen(onBack: () -> Unit) {
     var errorMsg by remember { mutableStateOf("") }
     var activeFind by remember { mutableStateOf<Pair<KanalJamaah, String>?>(null) }
     var findResult by remember { mutableStateOf<FindStatus?>(null) }
+    // ID jamaah yang sedang dimintai lokasi -- untuk disable tombol agar tidak spam
+    var jamaahLoading by remember { mutableStateOf<String?>(null) }
     var tlLocation by remember { mutableStateOf<Location?>(null) }
 
     LaunchedEffect(Unit) {
@@ -141,12 +143,12 @@ fun FindJamaahScreen(onBack: () -> Unit) {
     LaunchedEffect(activeFind?.second) {
         val reqId = activeFind?.second ?: return@LaunchedEffect
         val start = System.currentTimeMillis()
-        while (System.currentTimeMillis() - start < 90_000) {
+        while (System.currentTimeMillis() - start < 60_000) {
             try {
                 val s = withContext(Dispatchers.IO) { FindApiClient.service.getFindStatus(reqId) }
                 if (s.status == "responded") { findResult = s; return@LaunchedEffect }
             } catch (e: Exception) { }
-            delay(2000)
+            delay(5000)
         }
         findResult = FindStatus(status = "timeout")
     }
@@ -278,7 +280,10 @@ fun FindJamaahScreen(onBack: () -> Unit) {
                     Spacer(Modifier.width(12.dp))
                     Text(j.nama, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.weight(1f))
                     Button(
+                        enabled = jamaahLoading == null,
                         onClick = {
+                            if (jamaahLoading != null) return@Button
+                            jamaahLoading = j.id
                             scope.launch {
                                 try {
                                     val resp = withContext(Dispatchers.IO) {
@@ -291,13 +296,22 @@ fun FindJamaahScreen(onBack: () -> Unit) {
                                         errorMsg = resp.error ?: "Gagal meminta lokasi"
                                     }
                                 } catch (e: Exception) {
-                                    errorMsg = "Gagal mengirim permintaan: ${e.message}"
+                                    val msg = e.message ?: "unknown"
+                                    errorMsg = when {
+                                        msg.contains("429") -> "Mohon tunggu 10 detik sebelum mencari jamaah ini lagi."
+                                        msg.contains("timeout", ignoreCase = true) -> "Koneksi lambat, coba lagi sebentar."
+                                        else -> "Gagal mengirim permintaan: $msg"
+                                    }
+                                } finally {
+                                    jamaahLoading = null
                                 }
                             }
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (jamaahLoading == j.id) Color.Gray else Color(0xFF0F7A5A)
+                        ),
                         shape = RoundedCornerShape(8.dp)
-                    ) { Text("Cari", fontSize = 12.sp) }
+                    ) { Text(if (jamaahLoading == j.id) "..." else "Cari", fontSize = 12.sp) }
                 }
             }
         }
