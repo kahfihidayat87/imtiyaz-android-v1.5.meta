@@ -14,7 +14,7 @@
 | Commit terakhir | Lihat `git log --oneline -5` |
 | Branch | `main` |
 | CI | GitHub Actions hijau |
-| Total file Kotlin | **26 file** (22 lama + 4 FCM) |
+| Total file Kotlin | **25 file** (21 lama + 4 FCM/notifikasi) |
 | Warna tema | Hijau `#0F7A5A` |
 | Distribusi | Play Store (AAB) + APK Release signed (langsung) |
 | **Tracking lokasi** | **FCM + Firestore** (menggantikan ntfy.sh) |
@@ -52,7 +52,7 @@
 
 ---
 
-## File Kotlin di App Jamaah (26 file, per 27 Sep 2026)
+## File Kotlin di App Jamaah (25 file, per 27 Sep 2026)
 
 | File | Fungsi |
 |---|---|

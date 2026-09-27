@@ -1,5 +1,7 @@
-# Node backend
+# Node backend (legacy — tidak dipakai di repo Android)
 node_modules/
+package.json
+package-lock.json
 .env
 backend/uploads/
 
@@ -14,8 +16,3 @@ android-app/app/*.jks
 # Patch scripts (tidak disimpan di repo)
 patch-*.py
 *.bak-*
-
-# Node.js (tidak dipakai di repo Android)
-node_modules/
-package.json
-package-lock.json
