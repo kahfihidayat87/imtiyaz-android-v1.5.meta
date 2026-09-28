@@ -256,25 +256,11 @@ fun RadioScreen(onBack: () -> Unit) {
         }
     }
 
-    // v2.14.0: auto-connect LiveKit saat mode live dibuka, auto-disconnect saat ditutup.
-    DisposableEffect(mode) {
-        if (mode == "live") {
-            if (isTourLeader && !hasMicPermission) {
-                micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-            }
-            RadioLiveKit.mulai(context, jamaahId, jamaahToken) { s ->
-                liveStatus = s
-                liveActive = RadioLiveKit.sedangAktif()
-            }
-        } else {
-            RadioLiveKit.berhenti()
-            liveStatus = ""
-            liveActive = false
-        }
+    // v2.14.1: cleanup LiveKit hanya saat keluar RadioScreen.
+    // Start/stop siaran sekarang manual via tombol di LiveKitSection.
+    DisposableEffect(Unit) {
         onDispose {
-            if (mode == "live") {
-                RadioLiveKit.berhenti()
-            }
+            RadioLiveKit.berhenti()
         }
     }
 
@@ -397,12 +383,20 @@ fun RadioScreen(onBack: () -> Unit) {
                 isTourLeader = isTourLeader,
                 liveStatus = liveStatus,
                 liveActive = liveActive,
-                onRestart = {
-                    RadioLiveKit.berhenti()
-                    RadioLiveKit.mulai(context, jamaahId, jamaahToken) { s ->
-                        liveStatus = s
-                        liveActive = RadioLiveKit.sedangAktif()
+                onStart = {
+                    if (!hasMicPermission) {
+                        micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    } else {
+                        RadioLiveKit.mulai(context, jamaahId, jamaahToken) { s ->
+                            liveStatus = s
+                            liveActive = RadioLiveKit.sedangAktif()
+                        }
                     }
+                },
+                onStop = {
+                    RadioLiveKit.berhenti()
+                    liveStatus = ""
+                    liveActive = false
                 }
             )
         }
@@ -414,7 +408,8 @@ private fun LiveKitSection(
     isTourLeader: Boolean,
     liveStatus: String,
     liveActive: Boolean,
-    onRestart: () -> Unit
+    onStart: () -> Unit,
+    onStop: () -> Unit
 ) {
     Column(
         Modifier.fillMaxSize().padding(24.dp),
@@ -461,9 +456,37 @@ private fun LiveKitSection(
             modifier = Modifier.padding(horizontal = 16.dp)
         )
         Spacer(Modifier.height(20.dp))
-        OutlinedButton(onClick = onRestart) {
-            Text("Sambungkan Ulang", fontSize = 12.sp)
+        if (liveActive) {
+            Button(
+                onClick = onStop,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                modifier = Modifier.fillMaxWidth(0.6f).height(48.dp),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Text(
+                    if (isTourLeader) "Akhiri Siaran" else "Berhenti Mendengarkan",
+                    fontSize = 13.sp, fontWeight = FontWeight.Bold
+                )
+            }
+        } else {
+            Button(
+                onClick = onStart,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)),
+                modifier = Modifier.fillMaxWidth(0.6f).height(48.dp),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Text(
+                    if (isTourLeader) "Mulai Siaran Live" else "Mulai Mendengarkan Live",
+                    fontSize = 13.sp, fontWeight = FontWeight.Bold
+                )
+            }
         }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            if (liveActive) "Tap tombol untuk berhenti."
+            else "Tap tombol untuk mulai.",
+            fontSize = 10.sp, color = Color.Gray
+        )
     }
 }
 

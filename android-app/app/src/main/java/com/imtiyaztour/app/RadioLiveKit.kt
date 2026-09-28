@@ -3,28 +3,26 @@ package com.imtiyaztour.app
 import android.content.Context
 import android.util.Log
 import io.livekit.android.LiveKit
-import io.livekit.android.room.Room
 import io.livekit.android.RoomOptions
+import io.livekit.android.room.Room
 import io.livekit.android.events.RoomEvent
 import io.livekit.android.events.collect
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
 import retrofit2.http.POST
 
 /**
- * v2.14.0: LiveKit radio TL - siaran real-time latency rendah.
+ * v2.14.1: LiveKit radio TL - siaran real-time.
  *
- * TL: publish microphone. Jamaah: subscribe -> audio otomatis diputar.
- *
- * Arsitektur:
- *   TL --publish audio--> LiveKit Cloud --forward--> Jamaah --auto-play-->
- *
- * Server Node.js hanya untuk generate token via /api/radio/token.
+ * FIX CRASH: LiveKit.create() dan setMicrophoneEnabled() WAJIB dipanggil di
+ * Main thread (bukan IO). AudioSwitch initialization internal SDK butuh
+ * Android Looper utama. Fetch token tetap di IO thread.
  */
 object RadioLiveKit {
 
@@ -64,16 +62,21 @@ object RadioLiveKit {
             return
         }
 
-        CoroutineScope(Dispatchers.IO).launch {
+        CoroutineScope(Dispatchers.Main).launch {
             try {
                 onStatus("Menghubungkan...")
-                val resp = api.getToken(mapOf("jamaah_id" to jamaahId, "token" to token))
+
+                // Fetch token di IO thread
+                val resp = withContext(Dispatchers.IO) {
+                    api.getToken(mapOf("jamaah_id" to jamaahId, "token" to token))
+                }
 
                 if (resp.token == null || resp.url == null) {
                     onStatus("Gagal dapat token: ${resp.error ?: "unknown"}")
                     return@launch
                 }
 
+                // LiveKit.create + connect di Main thread (wajib)
                 val r = LiveKit.create(
                     appContext = context.applicationContext,
                     options = RoomOptions(
@@ -90,15 +93,16 @@ object RadioLiveKit {
                             is RoomEvent.TrackSubscribed -> {
                                 Log.d(TAG, "Track subscribed: ${event.track.kind}")
                                 if (!resp.is_tl) {
-                                    onStatus("\uD83D\uDD0A Mendengarkan TL...")
+                                    withContext(Dispatchers.Main) {
+                                        onStatus("\uD83D\uDD0A Mendengarkan TL...")
+                                    }
                                 }
-                            }
-                            is RoomEvent.TrackUnsubscribed -> {
-                                Log.d(TAG, "Track unsubscribed")
                             }
                             is RoomEvent.Disconnected -> {
                                 Log.d(TAG, "Disconnected")
-                                onStatus("Koneksi terputus")
+                                withContext(Dispatchers.Main) {
+                                    onStatus("Koneksi terputus")
+                                }
                             }
                             else -> {}
                         }
@@ -107,7 +111,7 @@ object RadioLiveKit {
 
                 if (resp.is_tl) {
                     r.localParticipant.setMicrophoneEnabled(true)
-                    onStatus("\uD83D\uDD34 Siaran aktif — jamaah mendengarkan")
+                    onStatus("\uD83D\uDD34 Siaran aktif")
                     Log.d(TAG, "TL siaran aktif di room")
                 } else {
                     onStatus("\uD83D\uDD0A Mendengarkan TL...")
@@ -116,14 +120,14 @@ object RadioLiveKit {
 
             } catch (e: Exception) {
                 Log.e(TAG, "Error mulai LiveKit", e)
-                onStatus("Gagal: ${e.message}")
+                onStatus("Gagal: ${e.message ?: "unknown"}")
                 berhentiInternal()
             }
         }
     }
 
     fun berhenti() {
-        CoroutineScope(Dispatchers.IO).launch {
+        CoroutineScope(Dispatchers.Main).launch {
             try {
                 berhentiInternal()
                 Log.d(TAG, "LiveKit dihentikan")
