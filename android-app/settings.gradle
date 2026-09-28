@@ -10,6 +10,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // v2.14.0: JitPack untuk dependency LiveKit (com.github.davidliu:audioswitch)
+        maven { url 'https://jitpack.io' }
     }
 }
 rootProject.name = "Imtiyaz Simple Pro FIX Line2"
