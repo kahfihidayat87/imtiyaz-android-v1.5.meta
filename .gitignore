@@ -16,3 +16,6 @@ android-app/app/*.jks
 # Patch scripts (tidak disimpan di repo)
 patch-*.py
 *.bak-*
+
+# Test logs folder
+logs/
