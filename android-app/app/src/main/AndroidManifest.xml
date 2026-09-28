@@ -55,5 +55,11 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+
+        <!-- v2.13.0 (TAHAP 16): Mode Aman Foreground Service -->
+        <service
+            android:name=".ModeAmanService"
+            android:foregroundServiceType="location"
+            android:exported="false" />
     </application>
 </manifest>

@@ -222,3 +222,83 @@ ssh -p 65002 u120369480@153.92.10.222 "cd ~/domains/api.pastiumrah.com/hbuilds/c
 - LiveKit Server SDK (Node): https://github.com/livekit/server-sdk-js
 - LiveKit Docs: https://docs.livekit.io
 - LiveKit Pricing: https://livekit.io/pricing
+
+---
+
+## TAHAP 16 — Mode Aman Foreground Service
+
+**Tanggal:** 29 Sep 2026
+**Status:** ✅ Implementasi selesai, siap uji device
+
+### Tujuan
+
+HP jamaah tetap respon terhadap permintaan lokasi dari TL, meskipun aplikasi dalam kondisi:
+- Background (app tidak dibuka)
+- Di-swipe dari Recents (app "ditutup" user)
+- Low memory (OS kill karena RAM penuh)
+
+### Arsitektur "Mode Aman"
+
+3 layer pertahanan:
+
+| Layer | Mekanisme | Skenario |
+|---|---|---|
+| 1 | Foreground Service (notifikasi permanen) | App di-background |
+| 2 | onTaskRemoved() -> restart via AlarmManager | App di-swipe dari Recents |
+| 3 | FCM High-Priority (sudah ada) | App benar-benar mati / Doze mode |
+
+### File Baru
+
+| File | Ukuran | Fungsi |
+|---|---|---|
+| `ModeAmanService.kt` | ~188 baris | Foreground service `location` type |
+
+**Fitur:**
+- Notifikasi permanen: "Mode Aman Aktif - Lokasi Anda siap dicari Tour Leader"
+- Refresh lokasi ke Firestore `lokasi_jamaah/{jamaahId}` setiap 60 detik
+- `onTaskRemoved()` restart service via `AlarmManager` (delay 1 detik)
+- `START_STICKY` -> OS restart jika di-kill low-memory
+- Action button "Matikan" di notifikasi
+
+### File Dimodifikasi
+
+| File | Perubahan |
+|---|---|
+| `AndroidManifest.xml` | +7 baris - `<service android:name=".ModeAmanService" android:foregroundServiceType="location" />` |
+| `MainActivity.kt` | +50 baris - import `Build`, state `modeAmanAktif`, `modeAmanPermissionLauncher`, Card UI di `SayaScreen` |
+| `Radio.kt` | Rapikan UI: hapus teks penjelasan panjang untuk jamaah, tombol `"Mulai Mendengarkan"` (tanpa "Live"), hapus "Tap tombol..." untuk TL |
+
+### Permission
+
+Sudah ada di Manifest:
+- `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION`
+- `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_LOCATION`
+- `POST_NOTIFICATIONS`
+
+### Batasan yang Disadari
+
+| Skenario | Bisa Wake? |
+|---|---|
+| App foreground | ✅ |
+| App background | ✅ |
+| App di-swipe Recents | ⚠️ Restart ~1-2 detik |
+| App di-Force Stop oleh user | ❌ **Tidak bisa** (batasan OS Android) |
+| Android 15+ | ⚠️ Foreground service lebih agresif di-kill |
+
+### Cara Test di Device
+
+1. Install APK terbaru, login
+2. Buka tab **Saya** -> scroll -> cari Card **"Mode Aman"**
+3. Tap **"Aktifkan Mode Aman"** -> dialog izin muncul
+4. Izinkan lokasi + notifikasi -> notifikasi "Mode Aman Aktif" muncul
+5. Cek Firestore `lokasi_jamaah/{jamaahId}` -> `source: "mode_aman_service"`, `updated_at` update tiap 60 detik
+6. Swipe app dari Recents -> notifikasi hilang sebentar, muncul lagi ~1-2 detik
+7. Force Stop dari Settings -> notifikasi hilang **permanen** (expected)
+8. Tap **"Matikan Mode Aman"** di Card -> notifikasi hilang, service stop
+
+### Kandidat Lanjutan
+
+- [ ] Auto-start permission guide (Xiaomi/Oppo/Vivo/Samsung)
+- [ ] Battery optimization exemption prompt
+- [ ] Ganti interval refresh dari 60 detik (test tuning)
+- [ ] Handle edge case: service restart gagal karena izin revoked

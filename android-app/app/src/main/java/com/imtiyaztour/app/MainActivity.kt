@@ -9,6 +9,7 @@ import com.google.firebase.messaging.FirebaseMessaging
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
@@ -1028,6 +1029,7 @@ fun SayaScreen(
     var isUploading by remember { mutableStateOf(false) }
     var showSkrining by remember { mutableStateOf(false) }
     var cameraUri by remember { mutableStateOf<Uri?>(null) }
+    var modeAmanAktif by remember { mutableStateOf(false) }
 
     // FIX: sebelumnya angka-angka ini hardcode ("Rp 37.400.000", "Paket Linuwih", dst)
     // -- tidak pernah diganti data jamaah yang benar-benar login, jadi terlihat salah/
@@ -1086,6 +1088,15 @@ fun SayaScreen(
             cameraLauncher.launch(uri)
         } else {
             uploadStatus = "Izin kamera ditolak"
+        }
+    }
+
+    val modeAmanPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        if (result.values.all { it }) {
+            ModeAmanService.start(context)
+            modeAmanAktif = true
+        } else {
+            uploadStatus = "Izin lokasi atau notifikasi ditolak"
         }
     }
 
@@ -1181,6 +1192,45 @@ fun SayaScreen(
                         Button(onClick = { showSkrining = true }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)), shape = RoundedCornerShape(12.dp)) { Text("Mulai Skrining - 29 Pertanyaan") }
                     } else {
                         SkriningForm(jamaahId = jamaahId, token = token, onClose = { showSkrining = false }, onUnauthorized = { handleUnauthorized("Token login") })
+                    }
+                }
+            }
+        }
+
+        item {
+            Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(2.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text("Mode Aman", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text("Lokasi Anda tetap bisa dicari Tour Leader meski aplikasi ditutup", fontSize = 11.sp, color = Color.Gray)
+                    Spacer(Modifier.height(12.dp))
+                    Button(
+                        onClick = {
+                            if (!modeAmanAktif) {
+                                val hasLoc = context.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                                val hasNotif = if (Build.VERSION.SDK_INT >= 33)
+                                    context.checkSelfPermission("android.permission.POST_NOTIFICATIONS") == PackageManager.PERMISSION_GRANTED
+                                else true
+                                if (hasLoc && hasNotif) {
+                                    ModeAmanService.start(context)
+                                    modeAmanAktif = true
+                                } else {
+                                    val reqs = mutableListOf(
+                                        android.Manifest.permission.ACCESS_FINE_LOCATION,
+                                        android.Manifest.permission.ACCESS_COARSE_LOCATION
+                                    )
+                                    if (Build.VERSION.SDK_INT >= 33) reqs.add("android.permission.POST_NOTIFICATIONS")
+                                    modeAmanPermissionLauncher.launch(reqs.toTypedArray())
+                                }
+                            } else {
+                                ModeAmanService.stop(context)
+                                modeAmanAktif = false
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().height(42.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = if (modeAmanAktif) Color(0xFFDC2626) else Color(0xFF0F7A5A)),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text(if (modeAmanAktif) "Matikan Mode Aman" else "Aktifkan Mode Aman", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }

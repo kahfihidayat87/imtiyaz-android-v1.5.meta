@@ -447,14 +447,13 @@ private fun LiveKitSection(
             fontWeight = FontWeight.Bold
         )
         Spacer(Modifier.height(16.dp))
-        Text(
-            if (isTourLeader)
-                "Suara Anda langsung tersiar ke seluruh jamaah di kanal ini tanpa delay. Pastikan mikrofon HP aktif."
-            else
-                "Anda akan mendengar suara Tour Leader secara langsung saat ia berbicara. Tidak ada tombol bicara untuk jamaah.",
-            fontSize = 11.sp, color = Color.Gray,
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
+        if (isTourLeader) {
+            Text(
+                "Suara Anda langsung tersiar ke seluruh jamaah di kanal ini tanpa delay. Pastikan mikrofon HP aktif.",
+                fontSize = 11.sp, color = Color.Gray,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+        }
         Spacer(Modifier.height(20.dp))
         if (liveActive) {
             Button(
@@ -476,17 +475,19 @@ private fun LiveKitSection(
                 shape = RoundedCornerShape(10.dp)
             ) {
                 Text(
-                    if (isTourLeader) "Mulai Siaran Live" else "Mulai Mendengarkan Live",
+                    if (isTourLeader) "Mulai Siaran Live" else "Mulai Mendengarkan",
                     fontSize = 13.sp, fontWeight = FontWeight.Bold
                 )
             }
         }
-        Spacer(Modifier.height(8.dp))
-        Text(
-            if (liveActive) "Tap tombol untuk berhenti."
-            else "Tap tombol untuk mulai.",
-            fontSize = 10.sp, color = Color.Gray
-        )
+        if (!isTourLeader) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                if (liveActive) "Tap tombol untuk berhenti."
+                else "Tap tombol untuk mulai.",
+                fontSize = 10.sp, color = Color.Gray
+            )
+        }
     }
 }
 
