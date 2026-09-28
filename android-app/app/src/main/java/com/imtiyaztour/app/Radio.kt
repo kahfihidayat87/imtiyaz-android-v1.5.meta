@@ -198,6 +198,10 @@ fun RadioScreen(onBack: () -> Unit) {
     var isRecording by remember { mutableStateOf(false) }
     var isSending by remember { mutableStateOf(false) }
     var statusMsg by remember { mutableStateOf("") }
+    // v2.14.0: mode UI -- "voice" (voice note lama) atau "live" (LiveKit)
+    var mode by remember { mutableStateOf("voice") }
+    var liveStatus by remember { mutableStateOf("") }
+    var liveActive by remember { mutableStateOf(false) }
     val playedIds = remember { mutableSetOf<String>() }
     val recorder = remember { RadioRecorder(context) }
 
@@ -249,6 +253,28 @@ fun RadioScreen(onBack: () -> Unit) {
                 statusMsg = "Tidak terhubung ke server -- akan mencoba lagi"
             }
             delay(2500)
+        }
+    }
+
+    // v2.14.0: auto-connect LiveKit saat mode live dibuka, auto-disconnect saat ditutup.
+    DisposableEffect(mode) {
+        if (mode == "live") {
+            if (isTourLeader && !hasMicPermission) {
+                micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            }
+            RadioLiveKit.mulai(context, jamaahId, jamaahToken) { s ->
+                liveStatus = s
+                liveActive = RadioLiveKit.sedangAktif()
+            }
+        } else {
+            RadioLiveKit.berhenti()
+            liveStatus = ""
+            liveActive = false
+        }
+        onDispose {
+            if (mode == "live") {
+                RadioLiveKit.berhenti()
+            }
         }
     }
 
@@ -318,8 +344,28 @@ fun RadioScreen(onBack: () -> Unit) {
             }
             if (statusMsg.isNotEmpty()) Text(statusMsg, fontSize = 11.sp, color = Color(0xFFDC2626))
         }
+
+        // v2.14.0: tab switcher -- Voice Note vs Siaran Live (LiveKit)
+        TabRow(
+            selectedTabIndex = if (mode == "voice") 0 else 1,
+            containerColor = Color(0xFFF0FDF4),
+            contentColor = Color(0xFF0F7A5A),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+        ) {
+            Tab(
+                selected = mode == "voice",
+                onClick = { mode = "voice" },
+                text = { Text("\uD83C\uDF99 Voice Note", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+            )
+            Tab(
+                selected = mode == "live",
+                onClick = { mode = "live" },
+                text = { Text("\uD83D\uDD34 Siaran Live", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+            )
+        }
         Spacer(Modifier.height(8.dp))
 
+        if (mode == "voice") {
         LazyColumn(Modifier.weight(1f).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (messages.isEmpty()) {
                 item { Text("Belum ada suara masuk di kanal ini.", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(top = 16.dp)) }
@@ -344,6 +390,79 @@ fun RadioScreen(onBack: () -> Unit) {
             PushToTalkButton(isRecording, isSending, interactionSource)
         } else {
             ListenOnlyIndicator()
+        }
+        } else {
+            // v2.14.0: Mode Siaran Live (LiveKit WebRTC)
+            LiveKitSection(
+                isTourLeader = isTourLeader,
+                liveStatus = liveStatus,
+                liveActive = liveActive,
+                onRestart = {
+                    RadioLiveKit.berhenti()
+                    RadioLiveKit.mulai(context, jamaahId, jamaahToken) { s ->
+                        liveStatus = s
+                        liveActive = RadioLiveKit.sedangAktif()
+                    }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun LiveKitSection(
+    isTourLeader: Boolean,
+    liveStatus: String,
+    liveActive: Boolean,
+    onRestart: () -> Unit
+) {
+    Column(
+        Modifier.fillMaxSize().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(120.dp)
+                .background(
+                    if (liveActive) Color(0xFFDC2626) else Color(0xFF9CA3AF),
+                    CircleShape
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                if (isTourLeader) Icons.Default.Mic else Icons.Default.Headset,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(48.dp)
+            )
+        }
+        Spacer(Modifier.height(20.dp))
+        Text(
+            if (isTourLeader) "Mode Siaran Langsung (TL)" else "Mode Mendengarkan (Live)",
+            fontWeight = FontWeight.Bold, fontSize = 16.sp
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            if (liveStatus.isNotEmpty()) liveStatus
+            else if (liveActive) "Tersambung"
+            else "Menyiapkan...",
+            fontSize = 12.sp,
+            color = if (liveActive) Color(0xFF0F7A5A) else Color.Gray,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(Modifier.height(16.dp))
+        Text(
+            if (isTourLeader)
+                "Suara Anda langsung tersiar ke seluruh jamaah di kanal ini tanpa delay. Pastikan mikrofon HP aktif."
+            else
+                "Anda akan mendengar suara Tour Leader secara langsung saat ia berbicara. Tidak ada tombol bicara untuk jamaah.",
+            fontSize = 11.sp, color = Color.Gray,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+        Spacer(Modifier.height(20.dp))
+        OutlinedButton(onClick = onRestart) {
+            Text("Sambungkan Ulang", fontSize = 12.sp)
         }
     }
 }
