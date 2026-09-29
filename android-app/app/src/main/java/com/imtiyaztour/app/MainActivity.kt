@@ -205,7 +205,7 @@ interface ApiService {
     suspend fun updateChecklist(@Body body: ChecklistRequest): ChecklistResponse
 
     @POST("api/skrining")
-    suspend fun submitSkrining(@Body body: Map<String, String>): SkriningResponse
+    suspend fun submitSkrining(@Body body: Map<String, Any>): SkriningResponse
 }
 
 object ApiClient {
@@ -1185,11 +1185,11 @@ fun SayaScreen(
         item {
             Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(2.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text("Skrining Kesehatan Lansia", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                    Text("29 Pertanyaan A-H - Wajib untuk Kamulyan & Linuwih", fontSize = 11.sp, color = Color.Gray)
+                    Text("Skrining Kesehatan", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text("Mohon mengisi dengan data yang valid", fontSize = 11.sp, color = Color.Gray)
                     Spacer(Modifier.height(12.dp))
                     if (!showSkrining) {
-                        Button(onClick = { showSkrining = true }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)), shape = RoundedCornerShape(12.dp)) { Text("Mulai Skrining - 29 Pertanyaan") }
+                        Button(onClick = { showSkrining = true }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)), shape = RoundedCornerShape(12.dp)) { Text("Mulai Skrining") }
                     } else {
                         SkriningFormV2(jamaahId = jamaahId, token = token, onClose = { showSkrining = false }, onUnauthorized = { handleUnauthorized("Token login") })
                     }
@@ -1201,7 +1201,7 @@ fun SayaScreen(
             Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(2.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text("Mode Aman", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                    Text("Lokasi Anda tetap bisa dicari Tour Leader meski aplikasi ditutup", fontSize = 11.sp, color = Color.Gray)
+                    Text("Kirimkan notifikasi ke Tour Leader jika terpisah dari rombongan", fontSize = 11.sp, color = Color.Gray)
                     Spacer(Modifier.height(12.dp))
                     Button(
                         onClick = {
