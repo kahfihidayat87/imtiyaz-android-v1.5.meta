@@ -97,11 +97,11 @@ data class SkriningData(
                 if (sanggupThawaf.isBlank()) errors.add("Kesiapan thawaf wajib dipilih")
                 if (sanggupSai.isBlank()) errors.add("Kesiapan sai wajib dipilih")
                 if (sesakNapasAktivitas.isBlank()) errors.add("Sesak napas wajib dipilih")
+            }
+            7 -> {
                 if (pantanganMakanan.isBlank()) errors.add("Pantangan makanan wajib diisi (isi '-' jika tidak ada)")
                 if (dietKhusus.isBlank()) errors.add("Diet khusus wajib diisi (isi '-' jika tidak ada)")
                 if (obatPribadi.isBlank()) errors.add("Obat pribadi wajib diisi (isi '-' jika tidak ada)")
-            }
-            7 -> {
                 if (asuransiAktif.isBlank()) errors.add("Status asuransi wajib dipilih")
                 if (bersediaSuratSehat.isBlank()) errors.add("Kesediaan surat sehat wajib dipilih")
                 if (persetujuanKeluarga.isBlank()) errors.add("Persetujuan keluarga wajib dicentang")

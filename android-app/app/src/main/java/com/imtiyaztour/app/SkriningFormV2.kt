@@ -6,6 +6,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -40,15 +41,21 @@ fun SkriningFormV2(
     val scope = rememberCoroutineScope()
 
     // Load draft (jika ada)
-    var data by remember { mutableStateOf(loadDraft(context)) }
-    var step by remember { mutableStateOf(1) }
-    var isSending by remember { mutableStateOf(false) }
-    var sendResult by remember { mutableStateOf("") }
-    var sendError by remember { mutableStateOf(false) }
-    var validationMsg by remember { mutableStateOf("") }
+    // v2.13.0 FIX: gunakan rememberSaveable supaya state tidak reset saat
+    // LazyColumn parent recompose. data disimpan sebagai JSON string via Gson.
+    val dataSaver = Saver<SkriningData, String>(
+        save = { gsonSkrining.toJson(it) },
+        restore = { gsonSkrining.fromJson(it, SkriningData::class.java) ?: SkriningData() }
+    )
+    var data by rememberSaveable(stateSaver = dataSaver) { mutableStateOf(loadDraft(context)) }
+    var step by rememberSaveable { mutableStateOf(1) }
+    var isSending by rememberSaveable { mutableStateOf(false) }
+    var sendResult by rememberSaveable { mutableStateOf("") }
+    var sendError by rememberSaveable { mutableStateOf(false) }
+    var validationMsg by rememberSaveable { mutableStateOf("") }
 
-    // Auto-save saat data berubah
-    LaunchedEffect(data) { saveDraft(context, data) }
+    // Auto-save saat pindah step (bukan tiap keystroke — hemat recompose)
+    LaunchedEffect(step) { saveDraft(context, data) }
 
     Column(
         modifier = Modifier
@@ -59,10 +66,6 @@ fun SkriningFormV2(
         // Progress
         Text("Langkah $step / $TOTAL_STEP", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(HIJAU))
         LinearProgressIndicator(progress = step / TOTAL_STEP.toFloat(), modifier = Modifier.fillMaxWidth())
-
-        if (validationMsg.isNotEmpty()) {
-            Text(validationMsg, fontSize = 11.sp, color = Color(0xFFDC2626), fontWeight = FontWeight.Bold)
-        }
 
         when (step) {
             1 -> StepA(data) { data = it }
@@ -87,6 +90,11 @@ fun SkriningFormV2(
             Text(sendResult, fontSize = 11.sp,
                 color = if (sendError) Color(0xFFDC2626) else Color(HIJAU),
                 fontWeight = FontWeight.Bold)
+        }
+
+        // v2.13.0 FIX: validation message di dekat tombol Lanjut (bukan di atas, sering tidak terlihat)
+        if (validationMsg.isNotEmpty()) {
+            Text(validationMsg, fontSize = 11.sp, color = Color(0xFFDC2626), fontWeight = FontWeight.Bold)
         }
 
         // Tombol navigasi
