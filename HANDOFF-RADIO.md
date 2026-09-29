@@ -363,3 +363,72 @@ Sudah ada di Manifest:
 - [ ] WP Admin metabox rapi untuk tampilkan field skrining (saat ini raw JSON)
 - [ ] Export CSV/PDF dari data skrining untuk asesmen medis
 - [ ] Notifikasi otomatis ke admin jika ada jawaban "Sering sesak napas" / "Perlu kursi roda"
+
+---
+
+## TAHAP 17 — Skrining Kesehatan (Full Native Form)
+
+**Tanggal:** 29 Sep 2026
+**Status:** ✅ Selesai & teruji end-to-end
+
+### File Baru
+
+| File | Baris | Fungsi |
+|---|---|---|
+| `SkriningModels.kt` | 281 | Model data + validateStep + toMap + SkriningOptions |
+| `SkriningFormV2.kt` | 505 | UI multi-step 7 langkah (8 section A-H) |
+
+### File Dimodifikasi
+
+| File | Perubahan |
+|---|---|
+| `MainActivity.kt` | Ganti panggilan `SkriningForm` → `SkriningFormV2`, hapus 80 baris SkriningForm lama, fix signature `submitSkrining` jadi `Map<String, @JvmSuppressWildcards Any>`, rapikan teks Skrining + Mode Aman |
+
+### Struktur Form (8 Section, ~32 Pertanyaan)
+
+| Section | Isi |
+|---|---|
+| A. Data Diri & Pendamping | email, nama, usia, pendamping nama/HP/lain |
+| B. Riwayat Umrah | pernah_umrah (radio), pernah_umrah_kendala |
+| C. Riwayat Kesehatan | riwayat_penyakit[] (checkbox 10), penyakit_lain, pengobatan_rutin, dirawat_rs, dirawat_rs_kondisi |
+| D. Mobilitas | jalan_mandiri, durasi_jalan, pernah_jatuh, naik_turun_tangga, duduk_berdiri_toilet |
+| E. Aktivitas Harian | mandi_mandiri, makan_mandiri, bantuan_obat |
+| F. Kognitif | bingung_lingkungan_baru, pernah_tersesat, ikuti_instruksi |
+| G. Kesiapan Ibadah | sanggup_thawaf, sanggup_sai, sesak_napas_aktivitas |
+| H. Diet & Asuransi | pantangan_makanan, diet_khusus, obat_pribadi, asuransi_aktif, bersedia_surat_sehat, persetujuan_keluarga |
+
+### Fix Sequence (Kronologis)
+
+1. **Compile error** — `submitSkrining` perlu `Map<String, Any>` (bukan `Map<String, String>`)
+2. **Crash nested scroll** — hapus `verticalScroll` di `SkriningFormV2` karena dipanggil di dalam `LazyColumn`
+3. **State reset** — ganti `remember` → `rememberSaveable` + `LaunchedEffect(step)` (bukan `data`)
+4. **validateStep(6/7) salah field** — pindah `pantangan_makanan`, `diet_khusus`, `obat_pribadi` dari step 6 → step 7
+5. **Import Saver missing** — tambah `import androidx.compose.runtime.saveable.Saver`
+6. **Retrofit wildcard error** — `Map<String, @JvmSuppressWildcards Any>`
+
+### Server-Side: TIDAK PERLU DIUBAH
+
+- **Node.js `/api/skrining`** = murni proxy (`axios.post ... req.body`)
+- **WP `api_skrining()`** = fleksibel, ambil `$params` mentah, simpan JSON di `_skrining_data`
+- **WP Metabox BARU** ditambah di `imtiyaz-connector.php` (`imtiyaz_render_skrining_metabox`) untuk tampilkan data rapi
+
+### Bukti Test Sukses
+
+- Form diisi lengkap s/d step 7, tap **Kirim ke Admin** → sukses
+- Post ID **1482** di WP (`skrining_kesehatan`) — semua field lengkap di `_skrining_data`
+- Metabox "Data Skrining Kesehatan" tampil di halaman edit post
+
+### Fitur UX
+
+- Multi-step 7 langkah (step 1-6 = section, step 7 = preview + submit)
+- Auto-save draft ke `SharedPreferences` saat pindah step
+- Draft dihapus otomatis setelah submit sukses
+- Validasi per step sebelum lanjut
+- Preview ringkasan sebelum submit
+
+### Pelajaran Penting
+
+- ❌ **Jangan** taruh `Column(Modifier.verticalScroll())` di dalam `LazyColumn` → crash
+- ✅ **Pakai** `rememberSaveable` untuk state di dalam `LazyColumn` — `remember` bisa reset saat recompose
+- ✅ Retrofit + `Map<String, Any>` butuh `@JvmSuppressWildcards` — kalau tidak: `Parameter type must not include a type variable or wildcard`
+- ✅ `LaunchedEffect(data)` bisa re-trigger terlalu sering — pakai `LaunchedEffect(step)` untuk auto-save
