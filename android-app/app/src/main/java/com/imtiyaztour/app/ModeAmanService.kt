@@ -14,6 +14,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.google.android.gms.location.LocationServices
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -168,7 +169,8 @@ class ModeAmanService : Service() {
                                     "accuracy" to loc.accuracy.toDouble(),
                                     "updated_at" to System.currentTimeMillis(),
                                     "source" to "mode_aman_service"
-                                )
+                                ),
+                                SetOptions.merge()
                             )
                             .await()
                         Log.d(TAG, "Cache lokasi terkirim: $jamaahId")

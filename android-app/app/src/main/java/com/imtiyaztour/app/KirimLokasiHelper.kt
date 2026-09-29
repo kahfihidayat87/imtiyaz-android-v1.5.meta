@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.GeoPoint
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -51,7 +52,7 @@ object KirimLokasiHelper {
                 FirebaseFirestore.getInstance()
                     .collection("lokasi_jamaah")
                     .document(jamaahId)
-                    .set(data)
+                    .set(data, SetOptions.merge())
                     .await()
 
                 Log.d(TAG, "Lokasi terkirim ke Firestore: $requestId")
