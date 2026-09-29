@@ -205,7 +205,7 @@ interface ApiService {
     suspend fun updateChecklist(@Body body: ChecklistRequest): ChecklistResponse
 
     @POST("api/skrining")
-    suspend fun submitSkrining(@Body body: Map<String, Any>): SkriningResponse
+    suspend fun submitSkrining(@Body body: Map<String, @JvmSuppressWildcards Any>): SkriningResponse
 }
 
 object ApiClient {
