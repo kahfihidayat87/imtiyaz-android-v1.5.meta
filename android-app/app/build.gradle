@@ -14,6 +14,13 @@ android {
         targetSdk 36
         versionCode 14
         versionName "2.12.0"
+
+        // v2.13.0: Drop ABI yang tidak dipakai HP jamaah fisik.
+        // x86/x86_64 hanya untuk emulator (~30 MB), mips/armeabi sudah deprecated.
+        // Hasil: APK turun dari ~66 MB ke ~36 MB tanpa ubah kode.
+        ndk {
+            abiFilters 'arm64-v8a', 'armeabi-v7a'
+        }
     }
 
     // FIX: Play Store MENOLAK build yang ditandatangani kunci debug (yang dipakai
