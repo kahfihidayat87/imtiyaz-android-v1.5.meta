@@ -302,3 +302,64 @@ Sudah ada di Manifest:
 - [ ] Battery optimization exemption prompt
 - [ ] Ganti interval refresh dari 60 detik (test tuning)
 - [ ] Handle edge case: service restart gagal karena izin revoked
+
+---
+
+## TAHAP 17 — Skrining Kesehatan (Full Native Form)
+
+**Tanggal:** 29 Sep 2026
+**Status:** ✅ Android selesai, siap test end-to-end
+
+### File Baru
+
+| File | Ukuran | Fungsi |
+|---|---|---|
+| `SkriningModels.kt` | 281 baris | Model data + validasi + konversi ke Map |
+| `SkriningFormV2.kt` | 505 baris | UI multi-step 7 langkah (8 section A-H) |
+
+### File Dimodifikasi
+
+| File | Perubahan |
+|---|---|
+| `MainActivity.kt` | Ganti panggilan `SkriningForm` → `SkriningFormV2`, hapus `SkriningForm` lama (80 baris), fix signature `submitSkrining` jadi `Map<String, Any>`, rapikan teks Skrining + Mode Aman |
+
+### Struktur Form (8 Section, ~32 Pertanyaan)
+
+| Section | Isi |
+|---|---|
+| A. Data Diri & Pendamping | email, nama, usia, pendamping nama/HP/lain |
+| B. Riwayat Umrah | pernah_umrah (radio), pernah_umrah_kendala |
+| C. Riwayat Kesehatan | riwayat_penyakit[] (checkbox 10), penyakit_lain, pengobatan_rutin, dirawat_rs, dirawat_rs_kondisi |
+| D. Mobilitas | jalan_mandiri, durasi_jalan, pernah_jatuh, naik_turun_tangga, duduk_berdiri_toilet |
+| E. Aktivitas Harian | mandi_mandiri, makan_mandiri, bantuan_obat |
+| F. Kognitif | bingung_lingkungan_baru, pernah_tersesat, ikuti_instruksi |
+| G. Kesiapan Ibadah | sanggup_thawaf, sanggup_sai, sesak_napas_aktivitas |
+| H. Diet & Asuransi | pantangan_makanan, diet_khusus, obat_pribadi, asuransi_aktif, bersedia_surat_sehat, persetujuan_keluarga |
+
+### Server-side: TIDAK PERLU DIUBAH
+
+- **Node.js** `/api/skrining` = murni proxy (`axios.post ... req.body`), tidak ada transformasi field
+- **WP `api_skrining()`** = fleksibel, ambil `$params` mentah, simpan JSON di `_skrining_data` postmeta
+- Payload baru (~35 field) langsung diterima
+
+### Fitur UX
+
+- Multi-step 7 langkah (step 1-6 = section, step 7 = preview + submit)
+- Auto-save draft ke `SharedPreferences` setiap data berubah
+- Draft dihapus otomatis setelah submit sukses
+- Validasi per step sebelum lanjut
+- Preview ringkasan sebelum submit
+
+### Cara Test
+
+1. Buka app → tab **Saya** → scroll → Card **"Skrining Kesehatan"**
+2. Tap **"Mulai Skrining"** → form step 1/7 muncul
+3. Isi semua section, tap **Lanjut** per step
+4. Di step 7, cek **Ringkasan Jawaban** → tap **Kirim ke Admin**
+5. Cek WP Admin → **Skrining Kesehatan** post_type → data muncul (sebagai JSON di postmeta `_skrining_data`)
+
+### Kandidat Lanjutan
+
+- [ ] WP Admin metabox rapi untuk tampilkan field skrining (saat ini raw JSON)
+- [ ] Export CSV/PDF dari data skrining untuk asesmen medis
+- [ ] Notifikasi otomatis ke admin jika ada jawaban "Sering sesak napas" / "Perlu kursi roda"
