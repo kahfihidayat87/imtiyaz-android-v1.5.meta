@@ -1191,7 +1191,7 @@ fun SayaScreen(
                     if (!showSkrining) {
                         Button(onClick = { showSkrining = true }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)), shape = RoundedCornerShape(12.dp)) { Text("Mulai Skrining - 29 Pertanyaan") }
                     } else {
-                        SkriningForm(jamaahId = jamaahId, token = token, onClose = { showSkrining = false }, onUnauthorized = { handleUnauthorized("Token login") })
+                        SkriningFormV2(jamaahId = jamaahId, token = token, onClose = { showSkrining = false }, onUnauthorized = { handleUnauthorized("Token login") })
                     }
                 }
             }
@@ -1278,86 +1278,6 @@ fun SayaScreen(
                     Text(AppData.kontak.alamat, fontSize = 11.sp, color = Color.Gray)
                     Text("Kontak: ${AppData.kontak.kontak}", fontSize = 11.sp, color = Color(0xFF0F7A5A))
                 }
-            }
-        }
-    }
-}
-
-// FITUR 8 - tombol "Kirim ke Admin" sekarang benar-benar POST ke /api/skrining, disertai
-// token login jamaah (sebelumnya hanya jamaah_id polos tanpa bukti kepemilikan token).
-@Composable
-fun SkriningForm(jamaahId: String, token: String, onClose: () -> Unit, onUnauthorized: () -> Unit) {
-    val scope = rememberCoroutineScope()
-    var step by remember { mutableStateOf(1) }
-    var nama by remember { mutableStateOf("") }
-    var penyakit by remember { mutableStateOf("") }
-    var obat by remember { mutableStateOf("") }
-    var alergi by remember { mutableStateOf("") }
-    var kontakDarurat by remember { mutableStateOf("") }
-    var isSending by remember { mutableStateOf(false) }
-    var sendResult by remember { mutableStateOf("") }
-
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Langkah $step / 4", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF0F7A5A))
-        LinearProgressIndicator(progress = step / 4f, modifier = Modifier.fillMaxWidth())
-        when (step) {
-            1 -> {
-                Text("A. Data Diri & Kontak Darurat", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                OutlinedTextField(value = nama, onValueChange = { nama = it }, label = { Text("Nama Lengkap") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp))
-                OutlinedTextField(value = kontakDarurat, onValueChange = { kontakDarurat = it }, label = { Text("Kontak Darurat (Nama & HP)") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp))
-            }
-            2 -> {
-                Text("B. Riwayat Penyakit & Obat", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                OutlinedTextField(value = penyakit, onValueChange = { penyakit = it }, label = { Text("Riwayat Penyakit (Hipertensi, Diabetes, Jantung, dll)") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp))
-                OutlinedTextField(value = obat, onValueChange = { obat = it }, label = { Text("Obat Rutin") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp))
-            }
-            3 -> {
-                Text("C. Alergi & Mobilitas", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                OutlinedTextField(value = alergi, onValueChange = { alergi = it }, label = { Text("Alergi Obat/Makanan") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp))
-                Text("Apakah butuh kursi roda? Bisa jalan berapa meter?", fontSize = 11.sp, color = Color.Gray)
-            }
-            4 -> {
-                Text("D. Konfirmasi & Kirim", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                Text("Nama: $nama\nPenyakit: $penyakit\nObat: $obat\nAlergi: $alergi\nDarurat: $kontakDarurat", fontSize = 11.sp, color = Color(0xFF374151))
-                Text("Data akan dikirim ke Admin untuk asesmen medis pra-berangkat (Linuwih & Kamulyan wajib)", fontSize = 10.sp, color = Color.Gray)
-                if (isSending) { LinearProgressIndicator(Modifier.fillMaxWidth()) }
-                if (sendResult.isNotEmpty()) { Text(sendResult, fontSize = 11.sp, color = Color(0xFF0F7A5A)) }
-            }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            if (step > 1) { OutlinedButton(onClick = { step-- }, modifier = Modifier.weight(1f)) { Text("Kembali") } }
-            if (step < 4) {
-                Button(onClick = { step++ }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A))) { Text("Lanjut") }
-            } else {
-                Button(
-                    onClick = {
-                        isSending = true
-                        scope.launch {
-                            try {
-                                val body = mapOf(
-                                    "jamaah_id" to jamaahId,
-                                    "token" to token,
-                                    "nama_lengkap" to nama,
-                                    "kontak_darurat" to kontakDarurat,
-                                    "riwayat_penyakit" to penyakit,
-                                    "obat_rutin" to obat,
-                                    "alergi" to alergi
-                                )
-                                val resp = withContext(Dispatchers.IO) { ApiClient.service.submitSkrining(body) }
-                                sendResult = resp.message ?: "Terkirim"
-                                isSending = false
-                                onClose()
-                            } catch (e: Exception) {
-                                isSending = false
-                                val msg = e.message ?: ""
-                                if (msg.contains("401") || msg.contains("Token", ignoreCase = true)) { onUnauthorized() }
-                                else sendResult = "Gagal mengirim: $msg"
-                            }
-                        }
-                    },
-                    enabled = !isSending,
-                    modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A))
-                ) { Text("Kirim ke Admin") }
             }
         }
     }
