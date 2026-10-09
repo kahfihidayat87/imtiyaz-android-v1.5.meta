@@ -341,3 +341,32 @@ Target: lokasi TL muncul < 5 detik, HP tetap bangun di merek agresif (Xiaomi/Opp
 - Startup log: `[FCM] Firebase Admin SDK initialized` + `Imtiyaz API v2.12.0 jalan di port 3000`
 - Stderr kosong
 - PID tunggal (`607949`), health endpoint OK
+
+---
+
+## TAHAP 20 — Batch 1b Minify + Fix Fragment (9 Okt 2026)
+
+**Status:** ✅ Selesai & teruji
+
+### Perubahan
+- Fix fragment deprecated (1.0.0 → 1.8.5) — Play Console warning #2
+- Enable R8 minify + shrinkResources — Play Console warning #1
+- proguard-rules.pro 163 baris (Retrofit, Gson, OkHttp, Firestore, LiveKit, osmdroid)
+- Nuclear fix: keep seluruh package `com.imtiyaztour.app.**`
+- Bump versi 2.13.0 (code 15)
+
+### Hasil
+- APK release: **36 MB → 28 MB** (-22%)
+- Warning Play Console DEX ✅ teratasi
+- Warning Play Console Fragment ✅ teratasi
+
+### Pelajaran Kritis
+- R8 default terlalu agresif untuk Retrofit/Gson — login gagal tanpa pesan error
+- Debug APK adalah alat diagnosa: kalau debug OK tapi release gagal → **proguard issue**
+- Nuclear fix (keep seluruh package app) = trade-off size vs fungsional
+- Selalu test 9 fitur setelah minify: login, skrining, radio, peta, mode aman, quran, doa, jadwal, logout
+
+### File Backup
+- `app/build.gradle.bak-*`
+- `app/proguard-rules.pro.bak-*`
+- `.github/workflows/build-apk.yml.bak-*`
