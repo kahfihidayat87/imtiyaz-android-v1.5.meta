@@ -370,3 +370,29 @@ Target: lokasi TL muncul < 5 detik, HP tetap bangun di merek agresif (Xiaomi/Opp
 - `app/build.gradle.bak-*`
 - `app/proguard-rules.pro.bak-*`
 - `.github/workflows/build-apk.yml.bak-*`
+
+
+---
+
+## Hotfix — Block MEDIA_PROJECTION (9 Okt 2026)
+
+**Status:** Selesai & teruji
+
+### Masalah
+Google Play Console mendeteksi 2 FGS di AAB:
+- FOREGROUND_SERVICE_LOCATION (dipakai — Mode Aman)
+- FOREGROUND_SERVICE_MEDIA_PROJECTION (TIDAK dipakai)
+
+Root cause: LiveKit SDK manifest merger otomatis menambahkan MEDIA_PROJECTION.
+
+### Fix
+Tambah di AndroidManifest.xml:
+
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" tools:node="remove" />
+
+### Verifikasi
+- Merged manifest debug: MEDIA_PROJECTION = 0
+- Play Console: FGS error hilang
+
+### Pelajaran
+LiveKit SDK menambahkan FGS MEDIA_PROJECTION (untuk screen share). Kita tidak pakai screen share, jadi wajib di-block dari manifest merger.
