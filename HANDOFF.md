@@ -396,3 +396,26 @@ Tambah di AndroidManifest.xml:
 
 ### Pelajaran
 LiveKit SDK menambahkan FGS MEDIA_PROJECTION (untuk screen share). Kita tidak pakai screen share, jadi wajib di-block dari manifest merger.
+
+
+---
+
+## Cek Kesehatan Jamaah (9 Okt 2026)
+
+**Status:** ✅ Live
+
+### Fitur Baru
+Card "Cek Kesehatan" di Saya Screen (antara Skrining & Mode Aman).
+
+### Konten
+Menampilkan hasil cek kesehatan yang diisi admin:
+- Tensi, Gula Darah, Asam Urat, Kolesterol
+- Petugas, Catatan, Update terakhir
+
+### File Terkait
+- `MainActivity.kt` — SayaScreen (baris ~1008)
+- API: `POST /wp-json/imtiyaz/v1/kesehatan-me`
+- Data class: `KesehatanMeResponse`, `KesehatanItemConfig`, `KesehatanData`
+
+### Empty State
+Kalau belum ada data: "Belum ada data kesehatan. Hubungi Tour Leader atau Admin."
