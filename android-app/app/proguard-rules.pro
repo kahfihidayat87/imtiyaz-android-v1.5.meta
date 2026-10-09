@@ -126,3 +126,38 @@
 -dontwarn sun.misc.**
 -dontwarn java.nio.file.**
 -dontwarn org.codehaus.mojo.**
+# ============================================================================
+# EMERGENCY FIX v2.13.0 — R8 terlalu agresif strip app internal
+# Konfirmasi: debug OK login, release gagal → R8 strip model/Retrofit/API
+# ============================================================================
+-keep class com.imtiyaztour.app.** { *; }
+-keepclassmembers class com.imtiyaztour.app.** { *; }
+-keep interface com.imtiyaztour.app.** { *; }
+
+-keepclasseswithmembers class * {
+    @retrofit2.http.* <methods>;
+}
+-keep,allowobfuscation interface * {
+    @retrofit2.http.* <methods>;
+}
+
+-keep class okhttp3.** { *; }
+-keep class okio.** { *; }
+-keep class retrofit2.** { *; }
+-keep class com.google.gson.** { *; }
+-dontwarn okhttp3.**
+-dontwarn okio.**
+-dontwarn retrofit2.**
+-dontwarn com.google.gson.**
+
+-keepclassmembers,allowobfuscation class * {
+    @com.google.gson.annotations.SerializedName <fields>;
+    @com.google.gson.annotations.Expose <fields>;
+}
+
+-keep class com.imtiyaztour.app.BuildConfig { *; }
+-keep class * implements okhttp3.Interceptor { *; }
+-keepclassmembers class kotlin.coroutines.jvm.internal.** { *; }
+-keep class kotlinx.coroutines.** { *; }
+
+-dontwarn com.google.android.gms.internal.location.**
