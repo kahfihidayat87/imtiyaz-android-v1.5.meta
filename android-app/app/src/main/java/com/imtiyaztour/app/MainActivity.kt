@@ -206,6 +206,9 @@ interface ApiService {
 
     @POST("api/skrining")
     suspend fun submitSkrining(@Body body: Map<String, @JvmSuppressWildcards Any>): SkriningResponse
+
+    @retrofit2.http.POST("wp-json/imtiyaz/v1/kesehatan-me")
+    suspend fun kesehatanMe(@Body body: Map<String, String>): KesehatanMeResponse
 }
 
 object ApiClient {
@@ -1031,6 +1034,12 @@ fun SayaScreen(
     var cameraUri by remember { mutableStateOf<Uri?>(null) }
     var modeAmanAktif by remember { mutableStateOf(false) }
 
+    // ===== CEK KESEHATAN =====
+    var kesehatanData by remember { mutableStateOf<KesehatanData?>(null) }
+    var kesehatanItemsConfig by remember { mutableStateOf<List<KesehatanItemConfig>>(emptyList()) }
+    var kesehatanHasData by remember { mutableStateOf(false) }
+    var kesehatanLoading by remember { mutableStateOf(false) }
+
     // FIX: sebelumnya angka-angka ini hardcode ("Rp 37.400.000", "Paket Linuwih", dst)
     // -- tidak pernah diganti data jamaah yang benar-benar login, jadi terlihat salah/
     // tidak sesuai. Sekarang diambil dari server lewat endpoint /api/me yang memverifikasi
@@ -1059,6 +1068,25 @@ fun SayaScreen(
         profileLoading = false
     }
     LaunchedEffect(jamaahId) { loadProfile() }
+
+    // Load data kesehatan jamaah
+    LaunchedEffect(jamaahId) {
+        kesehatanLoading = true
+        try {
+            val kr = withContext(Dispatchers.IO) {
+                ApiClient.service.kesehatanMe(mapOf(
+                    "jamaah_id" to jamaahId,
+                    "token" to token
+                ))
+            }
+            if (kr.success == true) {
+                kesehatanItemsConfig = kr.items_config
+                kesehatanHasData = kr.has_data
+                kesehatanData = kr.data
+            }
+        } catch (_: Exception) {}
+        kesehatanLoading = false
+    }
 
     fun doUpload(file: File) {
         isUploading = true
@@ -1200,6 +1228,52 @@ fun SayaScreen(
         item {
             Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(2.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Cek Kesehatan", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Spacer(Modifier.weight(1f))
+                        if (kesehatanLoading) {
+                            CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = Color(0xFF0F7A5A))
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    if (!kesehatanHasData) {
+                        Text("Belum ada data kesehatan. Hubungi Tour Leader atau Admin.", fontSize = 11.sp, color = Color.Gray)
+                    } else {
+                        val kd = kesehatanData
+                        if (kd != null) {
+                            kesehatanItemsConfig.forEach { cfg ->
+                                val value = kd.items[cfg.id]?.value ?: ""
+                                if (value.isNotBlank()) {
+                                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                                        Text(cfg.label, fontSize = 12.sp, color = Color.Gray, modifier = Modifier.weight(1f))
+                                        Text(
+                                            value + if (cfg.unit.isNotBlank()) " " + cfg.unit else "",
+                                            fontSize = 12.sp, fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+                            }
+                            if (kd.petugas.isNotBlank()) {
+                                Spacer(Modifier.height(6.dp))
+                                Text("Petugas: " + kd.petugas, fontSize = 11.sp, color = Color.Gray)
+                            }
+                            if (kd.catatan.isNotBlank()) {
+                                Text("Catatan: " + kd.catatan, fontSize = 11.sp, color = Color.Gray)
+                            }
+                            if (kd.updated_at > 0L) {
+                                Spacer(Modifier.height(6.dp))
+                                val tgl = java.text.SimpleDateFormat("dd MMM yyyy", java.util.Locale("id", "ID")).format(java.util.Date(kd.updated_at * 1000L))
+                                Text("Update terakhir: " + tgl, fontSize = 10.sp, color = Color.Gray)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(2.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
                     Text("Mode Aman", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     Text("Kirimkan notifikasi ke Tour Leader jika terpisah dari rombongan", fontSize = 11.sp, color = Color.Gray)
                     Spacer(Modifier.height(12.dp))
@@ -1282,3 +1356,35 @@ fun SayaScreen(
         }
     }
 }
+
+
+
+// ============================================================================
+// [KESEHATAN] v1.0 — Data cek kesehatan jamaah
+// ============================================================================
+data class KesehatanItemConfig(
+    val id: String = "",
+    val label: String = "",
+    val unit: String = "",
+    val type: String = "text",
+    val hint: String = ""
+)
+
+data class KesehatanValue(val value: String = "")
+
+data class KesehatanData(
+    val items: Map<String, KesehatanValue> = emptyMap(),
+    val tanggal: Long = 0L,
+    val petugas: String = "",
+    val catatan: String = "",
+    val updated_at: Long = 0L
+)
+
+data class KesehatanMeResponse(
+    val success: Boolean? = null,
+    val jamaah_id: Int = 0,
+    val items_config: List<KesehatanItemConfig> = emptyList(),
+    val has_data: Boolean = false,
+    val data: KesehatanData? = null,
+    val error: String? = null
+)
