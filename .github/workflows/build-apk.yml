@@ -124,10 +124,10 @@ jobs:
         if: ${{ env.HAS_RELEASE_KEYSTORE == 'true' }}
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.12.0-build${{ github.run_number }}
-          name: Imtiyaz Tour v2.12.0 (build ${{ github.run_number }})
+          tag_name: v2.13.0-build${{ github.run_number }}
+          name: Imtiyaz Tour v2.13.0 (build ${{ github.run_number }})
           body: |
-            APK rilis Imtiyaz Tour versi 2.12.0.
+            APK rilis Imtiyaz Tour versi 2.13.0.
             Dibangun otomatis dari commit ${{ github.sha }}.
 
             **Cara install:**
