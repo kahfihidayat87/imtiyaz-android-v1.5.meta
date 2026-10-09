@@ -1,6 +1,6 @@
 # Imtiyaz Tour — Project Handoff Document
 
-**Terakhir update:** 27 Sep 2026 (v2.13.0-dev, TAHAP 14 SELESAI)
+**Terakhir update:** 10 Okt 2026 (v2.13.0, TAHAP 21 SELESAI)
 **Repo utama:** https://github.com/kahfihidayat87/imtiyaz-android-v1.5.meta
 **Local path:** C:\Users\DELL\Documents\GitHub\imtiyaz-android-v1.5.meta
 
@@ -10,11 +10,11 @@
 
 | Item | Nilai |
 |---|---|
-| Versi aktif (App Jamaah) | **2.12.0** (versionCode 14) — perlu bump ke 2.13.0 setelah uji FCM |
+| Versi aktif (App Jamaah) | **2.13.0** (versionCode 15) — rilis terbaru: v2.13.0-build104 |
 | Commit terakhir | Lihat `git log --oneline -5` |
 | Branch | `main` |
 | CI | GitHub Actions hijau |
-| Total file Kotlin | **25 file** (21 lama + 4 FCM/notifikasi) |
+| Total file Kotlin | **29 file** (25 lama + ModeAman + RadioLiveKit + SkriningFormV2 + SkriningModels) |
 | Warna tema | Hijau `#0F7A5A` |
 | Distribusi | Play Store (AAB) + APK Release signed (langsung) |
 | **Tracking lokasi** | **FCM + Firestore** (menggantikan ntfy.sh) |
@@ -81,6 +81,10 @@
 | FcmTokenStore.kt | Simpan token & kirim ke Firestore |
 | KirimLokasiHelper.kt | Kirim GPS ke Firestore saat dapat FCM |
 | NotifikasiHelper.kt | Tampilkan notifikasi lokal |
+| ModeAmanService.kt | Foreground service Mode Aman (tracking lokasi saat app background) |
+| RadioLiveKit.kt | Wrapper LiveKit SDK untuk siaran radio real-time |
+| SkriningFormV2.kt | Form skrining kesehatan multi-step 7 langkah |
+| SkriningModels.kt | Model data + validasi skrining kesehatan |
 
 ---
 
@@ -419,3 +423,86 @@ Menampilkan hasil cek kesehatan yang diisi admin:
 
 ### Empty State
 Kalau belum ada data: "Belum ada data kesehatan. Hubungi Tour Leader atau Admin."
+
+---
+
+## TAHAP 16 — Mode Aman (Foreground Service)
+
+**Tanggal:** 29 Sep 2026
+**Status:** ✅ Selesai, teruji
+
+### Tujuan
+HP jamaah tetap respon terhadap permintaan lokasi dari TL meski:
+- App background
+- Di-swipe dari Recents
+- Low memory (OS kill)
+
+### Arsitektur "Mode Aman" — 3 Layer
+
+| Layer | Mekanisme | Skenario |
+|---|---|---|
+| 1 | Foreground Service (notifikasi permanen) | App di-background |
+| 2 | `onTaskRemoved()` → restart via AlarmManager | App di-swipe dari Recents |
+| 3 | FCM High-Priority (sudah ada) | App mati / Doze mode |
+
+### File Terkait
+
+| File | Fungsi |
+|---|---|
+| `ModeAmanService.kt` (~188 baris) | FGS `location` type + refresh Firestore tiap 60 detik + `START_STICKY` |
+| `AndroidManifest.xml` | +`<service android:name=".ModeAmanService" android:foregroundServiceType="location" />` |
+| `MainActivity.kt` | Card UI di `SayaScreen` + permission launcher |
+| `Radio.kt` | Rapikan UI (tombol "Mulai Mendengarkan") |
+
+### Batasan (Disadari)
+- Force Stop oleh user → **tidak bisa wake** (batasan OS)
+- Android 15+ → FGS lebih agresif di-kill
+
+---
+
+## TAHAP 17 — Skrining Kesehatan V2 (Full Native Form)
+
+**Tanggal:** 29 Sep 2026
+**Status:** ✅ Selesai, teruji end-to-end
+
+### File Terkait
+
+| File | Baris | Fungsi |
+|---|---|---|
+| `SkriningFormV2.kt` | 505 | UI multi-step 7 langkah (8 section A-H, ~32 pertanyaan) |
+| `SkriningModels.kt` | 281 | Model data + `validateStep` + `toMap` + `SkriningOptions` |
+| `MainActivity.kt` | — | Ganti `SkriningForm` → `SkriningFormV2`, signature `submitSkrining` jadi `Map<String, @JvmSuppressWildcards Any>` |
+
+### Struktur Form
+8 section: A) Data diri, B) Riwayat umrah, C) Riwayat kesehatan, D) Mobilitas, E) Aktivitas harian, F) Kognitif, G) Kesiapan ibadah, H) Diet & asuransi.
+
+### Server
+- Node.js `/api/skrining` = murni proxy (tidak perlu ubah)
+- WP `api_skrining()` = fleksibel, simpan JSON di `_skrining_data`
+- WP Metabox `imtiyaz_render_skrining_metabox` ditambah di `imtiyaz-connector.php`
+
+### Pelajaran Kritis
+- ❌ Jangan taruh `Column(verticalScroll())` di dalam `LazyColumn` → crash
+- ✅ Pakai `rememberSaveable` (bukan `remember`) untuk state di `LazyColumn`
+- ✅ Retrofit + `Map<String, Any>` butuh `@JvmSuppressWildcards`
+- ✅ Auto-save pakai `LaunchedEffect(step)` (bukan `LaunchedEffect(data)`)
+
+---
+
+## Koreksi Catatan Server Node.js (10 Okt 2026)
+
+**Temuan dari diagnostik SSH:**
+
+PID 3347168 lsnode:/home/u120369480/domains/api.pastiumrah.com/...
+exe → /opt/alt/alt-nodejs24/root/usr/bin/node
+
+- `lsnode` **BUKAN** wrapper + child — `readlink /proc/PID/exe` = binary Node.js.
+- argv[0] di-spoof oleh LiteSpeed jadi `lsnode:...`, tapi itu **proses node yang menjalankan `app.js`**.
+- Hanya **1 proses** aktif untuk `api.pastiumrah.com`.
+- Uptime sejak **08 Okt 2026** (>2 hari), stderr kosong, FCM terkirim rutin.
+
+**Revisi catatan lama:**
+> ~~"Node di-spawn manual via `nohup` — tidak auto-respawn."~~
+
+Menjadi:
+> **LiteSpeed menjalankan & menjaga proses Node.js (`lsnode`). Setelah edit `app.js`, jalankan `bash scripts/restart-node.sh` untuk memuat perubahan. Proses otomatis di-respawn oleh LiteSpeed wrapper jika crash. Hindari duplikasi PID (port 3000 hanya boleh dipegang 1 proses).**
