@@ -506,4 +506,3 @@ exe → /opt/alt/alt-nodejs24/root/usr/bin/node
 
 Menjadi:
 > **LiteSpeed menjalankan & menjaga proses Node.js (`lsnode`). Setelah edit `app.js`, jalankan `bash scripts/restart-node.sh` untuk memuat perubahan. Proses otomatis di-respawn oleh LiteSpeed wrapper jika crash. Hindari duplikasi PID (port 3000 hanya boleh dipegang 1 proses).**
-
