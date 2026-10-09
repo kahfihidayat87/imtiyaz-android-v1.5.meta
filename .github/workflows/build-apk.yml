@@ -3,6 +3,18 @@ name: Build APK
 on:
   push:
     branches: [ main ]
+    # Skip build untuk perubahan yang tidak menyentuh source Android.
+    # Workflow trigger kalau minimal 1 file di push TIDAK match paths-ignore.
+    # Untuk build manual (misal regen APK dari commit docs), pakai:
+    #   gh workflow run build-apk.yml
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+      - '.gitattributes'
+      - 'LICENSE'
+      - 'scripts/**'
+      - 'logs/**'
+      - 'node_modules/**'
   workflow_dispatch:
 
 jobs:
