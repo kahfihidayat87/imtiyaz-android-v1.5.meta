@@ -81,6 +81,9 @@ dependencies {
 
     implementation 'androidx.core:core-ktx:1.12.0'
     implementation 'androidx.activity:activity-compose:1.8.2'
+    // Fix Play Console warning: fragment 1.0.0 (transitive dari activity-compose 1.5.0)
+    // di-force ke versi terbaru. Without this, Play Store flag deprecation.
+    implementation 'androidx.fragment:fragment-ktx:1.8.5'
     implementation 'androidx.compose.ui:ui'
     implementation 'androidx.compose.ui:ui-tooling-preview'
     implementation 'androidx.compose.material3:material3'
