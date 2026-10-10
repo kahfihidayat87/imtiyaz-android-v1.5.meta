@@ -13,6 +13,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.graphics.drawable.GradientDrawable
+import android.graphics.Color as AndroidColor
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.Dispatchers
@@ -43,6 +45,8 @@ data class JamaahLocation(
     val accuracy: Double = 0.0,
     val battery: Int = -1,
     val updated_at: Long = 0L,
+    val source: String = "",
+    val age_ms: Long = 0L,
 )
 
 interface KanalLokasiApi {
@@ -119,14 +123,19 @@ fun LokasiMapView(
         sortedJamaah.forEach { j ->
             val lat = j.latitude ?: return@forEach
             val lon = j.longitude ?: return@forEach
+            // v2.13.0 TAHAP 22: warna marker sesuai source + umur data
+            val srcColor = markerColor(j.source, j.age_ms)
+            val ageText = ageLabel(j.age_ms)
             val marker = Marker(mapView).apply {
                 position = GeoPoint(lat, lon)
                 title = j.nama
                 val batText = if (j.battery >= 0) "Baterai ${j.battery}%" else "Baterai -"
                 val accText = if (j.accuracy > 0) "\u00b1${j.accuracy.toInt()}m" else "-"
                 val status = if (j.jamaah_id == highlightJamaahId) "DICARI" else "Di kanal"
-                snippet = "$status \u2022 $batText \u2022 Akurasi $accText"
+                snippet = "$status \u2022 $batText \u2022 Akurasi $accText \u2022 $ageText"
                 setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                // Ganti icon default dengan bulatan berwarna
+                icon = circleDrawable(srcColor, if (j.jamaah_id == highlightJamaahId) 48 else 36)
             }
             mapView.overlays.add(marker)
             points.add(GeoPoint(lat, lon))
@@ -184,6 +193,8 @@ fun LokasiMapCard(
                         accuracy = (data["accuracy"] as? Double) ?: 0.0,
                         battery = (data["battery"] as? Long)?.toInt() ?: -1,
                         updated_at = (data["updated_at"] as? Long) ?: 0L,
+                        source = data["source"] as? String ?: "",
+                        age_ms = (data["age_ms"] as? Long) ?: 0L,
                     )
                 } ?: emptyList()
                 locations = list
@@ -231,3 +242,42 @@ fun LokasiMapCard(
         }
     }
 }
+
+// ============================================================================
+// v2.13.0 TAHAP 22: Helper warna marker + label umur data
+// ============================================================================
+
+/**
+ * Warna marker sesuai source + umur data.
+ *  - gps_akurat + < 2 menit  = hijau  (#0F7A5A)
+ *  - cache + < 10 menit       = kuning (#F59E0B)
+ *  - mode_aman_service < 30 m = abu    (#6B7280)
+ *  - stale (> 30 menit)       = merah  (#DC2626)
+ */
+private fun markerColor(source: String, ageMs: Long): Int {
+    val stale = ageMs > 30 * 60 * 1000L
+    return when {
+        stale -> 0xFFDC2626.toInt()
+        source == "gps_akurat" -> 0xFF0F7A5A.toInt()
+        source == "cache" -> 0xFFF59E0B.toInt()
+        source == "mode_aman_service" -> 0xFF6B7280.toInt()
+        else -> 0xFF9CA3AF.toInt()
+    }
+}
+
+private fun ageLabel(ageMs: Long): String = when {
+    ageMs < 1_000 -> "baru"
+    ageMs < 60_000 -> "${ageMs / 1_000}s lalu"
+    ageMs < 3_600_000 -> "${ageMs / 60_000}m lalu"
+    else -> "${ageMs / 3_600_000}j lalu"
+}
+
+private fun circleDrawable(colorInt: Int, sizePx: Int): GradientDrawable {
+    return GradientDrawable().apply {
+        shape = GradientDrawable.OVAL
+        setColor(colorInt)
+        setSize(sizePx, sizePx)
+        setStroke(4, AndroidColor.WHITE)
+    }
+}
+

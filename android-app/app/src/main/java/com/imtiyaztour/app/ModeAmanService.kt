@@ -189,12 +189,21 @@ class ModeAmanService : Service() {
                                     "longitude" to loc.longitude,
                                     "accuracy" to loc.accuracy.toDouble(),
                                     "updated_at" to System.currentTimeMillis(),
-                                    "source" to "mode_aman_service"
+                                    "source" to "mode_aman_service",
+                                    "age_ms" to 0L
                                 ),
                                 SetOptions.merge()
                             )
                             .await()
-                        Log.d(TAG, "Cache lokasi terkirim: $jamaahId")
+                        // v2.13.0 TAHAP 22 (Batch 4d): update LocationCache juga
+                        // supaya saat TL minta lokasi via FCM, cache ini bisa
+                        // dikirim cepat (<1 detik) tanpa tunggu GPS lock.
+                        LocationCache.save(
+                            this@ModeAmanService,
+                            loc.latitude, loc.longitude, loc.accuracy,
+                            "mode_aman_service"
+                        )
+                        Log.d(TAG, "Cache lokasi terkirim & disimpan: $jamaahId")
                     }
                 }
             } catch (e: Exception) {

@@ -1,5 +1,7 @@
 package com.imtiyaztour.app
 
+import android.content.Context
+import android.os.PowerManager
 import android.util.Log
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
@@ -17,6 +19,29 @@ class FcmService : FirebaseMessagingService() {
 
     companion object {
         private const val TAG = "FcmService"
+        private const val WAKELOCK_TIMEOUT_MS = 30_000L
+
+        /**
+         * v2.13.0 TAHAP 22: Jalankan blok dengan PARTIAL_WAKE_LOCK.
+         * Auto-release setelah timeout 30 detik atau setelah blok selesai.
+         */
+        private fun withWakeLock(ctx: Context, block: () -> Unit) {
+            val pm = ctx.getSystemService(Context.POWER_SERVICE) as? PowerManager
+            val lock = pm?.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "imtiyaz:kirim_lokasi"
+            )
+            try {
+                lock?.acquire(WAKELOCK_TIMEOUT_MS)
+                block()
+            } finally {
+                try {
+                    if (lock?.isHeld == true) lock.release()
+                } catch (e: Exception) {
+                    Log.w(TAG, "WakeLock release error: ${e.message}")
+                }
+            }
+        }
     }
 
     override fun onNewToken(token: String) {
@@ -43,7 +68,11 @@ class FcmService : FirebaseMessagingService() {
                 "minta-lokasi" -> {
                     val requestId = data["request_id"] ?: return
                     Log.d(TAG, "Minta lokasi: request_id=$requestId")
-                    KirimLokasiHelper.kirimLokasi(applicationContext, requestId)
+                    // v2.13.0 TAHAP 22 (Batch 4d): WakeLock guard 30 detik
+                    // supaya coroutine kirim lokasi tidak dipotong Doze
+                    withWakeLock(applicationContext) {
+                        KirimLokasiHelper.kirimLokasi(applicationContext, requestId)
+                    }
                 }
                 "pengumuman" -> {
                     NotifikasiHelper.tampilkanNotifikasi(

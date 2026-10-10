@@ -61,6 +61,8 @@ data class FindStatus(
     val battery: Int? = null,
     val requested_at: Long? = null,
     val responded_at: Long? = null,
+    val source: String? = null,
+    val age_ms: Long? = null,
     val error: String? = null
 )
 
@@ -110,6 +112,13 @@ private fun hitungJarak(lat1: Double, lon1: Double, lat2: Double, lon2: Double):
 private fun formatJarak(m: Double): String = when {
     m < 1000 -> "${m.toInt()} meter"
     else -> String.format("%.1f km", m/1000)
+}
+
+private fun formatAge(ms: Long): String = when {
+    ms < 1_000 -> "baru"
+    ms < 60_000 -> "${ms / 1_000} detik lalu"
+    ms < 3_600_000 -> "${ms / 60_000} menit lalu"
+    else -> "${ms / 3_600_000} jam lalu"
 }
 
 @Composable
@@ -163,7 +172,9 @@ fun FindJamaahScreen(onBack: () -> Unit) {
                         longitude = data["longitude"] as? Double,
                         accuracy = data["accuracy"] as? Double,
                         battery = (data["battery"] as? Long)?.toInt(),
-                        responded_at = data["updated_at"] as? Long
+                        responded_at = data["updated_at"] as? Long,
+                        source = data["source"] as? String,
+                        age_ms = (data["age_ms"] as? Long)
                     )
                 }
             }
@@ -223,6 +234,35 @@ fun FindJamaahScreen(onBack: () -> Unit) {
                             Spacer(Modifier.height(8.dp))
                         }
                         Text("Koordinat: ${"%.5f".format(lat)}, ${"%.5f".format(lon)}", fontSize = 12.sp)
+
+                        // v2.13.0 TAHAP 22: badge warna berdasarkan source
+                        val sourceLabel = when (r.source) {
+                            "gps_akurat" -> "GPS Akurat"
+                            "cache" -> "GPS Terakhir"
+                            "mode_aman_service" -> "Heartbeat"
+                            else -> "GPS"
+                        }
+                        val sourceColor = when (r.source) {
+                            "gps_akurat" -> Color(0xFF0F7A5A)
+                            "cache" -> Color(0xFFF59E0B)
+                            "mode_aman_service" -> Color(0xFF6B7280)
+                            else -> Color.Gray
+                        }
+                        val ageText = r.age_ms?.let { formatAge(it) } ?: "baru"
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+                            Box(
+                                modifier = Modifier
+                                    .background(sourceColor.copy(alpha = 0.15f), RoundedCornerShape(6.dp))
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    "$sourceLabel \u2022 $ageText",
+                                    fontSize = 12.sp,
+                                    color = sourceColor,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
 
                         // Badge akurasi berwarna (v1.1)
                         val accVal = r.accuracy?.toFloat()
