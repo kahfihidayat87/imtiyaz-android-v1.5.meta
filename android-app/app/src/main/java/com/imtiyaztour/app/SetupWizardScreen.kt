@@ -79,14 +79,14 @@ fun SetupWizardScreen(
 
                 when (step) {
                     0 -> {
-                        Text("Izin Lokasi", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text("PIN Lokasi", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "Aplikasi ini perlu tahu lokasi Anda agar Tour Leader dapat menemukan Anda jika terpisah dari rombongan.",
+                            "Aplikasi akan mengirimkan notifikasi lokasi ke Tour Leader jika Anda terpisah dari rombongan",
                             fontSize = 13.sp, color = Color(0xFF374151)
                         )
                         Spacer(Modifier.height(16.dp))
-                        StatusRow("Lokasi diizinkan", locGranted)
+                        StatusRow("Izinkan", locGranted)
                         Spacer(Modifier.height(16.dp))
                         Button(
                             onClick = {
@@ -135,7 +135,7 @@ fun SetupWizardScreen(
                         Text("Optimasi Baterai", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "Aktifkan agar HP Anda tidak mematikan aplikasi saat tidur, sehingga lokasi tetap bisa dicari Tour Leader.",
+                            "Aktifkan mode batrai ON agar aplikasi tidak mati",
                             fontSize = 13.sp, color = Color(0xFF374151)
                         )
                         Spacer(Modifier.height(16.dp))
