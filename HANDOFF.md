@@ -1,6 +1,6 @@
 # Imtiyaz Tour — Project Handoff Document
 
-**Terakhir update:** 10 Okt 2026 (v2.13.0, TAHAP 21 SELESAI)
+**Terakhir update:** 10 Okt 2026 (v2.13.0, TAHAP 22 SELESAI, rilis build 115)
 **Repo utama:** https://github.com/kahfihidayat87/imtiyaz-android-v1.5.meta
 **Local path:** C:\Users\DELL\Documents\GitHub\imtiyaz-android-v1.5.meta
 
@@ -10,11 +10,11 @@
 
 | Item | Nilai |
 |---|---|
-| Versi aktif (App Jamaah) | **2.13.0** (versionCode 15) — rilis terbaru: v2.13.0-build104 |
+| Versi aktif (App Jamaah) | **2.13.0** (versionCode 15) — rilis terbaru: v2.13.0-build115 |
 | Commit terakhir | Lihat `git log --oneline -5` |
 | Branch | `main` |
 | CI | GitHub Actions hijau |
-| Total file Kotlin | **29 file** (25 lama + ModeAman + RadioLiveKit + SkriningFormV2 + SkriningModels) |
+| Total file Kotlin | **34 file** (+SetupWizard, +LocationCache, +KirimLokasiWorker, +OtaDetector, +AlertIzinHelper) |
 | Warna tema | Hijau `#0F7A5A` |
 | Distribusi | Play Store (AAB) + APK Release signed (langsung) |
 | **Tracking lokasi** | **FCM + Firestore** (menggantikan ntfy.sh) |
@@ -81,6 +81,11 @@
 | FcmTokenStore.kt | Simpan token & kirim ke Firestore |
 | KirimLokasiHelper.kt | Kirim GPS ke Firestore saat dapat FCM |
 | NotifikasiHelper.kt | Tampilkan notifikasi lokal |
+| SetupWizardScreen.kt | Wizard setup 3-langkah (PIN lokasi, notif, baterai) |
+| LocationCache.kt | Cache GPS terakhir untuk kirim cepat saat FCM masuk |
+| KirimLokasiWorker.kt | WorkManager fallback kirim lokasi (FGS ditolak OS) |
+| OtaDetector.kt | Deteksi OTA + cek izin + kirim alert ke TL |
+| AlertIzinHelper.kt | Kirim alert izin ke Firestore alert_izin |
 | ModeAmanService.kt | Foreground service Mode Aman (tracking lokasi saat app background) |
 | RadioLiveKit.kt | Wrapper LiveKit SDK untuk siaran radio real-time |
 | SkriningFormV2.kt | Form skrining kesehatan multi-step 7 langkah |
@@ -506,3 +511,191 @@ exe → /opt/alt/alt-nodejs24/root/usr/bin/node
 
 Menjadi:
 > **LiteSpeed menjalankan & menjaga proses Node.js (`lsnode`). Setelah edit `app.js`, jalankan `bash scripts/restart-node.sh` untuk memuat perubahan. Proses otomatis di-respawn oleh LiteSpeed wrapper jika crash. Hindari duplikasi PID (port 3000 hanya boleh dipegang 1 proses).**
+
+---
+
+## TAHAP 22 — Zero-Touch Tracking (10 Okt 2026)
+
+**Status:** ✅ Selesai, rilis build 115
+
+### Tujuan
+Jamaah lansia tidak perlu klik apapun setelah setup awal. Setup wizard muncul
+sekali setelah login pertama, lalu Mode Aman auto-start dan selamanya jalan
+di background.
+
+### Sub-batch
+
+| Batch | Isi | Commit |
+|---|---|---|
+| **4a** | Setup wizard 3-langkah + auto-start Mode Aman | `70a8842` + `49bc44c` |
+| **4a-text** | Perbaikan teks (PIN Lokasi, batrai ON) | `3928d17` |
+| **4d** | LocationCache + kirim 2x + WakeLock + warna marker | `2d1a103` |
+| **4b** | BootReceiver auto-start + WorkManager fallback | `80ee4fd` |
+| **4c-1** | Server: endpoint heartbeat + alert-izin | (server-only) |
+| **4c-2** | Workflow GitHub Actions cron 6 jam | `753724d` |
+| **4c-3** | OTA detection + heartbeat handler + banner TL | `57123e9` |
+
+### Fitur Baru
+
+**Setup Wizard (SetupWizardScreen.kt):**
+- Muncul otomatis setelah login pertama (kalau `setup_complete=false`)
+- Step 1: PIN lokasi (FINE + BACKGROUND)
+- Step 2: Izin notifikasi
+- Step 3: Battery unrestricted
+- Tombol "Lewati" + "Jalankan Ulang Setup" di Card Mode Aman
+- Tombol lama "Aktifkan Mode Aman" tetap berfungsi (antisipasi skip/tolak izin)
+
+**LocationCache + Kirim 2x:**
+- `KirimLokasiHelper.kirimLokasi()` jadi **suspend fun** (bug fix, lihat di bawah)
+- Alur: cache dulu (instant) → GPS akurat → kirim ulang → update cache
+- Efek: TL lihat marker <1 detik dari cache, lalu refresh saat GPS akurat
+
+**WakeLock (FcmService):**
+- PARTIAL_WAKE_LOCK 90s selama proses kirim lokasi
+- Cegah Doze kill coroutine sebelum Firestore write selesai
+
+**BootReceiver (extend di Adzan.kt):**
+- Auto-start Mode Aman setelah HP restart
+- Handle QUICKBOOT_POWERON Xiaomi/Oppo/Vivo
+
+**WorkManager Fallback (KirimLokasiWorker.kt):**
+- Kalau FGS start ditolak OS (Android 12+) → WorkManager retry 3x
+- Exponential backoff 15s
+
+**Heartbeat FCM (cron 6 jam):**
+- Workflow `.github/workflows/heartbeat.yml`
+- Server `/api/heartbeat-broadcast` (guard API key)
+- Bangunkan HP dari App Standby Bucket Android
+
+**OTA Detection (OtaDetector.kt):**
+- Cek `Build.FINGERPRINT` berubah → verifikasi izin
+- Kalau izin hilang → `AlertIzinHelper` kirim ke Firestore `alert_izin/{jamaahId}`
+- Throttle 1 jam per jamaah
+
+**Banner TL (FindJamaah.kt):**
+- Banner merah real-time kalau ada jamaah izin hilang
+- Filter: hanya jamaah di kanal TL
+- Format: `⚠ N Jamaah Butuh Perhatian` + nama + reason + umur
+
+**Marker Warna (LokasiMapView.kt + FindJamaah.kt):**
+
+| Kondisi | Warna | Label |
+|---|---|---|
+| GPS akurat, <30 menit | 🟢 Hijau `#0F7A5A` | "GPS Akurat • baru" |
+| Cache, <10 menit | 🟡 Kuning `#F59E0B` | "GPS Terakhir • Xs lalu" |
+| Heartbeat Mode Aman | ⚫ Abu `#6B7280` | "Heartbeat • Xm lalu" |
+| Stale >30 menit | 🔴 Merah `#DC2626` | "GPS • Xj lalu" |
+
+### File Baru
+- `SetupWizardScreen.kt` (~221 baris)
+- `LocationCache.kt` (~57 baris)
+- `KirimLokasiWorker.kt` (~43 baris)
+- `OtaDetector.kt` (~93 baris)
+- `AlertIzinHelper.kt` (~76 baris)
+
+### Server-Side (TIDAK DI GIT)
+
+**`app.js` (Node.js) — endpoint baru:**
+- `POST /api/heartbeat-broadcast` (guard `requireApiKey`) — kirim FCM heartbeat
+  ke topic global `imtiyaz-heartbeat`
+- `POST /api/alert-izin` — terima alert dari HP jamaah, tulis Firestore
+- `POST /api/kesehatan-me` — proxy ke WP `/imtiyaz/v1/kesehatan-me`
+- Cache in-memory: `/api/me` 60s, `/api/kesehatan-me` 120s (per jamaah_id)
+
+**`imtiyaz-connector.php` (WP plugin):**
+- Token safety — cek hash sebelum hapus `_jamaah_token` (bulk update + save_meta)
+- Logging `TOKEN-SAFE-BULK` / `TOKEN-SAFE-META` / `TOKEN-SAFE-LOGOUT`
+
+**Backup di server:** `/tmp/app.js.bak-*`, `/tmp/imtiyaz-connector.php.bak-*`
+
+### Secrets GitHub (5)
+- `RELEASE_KEYSTORE_BASE64`, `RELEASE_KEYSTORE_PASSWORD`, `RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD`
+- `API_KEY_PASTIUMRAH` (untuk workflow heartbeat)
+
+---
+
+## Bug Fix Sesi 10 Okt 2026
+
+### Bug #1 — Tracking "HP tidak merespons"
+
+**Gejala:** TL tap "Cari" pada jamaah Mode Aman aktif → timeout 60s →
+"HP tidak merespons, jamaah mungkin tidak membawa HP".
+
+**Root cause:** `KirimLokasiHelper.kirimLokasi()` spawn `CoroutineScope`
+sendiri (tidak suspend). `withWakeLock` di FcmService release instan
+sebelum Firestore write selesai. Coroutine di-kill OS → `request_id` tidak
+tertulis ke Firestore → listener TL tidak match → timeout.
+
+**Bukti:** Firestore `lokasi_jamaah/1410` punya `source=mode_aman_service`
++ `updated_at` fresh, TAPI tidak ada field `request_id`.
+
+**Fix (commit `b888bc1`):**
+- `KirimLokasiHelper.kirimLokasi()` jadi **suspend fun**
+- FcmService hold `PARTIAL_WAKE_LOCK` di dalam coroutine sampai await selesai
+- `KirimLokasiWorker` await suspend
+- `FindJamaah`: fallback ke lokasi terakhir Firestore kalau timeout
+  (jangan langsung "HP tidak merespons")
+
+### Bug #2 — Card "Cek Kesehatan" selalu empty
+
+**Gejala:** Data kesehatan ada di WP Admin (`_kesehatan_data` postmeta
+lengkap) tapi Card di app jamaah tampil "Belum ada data kesehatan".
+
+**Root cause:** Retrofit path `wp-json/imtiyaz/v1/kesehatan-me` di-resolve
+terhadap `BASE_URL=https://api.pastiumrah.com/` →
+`https://api.pastiumrah.com/wp-json/imtiyaz/v1/kesehatan-me` = **404**.
+Endpoint Node.js yang benar ada di `/api/kesehatan-me`.
+
+**Fix (commit `19d8367`):**
+- Android: ganti path Retrofit jadi `api/kesehatan-me`
+- Server: tambah proxy `/api/kesehatan-me` di `app.js`
+
+### Performa — Tab Saya lambat
+
+**Gejala:** Buka tab Saya tunggu 1-2 detik.
+
+**Root cause:** `/api/me` + `/api/kesehatan-me` tidak di-cache, setiap
+buka tab panggil WP fresh (~0.4s + network).
+
+**Fix (server-side, tidak di git):**
+- Cache `/api/me` 60s per `jamaah_id`
+- Cache `/api/kesehatan-me` 120s per `jamaah_id`
+- Efek: warm request dari 0.4s → **0.014s** (30x lebih cepat)
+
+### Token jamaah terhapus otomatis
+
+**Gejala:** `_jamaah_token` di postmeta KOSONG padahal admin tidak klik
+apa-apa.
+
+**Root cause:** Form login di WP Admin punya input `jamaah_password` yang
+di-autofill browser. Setiap admin edit jamaah (isi kesehatan, ubah paket)
+→ hook `save_meta` trigger → hapus token (meski password tidak diubah).
+
+**Fix (WP `imtiyaz-connector.php`):**
+- Sebelum hapus token, cek apakah password benar-benar berubah:
+  `if (empty($old_hash) || !wp_check_password($new_pass, $old_hash))`
+- Kalau password sama → token TIDAK dihapus
+- Kalau password beda → token dihapus (perilaku lama)
+
+### Catatan Server
+
+- Node.js TIDAK auto-respawn — restart manual via `pkill + nohup` (lihat
+  bagian Prosedur Restart di bawah)
+- Endpoint `/api/heartbeat-broadcast` perlu header `x-api-key` (guard)
+- Firestore rules masih `allow read/write if true` (DEV ONLY — kandidat
+  Firebase Custom Auth)
+
+---
+
+## Catatan Sesi untuk Chat Berikutnya
+
+1. Server code (`app.js`, `imtiyaz-connector.php`) TIDAK di git — edit
+   langsung via SSH, backup di `/tmp/`
+2. Setiap edit `app.js` wajib restart: `pkill + nohup spawn`
+3. Secrets GitHub: 5 (4 keystore + `API_KEY_PASTIUMRAH`)
+4. Firestore rules masih terbuka (kandidat hardening)
+5. Kandidat TAHAP 23:
+   - Firebase Custom Auth (production-ready)
+   - Quick action Find Jamaah (copy koord, share WA)
+   - Rekam radio LiveKit (Egress)
+   - Hapus `LocateService.kt` (ntfy legacy) → v2.14.0
