@@ -687,7 +687,7 @@ fun PaketListScreen(onPaketClick: (PaketUmrah) -> Unit) {
         }
         item {
             Spacer(Modifier.height(8.dp))
-            HorizontalDivider(color = Color(0xFFE5E7EB), thickness = 1.dp)
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFFE5E7EB)))
             Spacer(Modifier.height(8.dp))
         }
         item {
