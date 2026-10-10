@@ -1,0 +1,29 @@
+name: Heartbeat Broadcast
+
+on:
+  schedule:
+    # Setiap 6 jam: 00:00, 06:00, 12:00, 18:00 UTC (07,13,19,01 WIB)
+    - cron: '0 */6 * * *'
+  workflow_dispatch:  # manual trigger untuk test
+
+jobs:
+  broadcast:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Kirim heartbeat ke semua jamaah
+        run: |
+          echo "Trigger heartbeat @ $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          response=$(curl -s -w "\n%{http_code}" -X POST \
+            https://api.pastiumrah.com/api/heartbeat-broadcast \
+            -H "x-api-key: ${{ secrets.API_KEY_PASTIUMRAH }}" \
+            -H "Content-Type: application/json" \
+            --max-time 30)
+          http_code=$(echo "$response" | tail -1)
+          body=$(echo "$response" | head -n -1)
+          echo "HTTP $http_code"
+          echo "Body: $body"
+          if [ "$http_code" != "200" ]; then
+            echo "::error::Heartbeat gagal (HTTP $http_code)"
+            exit 1
+          fi
+          echo "✓ Heartbeat terkirim"
