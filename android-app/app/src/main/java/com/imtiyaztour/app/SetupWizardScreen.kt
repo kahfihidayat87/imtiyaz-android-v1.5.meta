@@ -71,7 +71,7 @@ fun SetupWizardScreen(
                 Text("Langkah ${step + 1} dari 3", fontSize = 12.sp, color = Color.Gray)
                 Spacer(Modifier.height(12.dp))
                 LinearProgressIndicator(
-                    progress = { (step + 1) / 3f },
+                    progress = (step + 1) / 3f,
                     modifier = Modifier.fillMaxWidth(),
                     color = Color(0xFF0F7A5A)
                 )

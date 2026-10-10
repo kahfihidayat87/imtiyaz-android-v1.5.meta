@@ -1025,6 +1025,7 @@ fun SayaScreen(
 
     var loggedIn by remember { mutableStateOf(Prefs.isLoggedIn(context)) }
     var showWizard by remember { mutableStateOf(false) }
+    var modeAmanAktif by remember { mutableStateOf(Prefs.isModeAmanEnabled(context)) }
 
     // Cek wizard setelah login: kalau sudah login tapi belum setup, tampilkan
     LaunchedEffect(loggedIn) {
@@ -1074,7 +1075,6 @@ fun SayaScreen(
     var isUploading by remember { mutableStateOf(false) }
     var showSkrining by remember { mutableStateOf(false) }
     var cameraUri by remember { mutableStateOf<Uri?>(null) }
-    var modeAmanAktif by remember { mutableStateOf(Prefs.isModeAmanEnabled(context)) }
 
     // ===== CEK KESEHATAN =====
     var kesehatanData by remember { mutableStateOf<KesehatanData?>(null) }
