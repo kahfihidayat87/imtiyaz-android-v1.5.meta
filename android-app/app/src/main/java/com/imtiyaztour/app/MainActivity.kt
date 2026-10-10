@@ -207,7 +207,7 @@ interface ApiService {
     @POST("api/skrining")
     suspend fun submitSkrining(@Body body: Map<String, @JvmSuppressWildcards Any>): SkriningResponse
 
-    @retrofit2.http.POST("wp-json/imtiyaz/v1/kesehatan-me")
+    @retrofit2.http.POST("api/kesehatan-me")
     suspend fun kesehatanMe(@Body body: Map<String, String>): KesehatanMeResponse
 }
 
