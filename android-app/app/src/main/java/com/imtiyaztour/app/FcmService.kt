@@ -5,9 +5,16 @@ import android.os.PowerManager
 import android.util.Log
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import androidx.work.BackoffPolicy
+import androidx.work.Constraints
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.workDataOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.util.concurrent.TimeUnit
 
 /**
  * v2.13.0: Penerima pesan Firebase Cloud Messaging (FCM).
@@ -42,6 +49,32 @@ class FcmService : FirebaseMessagingService() {
                 }
             }
         }
+
+        /**
+         * v2.13.0 TAHAP 22 (Batch 4b): Fallback kalau FGS start ditolak OS
+         * atau coroutine terputus. WorkManager jalan di background.
+         */
+        fun enqueueFallbackKirim(ctx: Context, requestId: String) {
+            try {
+                val constraints = Constraints.Builder()
+                    .setRequiresBatteryNotLow(false)
+                    .build()
+                val req = OneTimeWorkRequestBuilder<KirimLokasiWorker>()
+                    .setInputData(workDataOf(KirimLokasiWorker.KEY_REQUEST_ID to requestId))
+                    .setConstraints(constraints)
+                    .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.SECONDS)
+                    .build()
+                WorkManager.getInstance(ctx)
+                    .enqueueUniqueWork(
+                        "kirim_lokasi_$requestId",
+                        ExistingWorkPolicy.KEEP,
+                        req
+                    )
+                Log.d(TAG, "Fallback WorkManager enqueued: $requestId")
+            } catch (e: Exception) {
+                Log.e(TAG, "Gagal enqueue fallback", e)
+            }
+        }
     }
 
     override fun onNewToken(token: String) {
@@ -69,9 +102,14 @@ class FcmService : FirebaseMessagingService() {
                     val requestId = data["request_id"] ?: return
                     Log.d(TAG, "Minta lokasi: request_id=$requestId")
                     // v2.13.0 TAHAP 22 (Batch 4d): WakeLock guard 30 detik
-                    // supaya coroutine kirim lokasi tidak dipotong Doze
-                    withWakeLock(applicationContext) {
-                        KirimLokasiHelper.kirimLokasi(applicationContext, requestId)
+                    // v2.13.0 TAHAP 22 (Batch 4b): try/catch + fallback WorkManager
+                    try {
+                        withWakeLock(applicationContext) {
+                            KirimLokasiHelper.kirimLokasi(applicationContext, requestId)
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Kirim lokasi gagal, pakai WorkManager fallback", e)
+                        enqueueFallbackKirim(applicationContext, requestId)
                     }
                 }
                 "pengumuman" -> {

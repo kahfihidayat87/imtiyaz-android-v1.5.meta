@@ -116,5 +116,9 @@ dependencies {
     // v2.14.0: LiveKit untuk siaran radio TL real-time (WebRTC)
     implementation 'io.livekit:livekit-android:2.29.0'
 
+    // v2.13.0 TAHAP 22 (Batch 4b): WorkManager untuk fallback kirim lokasi
+    // saat FGS start ditolak OS (Android 12+) atau app di-kill agresif OEM
+    implementation 'androidx.work:work-runtime-ktx:2.9.0'
+
     debugImplementation 'androidx.compose.ui:ui-tooling'
 }

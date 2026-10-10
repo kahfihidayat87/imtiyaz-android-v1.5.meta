@@ -149,7 +149,22 @@ class AdzanReceiver : BroadcastReceiver() {
 
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        val action = intent.action
+        if (action != Intent.ACTION_BOOT_COMPLETED &&
+            action != "android.intent.action.QUICKBOOT_POWERON" &&
+            action != "com.htc.intent.action.QUICKBOOT_POWERON") return
+
+        // 1) Auto-start Mode Aman setelah HP restart (TAHAP 22 Batch 4b)
+        try {
+            if (Prefs.isSetupComplete(context) && Prefs.isModeAmanEnabled(context)) {
+                ModeAmanService.startIfNeeded(context)
+                android.util.Log.d("BootReceiver", "Mode Aman auto-start OK")
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("BootReceiver", "Auto-start Mode Aman gagal: ${e.message}", e)
+        }
+
+        // 2) Reschedule adzan (existing)
         if (!AdzanPrefs.isEnabled(context)) return
         val times = AdzanPrefs.getTimes(context) ?: return
         AdzanScheduler.scheduleAll(context, times)
