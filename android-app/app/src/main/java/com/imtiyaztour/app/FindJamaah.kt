@@ -29,6 +29,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import retrofit2.Retrofit
@@ -219,7 +220,35 @@ fun FindJamaahScreen(onBack: () -> Unit) {
             delay(1000)
         }
         if (!sudahRespons) {
-            findResult = FindStatus(status = "timeout")
+            // FIX bug-1: fallback ke lokasi terakhir di Firestore (jangan
+            // langsung timeout -- jamaah mungkin terlambat kirim request_id
+            // tapi Mode Aman tetap update lokasi tiap 60 detik).
+            try {
+                val snap = FirebaseFirestore.getInstance()
+                    .collection("lokasi_jamaah")
+                    .document(targetId)
+                    .get()
+                    .await()
+                val lat = snap.getDouble("latitude")
+                val lon = snap.getDouble("longitude")
+                val updatedAt = snap.getLong("updated_at") ?: 0L
+                if (lat != null && lon != null && updatedAt > 0L) {
+                    findResult = FindStatus(
+                        status = "responded",
+                        latitude = lat,
+                        longitude = lon,
+                        accuracy = snap.getDouble("accuracy"),
+                        battery = (snap.getLong("battery"))?.toInt(),
+                        responded_at = updatedAt,
+                        source = snap.getString("source"),
+                        age_ms = System.currentTimeMillis() - updatedAt
+                    )
+                } else {
+                    findResult = FindStatus(status = "timeout")
+                }
+            } catch (e: Exception) {
+                findResult = FindStatus(status = "timeout")
+            }
         }
         listener.remove()
     }

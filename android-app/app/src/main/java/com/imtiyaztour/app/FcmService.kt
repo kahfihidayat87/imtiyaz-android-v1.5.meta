@@ -102,15 +102,28 @@ class FcmService : FirebaseMessagingService() {
                 "minta-lokasi" -> {
                     val requestId = data["request_id"] ?: return
                     Log.d(TAG, "Minta lokasi: request_id=$requestId")
-                    // v2.13.0 TAHAP 22 (Batch 4d): WakeLock guard 30 detik
-                    // v2.13.0 TAHAP 22 (Batch 4b): try/catch + fallback WorkManager
-                    try {
-                        withWakeLock(applicationContext) {
+                    // FIX bug-1: KirimLokasiHelper sekarang suspend. Hold WakeLock
+                    // di dalam coroutine sampai Firestore write selesai, JANGAN
+                    // release instant.
+                    CoroutineScope(Dispatchers.IO).launch {
+                        val pm = applicationContext.getSystemService(Context.POWER_SERVICE) as? PowerManager
+                        val lock = pm?.newWakeLock(
+                            PowerManager.PARTIAL_WAKE_LOCK,
+                            "imtiyaz:fcm_kirim_lokasi"
+                        )
+                        try {
+                            lock?.acquire(90_000L)
                             KirimLokasiHelper.kirimLokasi(applicationContext, requestId)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Kirim lokasi gagal, pakai WorkManager fallback", e)
+                            enqueueFallbackKirim(applicationContext, requestId)
+                        } finally {
+                            try {
+                                if (lock?.isHeld == true) lock.release()
+                            } catch (e: Exception) {
+                                Log.w(TAG, "WakeLock release error: ${e.message}")
+                            }
                         }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Kirim lokasi gagal, pakai WorkManager fallback", e)
-                        enqueueFallbackKirim(applicationContext, requestId)
                     }
                 }
                 "pengumuman" -> {

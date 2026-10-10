@@ -33,7 +33,7 @@ class KirimLokasiWorker(
         }
         return try {
             Log.d(TAG, "Kirim lokasi via WorkManager: $requestId")
-            KirimLokasiHelper.kirimLokasi(applicationContext, requestId)
+            KirimLokasiHelper.kirimLokasi(applicationContext, requestId)  // suspend, await
             Result.success()
         } catch (e: Exception) {
             Log.e(TAG, "Gagal kirim lokasi (retry=${runAttemptCount})", e)
