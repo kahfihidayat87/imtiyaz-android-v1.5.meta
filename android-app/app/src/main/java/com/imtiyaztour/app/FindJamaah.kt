@@ -51,6 +51,13 @@ import kotlin.math.sqrt
 // ============================================================================
 
 data class KanalJamaah(val id: String, val nama: String)
+
+data class AlertIzin(
+    val jamaah_id: String = "",
+    val nama: String = "",
+    val reason: String = "",
+    val detected_at: Long = 0L
+)
 data class FindRequest(val jamaah_id: String, val token: String, val target_jamaah_id: String)
 data class FindResponse(val request_id: String? = null, val status: String? = null, val error: String? = null)
 data class FindStatus(
@@ -136,6 +143,7 @@ fun FindJamaahScreen(onBack: () -> Unit) {
     // ID jamaah yang sedang dimintai lokasi -- untuk disable tombol agar tidak spam
     var jamaahLoading by remember { mutableStateOf<String?>(null) }
     var tlLocation by remember { mutableStateOf<Location?>(null) }
+    var alertList by remember { mutableStateOf<List<AlertIzin>>(emptyList()) }
 
     LaunchedEffect(Unit) {
         loading = true; errorMsg = ""
@@ -148,6 +156,32 @@ fun FindJamaahScreen(onBack: () -> Unit) {
             errorMsg = "Gagal memuat daftar jamaah -- pastikan Anda Tour Leader dan koneksi stabil"
         }
         loading = false
+    }
+
+    // v2.13.0 TAHAP 22 (Batch 4c): listen alert_izin real-time (izin hilang / OTA)
+    DisposableEffect(list) {
+        if (list.isEmpty()) {
+            onDispose { }
+        } else {
+            val registration = FirebaseFirestore.getInstance()
+                .collection("alert_izin")
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null || snapshot == null) return@addSnapshotListener
+                    val idsInKanal = list.map { it.id }.toSet()
+                    alertList = snapshot.documents.mapNotNull { doc ->
+                        val id = doc.id
+                        if (id !in idsInKanal) return@mapNotNull null
+                        val data = doc.data ?: return@mapNotNull null
+                        AlertIzin(
+                            jamaah_id = id,
+                            nama = data["nama"] as? String ?: "Jamaah",
+                            reason = data["reason"] as? String ?: "unknown",
+                            detected_at = (data["detected_at"] as? Long) ?: 0L
+                        )
+                    }
+                }
+            onDispose { registration.remove() }
+        }
     }
 
     // v2.13.0: ganti polling /status dengan Firestore real-time listener.
@@ -339,6 +373,43 @@ fun FindJamaahScreen(onBack: () -> Unit) {
             Spacer(Modifier.height(8.dp))
             if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
             if (errorMsg.isNotEmpty()) { Text(errorMsg, fontSize = 12.sp, color = Color(0xFFDC2626)); Spacer(Modifier.height(8.dp)) }
+        }
+
+        // v2.13.0 TAHAP 22 (Batch 4c): Banner alert izin hilang
+        if (alertList.isNotEmpty()) {
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFEE2E2)),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text(
+                            "\u26a0 ${alertList.size} Jamaah Butuh Perhatian",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = Color(0xFF991B1B)
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        alertList.forEach { alert ->
+                            val umur = if (alert.detected_at > 0L)
+                                formatAge(System.currentTimeMillis() - alert.detected_at)
+                            else "tidak diketahui"
+                            Text(
+                                "\u2022 ${alert.nama}: ${alert.reason} ($umur)",
+                                fontSize = 11.sp,
+                                color = Color(0xFF7F1D1D)
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Kunjungi jamaah untuk membantu aktifkan izin + Mode Aman.",
+                            fontSize = 10.sp,
+                            color = Color(0xFF991B1B)
+                        )
+                    }
+                }
+            }
         }
         items(list) { j ->
             Card(shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(1.dp), modifier = Modifier.fillMaxWidth()) {

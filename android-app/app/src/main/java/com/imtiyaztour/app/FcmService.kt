@@ -14,6 +14,7 @@ import androidx.work.workDataOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import java.util.concurrent.TimeUnit
 
 /**
@@ -118,6 +119,24 @@ class FcmService : FirebaseMessagingService() {
                         data["judul"] ?: "Imtiyaz Tour",
                         data["pesan"] ?: ""
                     )
+                }
+                "heartbeat" -> {
+                    // v2.13.0 TAHAP 22 (Batch 4c): heartbeat dari server (cron 6 jam).
+                    // Tujuan: bangunkan HP dari standby bucket + reset FCM quota.
+                    Log.d(TAG, "Heartbeat diterima: ts=${data["ts"]}")
+                    CoroutineScope(Dispatchers.IO).launch {
+                        try {
+                            // 1) Refresh FCM token ke server (biar server tahu masih aktif)
+                            val token = com.google.firebase.messaging.FirebaseMessaging
+                                .getInstance().token.await()
+                            FcmTokenStore.simpanToken(applicationContext, token)
+                            FcmTokenStore.kirimKeServer(applicationContext, token)
+                            // 2) Cek OTA + izin, kirim alert kalau ada yang hilang
+                            OtaDetector.checkAndAlertIfNeeded(applicationContext)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Heartbeat handling gagal: ${e.message}")
+                        }
+                    }
                 }
             }
         }

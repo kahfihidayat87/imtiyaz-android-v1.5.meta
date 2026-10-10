@@ -986,11 +986,17 @@ fun LoginScreen(onLoggedIn: () -> Unit, onCancel: (() -> Unit)? = null) {
                                     FirebaseMessaging.getInstance()
                                         .subscribeToTopic("imtiyaz-loc-j${resp.jamaah_id}")
                                         .await()
-                                    android.util.Log.d("MainActivity", "FCM subscribed: imtiyaz-loc-j${resp.jamaah_id}")
+                                    // v2.13.0 TAHAP 22 (Batch 4c): subscribe heartbeat global
+                                    FirebaseMessaging.getInstance()
+                                        .subscribeToTopic("imtiyaz-heartbeat")
+                                        .await()
+                                    android.util.Log.d("MainActivity", "FCM subscribed: imtiyaz-loc-j${resp.jamaah_id} + heartbeat")
                                 } catch (e: Exception) {
                                     android.util.Log.e("MainActivity", "Gagal subscribe FCM", e)
                                 }
                             }
+                            // v2.13.0: simpan FINGERPRINT awal untuk OTA detection
+                            OtaDetector.detectOta(context)
                             onLoggedIn()
                         } else {
                             errorMsg = resp.error ?: "Username atau password salah"
