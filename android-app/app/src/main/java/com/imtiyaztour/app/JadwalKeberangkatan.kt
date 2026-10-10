@@ -1,7 +1,5 @@
 package com.imtiyaztour.app
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -25,17 +23,13 @@ import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.GET
 
 // ============================================================================
-// JADWAL KEBERANGKATAN -- diintegrasikan dari plugin imtiyaz-jadwal-sync.php yang
-// Anda kirim (dipakai untuk shortcode website). Sumber datanya WP Travel Engine
-// (custom post type "trip") yang berisi tanggal keberangkatan RIIL dan harga
-// LIVE (termasuk diskon) -- berbeda dari tab "Paket Umrah" yang isinya kategori
-// paket generik (Ekonomis/Reguler/Premium) yang diisi manual oleh Admin.
+// JADWAL KEBERANGKATAN -- data dari WP Travel Engine (custom post type "trip").
+// Tanggal + harga LIVE per trip, murni untuk jamaah/calon jamaah MELIHAT info.
 //
-// Keduanya sengaja dibiarkan terpisah, bukan saling mengganti:
-// - "Paket Umrah" = kategori/tingkatan paket, jadi acuan pendaftaran jamaah
-//   (paket_id jamaah, kanal radio, dsb bergantung ke sini -- jangan diubah).
-// - "Jadwal Keberangkatan" (halaman ini) = tanggal riil & harga LIVE per trip,
-//   murni untuk jamaah/calon jamaah MELIHAT info terkini sebelum mendaftar.
+// v2.13.0: dipindah dari Beranda ke tab "Jadwal" (sebelumnya "Paket").
+// Dipecah jadi:
+//  - JadwalKeberangkatanSection : inline di dalam LazyColumn parent (bukan LazyColumn)
+//  - JadwalKeberangkatanScreen  : fullscreen wrapper (backward compat, kalau dipanggil terpisah)
 // ============================================================================
 
 data class JadwalKeberangkatan(
@@ -65,9 +59,15 @@ object JadwalApiClient {
     }
 }
 
+/**
+ * v2.13.0: Section inline — pakai Column biasa, BUKAN LazyColumn.
+ * Aman dipanggil di dalam LazyColumn parent (tab Jadwal / Paket).
+ */
 @Composable
-fun JadwalKeberangkatanScreen(onBack: () -> Unit) {
-    val context = LocalContext.current
+fun JadwalKeberangkatanSection(
+    showHeader: Boolean = true,
+    modifier: Modifier = Modifier
+) {
     var jadwal by remember { mutableStateOf<List<JadwalKeberangkatan>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var errorMsg by remember { mutableStateOf("") }
@@ -82,45 +82,104 @@ fun JadwalKeberangkatanScreen(onBack: () -> Unit) {
         loading = false
     }
 
-    LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item {
-            Button(onClick = onBack, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)), shape = RoundedCornerShape(8.dp)) { Text("← Kembali") }
-            Spacer(Modifier.height(12.dp))
-            Text("Jadwal Keberangkatan Terbaru", fontWeight = FontWeight.Bold, fontSize = 20.sp)
-            Text("Tanggal & harga langsung dari sistem -- jadwal yang sudah lewat otomatis tidak tampil", fontSize = 11.sp, color = Color.Gray)
-            Spacer(Modifier.height(8.dp))
-            if (loading) { LinearProgressIndicator(Modifier.fillMaxWidth()) }
-            if (errorMsg.isNotEmpty()) { Text(errorMsg, fontSize = 12.sp, color = Color(0xFFDC2626)) }
-            if (!loading && errorMsg.isEmpty() && jadwal.isEmpty()) {
-                Text("Belum ada jadwal keberangkatan baru yang akan datang. Hubungi kami untuk info terbaru.", fontSize = 12.sp, color = Color.Gray)
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (showHeader) {
+            Text("Jadwal Keberangkatan Terbaru", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Text(
+                "Tanggal & harga langsung dari sistem -- jadwal yang sudah lewat otomatis tidak tampil",
+                fontSize = 11.sp, color = Color.Gray
+            )
+            Spacer(Modifier.height(4.dp))
+        }
+
+        if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+        if (errorMsg.isNotEmpty()) {
+            Text(errorMsg, fontSize = 12.sp, color = Color(0xFFDC2626))
+        }
+        if (!loading && errorMsg.isEmpty() && jadwal.isEmpty()) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3CD)),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    "Belum ada jadwal keberangkatan baru yang akan datang. Hubungi kami untuk info terbaru.",
+                    fontSize = 11.sp, color = Color(0xFF92400E),
+                    modifier = Modifier.padding(12.dp)
+                )
             }
         }
-        items(jadwal) { j ->
-            Card(shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(1.dp), modifier = Modifier.fillMaxWidth()) {
-                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(
-                        modifier = Modifier
-                            .width(64.dp)
-                            .background(Color(0xFFF0FDF4), RoundedCornerShape(8.dp))
-                            .padding(vertical = 8.dp),
-                    ) { Text(j.tanggal, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F7A5A), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(j.nama_paket, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+
+        jadwal.forEach { j -> JadwalCard(j) }
+    }
+}
+
+@Composable
+fun JadwalCard(j: JadwalKeberangkatan) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(1.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(
+                modifier = Modifier
+                    .width(64.dp)
+                    .background(Color(0xFFF0FDF4), RoundedCornerShape(8.dp))
+                    .padding(vertical = 8.dp),
+            ) {
+                Text(
+                    j.tanggal, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                    color = Color(0xFF0F7A5A), textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(j.nama_paket, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text(
+                    (j.durasi_hari?.let { "$it hari" } ?: "-"),
+                    fontSize = 11.sp, color = Color.Gray
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (!j.harga_asli_tampilan.isNullOrBlank()) {
                         Text(
-                            (j.durasi_hari?.let { "$it hari" } ?: "-"),
-                            fontSize = 11.sp, color = Color.Gray
+                            j.harga_asli_tampilan, fontSize = 10.sp, color = Color.LightGray,
+                            textDecoration = TextDecoration.LineThrough
                         )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (!j.harga_asli_tampilan.isNullOrBlank()) {
-                                Text(j.harga_asli_tampilan, fontSize = 10.sp, color = Color.LightGray, textDecoration = TextDecoration.LineThrough)
-                                Spacer(Modifier.width(6.dp))
-                            }
-                            Text(j.harga_tampilan, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F7A5A))
-                        }
+                        Spacer(Modifier.width(6.dp))
                     }
+                    Text(
+                        j.harga_tampilan, fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold, color = Color(0xFF0F7A5A)
+                    )
                 }
             }
+        }
+    }
+}
+
+/**
+ * Fullscreen wrapper (backward compat). Tidak dipanggil lagi dari Beranda
+ * setelah v2.13.0, tapi tetap ada kalau perlu dibuka terpisah dari suatu tempat.
+ */
+@Composable
+fun JadwalKeberangkatanScreen(onBack: () -> Unit) {
+    LazyColumn(
+        Modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        item {
+            Button(
+                onClick = onBack,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)),
+                shape = RoundedCornerShape(8.dp)
+            ) { Text("← Kembali") }
+            Spacer(Modifier.height(12.dp))
+        }
+        item {
+            JadwalKeberangkatanSection(showHeader = true)
         }
     }
 }

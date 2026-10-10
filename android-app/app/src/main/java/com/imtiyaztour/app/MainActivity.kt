@@ -337,7 +337,6 @@ fun ImtiyazApp() {
     var selectedSurah by remember { mutableStateOf<Int?>(null) }
     var showItinerary by remember { mutableStateOf(false) }
     var showRadio by remember { mutableStateOf(false) }
-    var showJadwal by remember { mutableStateOf(false) }
     var showManasik by remember { mutableStateOf(false) }
     var showJournalList by remember { mutableStateOf(false) }
     var showJournalEdit by remember { mutableStateOf<JournalEntry?>(null) }
@@ -359,7 +358,6 @@ fun ImtiyazApp() {
         selectedSurah = null
         showItinerary = false
         showRadio = false
-        showJadwal = false
         showManasik = false
         showJournalList = false
         showJournalEdit = null
@@ -384,7 +382,7 @@ fun ImtiyazApp() {
     // seperti biasa (keluar aplikasi), sesuai perilaku standar Android.
     androidx.activity.compose.BackHandler(
         enabled = selectedPaket != null || selectedDoa != null || selectedSurah != null ||
-                  showItinerary || showRadio || showJadwal || showPembimbingList ||
+                  showItinerary || showRadio || showPembimbingList ||
                   selectedPembimbing != null || showManasik || showJournalList ||
                   showJournalEditActive || showReminder || showFindJamaah || showInvoiceList ||
                   showDokumen || showMatsurat
@@ -397,7 +395,6 @@ fun ImtiyazApp() {
             showJournalEditActive -> { showJournalEditActive = false; showJournalEdit = null }
             showItinerary -> showItinerary = false
             showRadio -> showRadio = false
-            showJadwal -> showJadwal = false
             showPembimbingList -> showPembimbingList = false
             showManasik -> showManasik = false
             showJournalList -> showJournalList = false
@@ -479,7 +476,7 @@ fun ImtiyazApp() {
         bottomBar = {
             NavigationBar(containerColor = Color.White) {
                 NavigationBarItem(selected = selectedTab == 0, onClick = { resetSubPages(); selectedTab = 0 }, icon = { Icon(Icons.Default.Home, null) }, label = { Text("Beranda", fontSize = 9.sp) })
-                NavigationBarItem(selected = selectedTab == 1, onClick = { resetSubPages(); selectedTab = 1 }, icon = { Icon(Icons.Default.List, null) }, label = { Text("Paket", fontSize = 9.sp) })
+                NavigationBarItem(selected = selectedTab == 1, onClick = { resetSubPages(); selectedTab = 1 }, icon = { Icon(Icons.Default.DateRange, null) }, label = { Text("Jadwal", fontSize = 9.sp) })
                 NavigationBarItem(selected = selectedTab == 2, onClick = { resetSubPages(); selectedTab = 2 }, icon = { Icon(Icons.Default.MenuBook, null) }, label = { Text("Quran", fontSize = 9.sp) })
                 NavigationBarItem(selected = selectedTab == 3, onClick = { resetSubPages(); selectedTab = 3 }, icon = { Icon(Icons.Default.Favorite, null) }, label = { Text("Doa", fontSize = 9.sp) })
                 NavigationBarItem(selected = selectedTab == 4, onClick = { resetSubPages(); selectedTab = 4 }, icon = { Icon(Icons.Default.Edit, null) }, label = { Text("Quiz", fontSize = 9.sp) })
@@ -494,7 +491,6 @@ fun ImtiyazApp() {
                 selectedSurah != null -> SurahDetailScreen(nomor = selectedSurah!!, onBack = { selectedSurah = null })
                 showItinerary -> ItineraryScreen(onBack = { showItinerary = false })
                 showRadio -> RadioScreen(onBack = { showRadio = false })
-                showJadwal -> JadwalKeberangkatanScreen(onBack = { showJadwal = false })
                 selectedPembimbing != null -> PembimbingDetailScreen(pembimbing = selectedPembimbing!!, onBack = { selectedPembimbing = null })
                 showPembimbingList -> PembimbingListScreen(onPembimbingClick = { selectedPembimbing = it }, onBack = { showPembimbingList = false })
                 showManasik -> ManasikScreen(onBack = { showManasik = false })
@@ -520,7 +516,6 @@ fun ImtiyazApp() {
                     0 -> BerandaScreen(
                         onPaketClick = { selectedPaket = it },
                         onItineraryClick = { showItinerary = true },
-                        onJadwalClick = { showJadwal = true },
                         onPembimbingClick = { showPembimbingList = true },
                         onManasikClick = { showManasik = true },
                         onJournalClick = { showJournalList = true },
@@ -566,7 +561,6 @@ fun SplashScreen() {
 fun BerandaScreen(
     onPaketClick: (PaketUmrah) -> Unit,
     onItineraryClick: () -> Unit,
-    onJadwalClick: () -> Unit,
     onPembimbingClick: () -> Unit,
     onManasikClick: () -> Unit,
     onJournalClick: () -> Unit,
@@ -608,21 +602,6 @@ fun BerandaScreen(
                     Column(Modifier.weight(1f)) {
                         Text("Itinerary Umrah 9 Hari", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         Text("Ramadhan & Reguler -- jadwal harian umum", fontSize = 11.sp, color = Color.Gray)
-                    }
-                    Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF0F7A5A))
-                }
-            }
-            Card(
-                shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(1.dp),
-                modifier = Modifier.fillMaxWidth().clickable { onJadwalClick() }
-            ) {
-                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.DateRange, contentDescription = null, tint = Color(0xFF0F7A5A))
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("Jadwal Keberangkatan Terbaru", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                        Text("Tanggal & harga live dari sistem", fontSize = 11.sp, color = Color.Gray)
                     }
                     Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF0F7A5A))
                 }
@@ -703,7 +682,19 @@ fun BerandaScreen(
 @Composable
 fun PaketListScreen(onPaketClick: (PaketUmrah) -> Unit) {
     LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { Text("Pilih Paket Umrah", fontWeight = FontWeight.Bold, fontSize = 20.sp); Text("Sesuaikan dengan kebutuhan", fontSize = 11.sp, color = Color.Gray); Spacer(Modifier.height(8.dp)) }
+        item {
+            JadwalKeberangkatanSection(showHeader = true)
+        }
+        item {
+            Spacer(Modifier.height(8.dp))
+            HorizontalDivider(color = Color(0xFFE5E7EB), thickness = 1.dp)
+            Spacer(Modifier.height(8.dp))
+        }
+        item {
+            Text("Paket Umrah", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Text("${AppData.paket.size} pilihan, profesional & amanah", fontSize = 11.sp, color = Color.Gray)
+            Spacer(Modifier.height(4.dp))
+        }
         items(AppData.paket) { paket -> PaketCard(paket = paket, onClick = { onPaketClick(paket) }) }
     }
 }
