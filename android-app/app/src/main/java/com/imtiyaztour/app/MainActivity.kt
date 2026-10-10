@@ -257,6 +257,12 @@ object Prefs {
     }
     fun setChecklistItem(context: Context, key: String, value: Boolean) =
         get(context).edit().putBoolean("doc_$key", value).apply()
+
+    // Setup Wizard + Mode Aman state (TAHAP 22, v2.13.0)
+    fun isSetupComplete(context: Context): Boolean = get(context).getBoolean("setup_complete", false)
+    fun setSetupComplete(context: Context, value: Boolean) = get(context).edit().putBoolean("setup_complete", value).apply()
+    fun isModeAmanEnabled(context: Context): Boolean = get(context).getBoolean("mode_aman_enabled", false)
+    fun setModeAmanEnabled(context: Context, value: Boolean) = get(context).edit().putBoolean("mode_aman_enabled", value).apply()
 }
 
 // Menyalin konten Uri (misal dari galeri) ke file cache sementara agar bisa di-upload sebagai Multipart
@@ -1018,10 +1024,46 @@ fun SayaScreen(
     val scope = rememberCoroutineScope()
 
     var loggedIn by remember { mutableStateOf(Prefs.isLoggedIn(context)) }
+    var showWizard by remember { mutableStateOf(false) }
+
+    // Cek wizard setelah login: kalau sudah login tapi belum setup, tampilkan
+    LaunchedEffect(loggedIn) {
+        if (loggedIn && !Prefs.isSetupComplete(context)) {
+            showWizard = true
+        }
+    }
 
     if (!loggedIn) {
-        LoginScreen(onLoggedIn = { loggedIn = true })
+        LoginScreen(onLoggedIn = {
+            loggedIn = true
+            if (!Prefs.isSetupComplete(context)) showWizard = true
+        })
         return
+    }
+
+    // Wizard overlay (fullscreen, Dialog supaya menutupi topBar/bottomBar)
+    if (showWizard) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { /* tidak bisa dismiss tanpa aksi */ },
+            properties = androidx.compose.ui.window.DialogProperties(
+                usePlatformDefaultWidth = false,
+                dismissOnBackPress = false,
+                dismissOnClickOutside = false
+            )
+        ) {
+            SetupWizardScreen(
+                onFinish = {
+                    Prefs.setSetupComplete(context, true)
+                    ModeAmanService.startIfNeeded(context)
+                    modeAmanAktif = Prefs.isModeAmanEnabled(context)
+                    showWizard = false
+                },
+                onSkip = {
+                    Prefs.setSetupComplete(context, true)
+                    showWizard = false
+                }
+            )
+        }
     }
 
     val jamaahId = Prefs.getJamaahId(context)
@@ -1032,7 +1074,7 @@ fun SayaScreen(
     var isUploading by remember { mutableStateOf(false) }
     var showSkrining by remember { mutableStateOf(false) }
     var cameraUri by remember { mutableStateOf<Uri?>(null) }
-    var modeAmanAktif by remember { mutableStateOf(false) }
+    var modeAmanAktif by remember { mutableStateOf(Prefs.isModeAmanEnabled(context)) }
 
     // ===== CEK KESEHATAN =====
     var kesehatanData by remember { mutableStateOf<KesehatanData?>(null) }
@@ -1122,9 +1164,10 @@ fun SayaScreen(
     val modeAmanPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
         if (result.values.all { it }) {
             ModeAmanService.start(context)
+            Prefs.setModeAmanEnabled(context, true)
             modeAmanAktif = true
         } else {
-            uploadStatus = "Izin lokasi atau notifikasi ditolak"
+            uploadStatus = "Izin lokasi atau notifikasi ditolak - coba lagi atau jalankan ulang setup"
         }
     }
 
@@ -1286,6 +1329,7 @@ fun SayaScreen(
                                 else true
                                 if (hasLoc && hasNotif) {
                                     ModeAmanService.start(context)
+                                    Prefs.setModeAmanEnabled(context, true)
                                     modeAmanAktif = true
                                 } else {
                                     val reqs = mutableListOf(
@@ -1297,6 +1341,7 @@ fun SayaScreen(
                                 }
                             } else {
                                 ModeAmanService.stop(context)
+                                Prefs.setModeAmanEnabled(context, false)
                                 modeAmanAktif = false
                             }
                         },
@@ -1305,6 +1350,20 @@ fun SayaScreen(
                         shape = RoundedCornerShape(10.dp)
                     ) {
                         Text(if (modeAmanAktif) "Matikan Mode Aman" else "Aktifkan Mode Aman", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                    if (!modeAmanAktif) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "Kalau izin belum lengkap atau salah klik, aktifkan lewat tombol di atas atau jalankan ulang setup.",
+                            fontSize = 10.sp, color = Color.Gray
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    TextButton(
+                        onClick = { showWizard = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Jalankan Ulang Setup", fontSize = 11.sp, color = Color(0xFF0F7A5A))
                     }
                 }
             }

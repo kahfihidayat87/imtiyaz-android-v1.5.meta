@@ -59,6 +59,27 @@ class ModeAmanService : Service() {
         fun stop(ctx: Context) {
             ctx.stopService(Intent(ctx, ModeAmanService::class.java))
         }
+
+        /**
+         * v2.13.0 TAHAP 22: Auto-start kalau belum aktif + izin sudah granted.
+         * Aman dipanggil berkali-kali (idempotent).
+         */
+        fun startIfNeeded(ctx: Context) {
+            if (Prefs.isModeAmanEnabled(ctx)) {
+                Log.d(TAG, "Mode Aman sudah enabled, skip")
+                return
+            }
+            val hasLoc = androidx.core.content.ContextCompat.checkSelfPermission(
+                ctx, android.Manifest.permission.ACCESS_FINE_LOCATION
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            if (!hasLoc) {
+                Log.w(TAG, "startIfNeeded: izin lokasi belum granted, skip")
+                return
+            }
+            Prefs.setModeAmanEnabled(ctx, true)
+            start(ctx)
+            Log.d(TAG, "Mode Aman di-start otomatis setelah wizard")
+        }
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
