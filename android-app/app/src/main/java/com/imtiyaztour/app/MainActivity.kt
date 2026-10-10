@@ -1096,11 +1096,24 @@ fun SayaScreen(
     var profileLoading by remember { mutableStateOf(true) }
     var profileError by remember { mutableStateOf("") }
 
-    fun handleUnauthorized(message: String?): Boolean {
-        // Kalau server bilang token tidak valid (kedaluwarsa / dipakai di perangkat lain
-        // setelah login ulang), paksa logout supaya jamaah login ulang -- jangan biarkan
-        // app tetap "kelihatan login" padahal sesinya sudah tidak berlaku di server.
-        if (message?.contains("Token login", ignoreCase = true) == true) {
+    fun handleUnauthorized(throwable: Throwable?): Boolean {
+        // v2.13.0 FIX: deteksi 401 dari HTTP code (Retrofit HttpException), bukan dari
+        // string message -- karena HttpException.message = "HTTP 401 Unauthorized",
+        // bukan pesan body server. Kalau 401, paksa logout.
+        var is401 = false
+        var msg = throwable?.message ?: ""
+
+        // Cek tipe HttpException
+        if (throwable is retrofit2.HttpException && throwable.code() == 401) {
+            is401 = true
+        }
+        // Fallback: cek string (kalau ada custom exception dengan message)
+        if (msg.contains("Token login", ignoreCase = true) ||
+            msg.contains("401", ignoreCase = false)) {
+            is401 = true
+        }
+
+        if (is401) {
             Prefs.clearLogin(context); loggedIn = false; return true
         }
         return false
@@ -1111,7 +1124,7 @@ fun SayaScreen(
         try {
             profile = withContext(Dispatchers.IO) { ApiClient.service.getMe(MeRequest(jamaahId, token)) }
         } catch (e: Exception) {
-            if (!handleUnauthorized(e.message)) profileError = "Gagal memuat data akun -- periksa koneksi internet"
+            if (!handleUnauthorized(e)) profileError = "Gagal memuat data akun -- periksa koneksi internet"
         }
         profileLoading = false
     }
@@ -1143,7 +1156,7 @@ fun SayaScreen(
             isUploading = false
             result.fold(
                 onSuccess = { uploadStatus = it.message ?: "Berhasil diupload"; loadProfile() },
-                onFailure = { if (!handleUnauthorized(it.message)) uploadStatus = "Gagal upload: ${it.message}" }
+                onFailure = { if (!handleUnauthorized(it)) uploadStatus = "Gagal upload: ${it.message}" }
             )
         }
     }
@@ -1268,7 +1281,7 @@ fun SayaScreen(
                     if (!showSkrining) {
                         Button(onClick = { showSkrining = true }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)), shape = RoundedCornerShape(12.dp)) { Text("Mulai Skrining") }
                     } else {
-                        SkriningFormV2(jamaahId = jamaahId, token = token, onClose = { showSkrining = false }, onUnauthorized = { handleUnauthorized("Token login") })
+                        SkriningFormV2(jamaahId = jamaahId, token = token, onClose = { showSkrining = false }, onUnauthorized = { handleUnauthorized(null) })
                     }
                 }
             }
