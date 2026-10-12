@@ -44,9 +44,26 @@ data class JadwalKeberangkatan(
     val url: String? = null
 )
 
+data class TripFasilitasResponse(
+    val success: Boolean? = null,
+    val id: Int = 0,
+    val nama_paket: String = "",
+    val tanggal: String = "",
+    val durasi_hari: Int? = null,
+    val harga_tampilan: String = "",
+    val harga_asli_tampilan: String? = null,
+    val termasuk: List<String> = emptyList(),
+    val tidak_termasuk: List<String> = emptyList(),
+    val url: String? = null,
+    val error: String? = null
+)
+
 interface JadwalApiService {
     @GET("api/jadwal-keberangkatan")
     suspend fun getJadwal(): List<JadwalKeberangkatan>
+
+    @GET("api/trip-fasilitas/{id}")
+    suspend fun getTripFasilitas(@retrofit2.http.Path("id") id: Int): TripFasilitasResponse
 }
 
 object JadwalApiClient {
@@ -66,6 +83,7 @@ object JadwalApiClient {
 @Composable
 fun JadwalKeberangkatanSection(
     showHeader: Boolean = true,
+    onJadwalClick: (Int) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var jadwal by remember { mutableStateOf<List<JadwalKeberangkatan>>(emptyList()) }
@@ -110,17 +128,17 @@ fun JadwalKeberangkatanSection(
             }
         }
 
-        jadwal.forEach { j -> JadwalCard(j) }
+        jadwal.forEach { j -> JadwalCard(j, onClick = { onJadwalClick(j.id) }) }
     }
 }
 
 @Composable
-fun JadwalCard(j: JadwalKeberangkatan) {
+fun JadwalCard(j: JadwalKeberangkatan, onClick: () -> Unit = {}) {
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(1.dp),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth().androidx.compose.foundation.clickable { onClick() }
     ) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(

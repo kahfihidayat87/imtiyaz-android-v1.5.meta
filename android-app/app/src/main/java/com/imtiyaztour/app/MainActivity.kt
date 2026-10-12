@@ -333,6 +333,7 @@ fun ImtiyazApp() {
     var showSplash by remember { mutableStateOf(true) }
     var selectedTab by remember { mutableStateOf(0) }
     var selectedPaket by remember { mutableStateOf<PaketUmrah?>(null) }
+    var selectedTripId by remember { mutableStateOf<Int?>(null) }
     var selectedDoa by remember { mutableStateOf<Doa?>(null) }
     var selectedSurah by remember { mutableStateOf<Int?>(null) }
     var showItinerary by remember { mutableStateOf(false) }
@@ -354,6 +355,7 @@ fun ImtiyazApp() {
     // Helper: reset semua sub-page state supaya klik tab = langsung pindah
     val resetSubPages: () -> Unit = {
         selectedPaket = null
+        selectedTripId = null
         selectedDoa = null
         selectedSurah = null
         showItinerary = false
@@ -381,13 +383,14 @@ fun ImtiyazApp() {
     // yang sudah ada di tiap layar -- baru di level Beranda/tab, back sistem berlaku
     // seperti biasa (keluar aplikasi), sesuai perilaku standar Android.
     androidx.activity.compose.BackHandler(
-        enabled = selectedPaket != null || selectedDoa != null || selectedSurah != null ||
+        enabled = selectedPaket != null || selectedTripId != null || selectedDoa != null || selectedSurah != null ||
                   showItinerary || showRadio || showPembimbingList ||
                   selectedPembimbing != null || showManasik || showJournalList ||
                   showJournalEditActive || showReminder || showFindJamaah || showInvoiceList ||
                   showDokumen || showMatsurat
     ) {
         when {
+            selectedTripId != null -> selectedTripId = null
             selectedPaket != null -> selectedPaket = null
             selectedDoa != null -> selectedDoa = null
             selectedSurah != null -> selectedSurah = null
@@ -486,6 +489,7 @@ fun ImtiyazApp() {
     ) { padding ->
         Box(Modifier.padding(padding)) {
             when {
+                selectedTripId != null -> TripFasilitasScreen(tripId = selectedTripId!!, onBack = { selectedTripId = null })
                 selectedPaket != null -> DetailPaketScreen(paket = selectedPaket!!, onBack = { selectedPaket = null })
                 selectedDoa != null -> DetailDoaScreen(doa = selectedDoa!!, onBack = { selectedDoa = null })
                 selectedSurah != null -> SurahDetailScreen(nomor = selectedSurah!!, onBack = { selectedSurah = null })
@@ -522,7 +526,7 @@ fun ImtiyazApp() {
                         onReminderClick = { showReminder = true },
                         onAnnouncementClick = { showAnnouncementDetail = true }
                     )
-                    1 -> PaketListScreen(onPaketClick = { selectedPaket = it })
+                    1 -> PaketListScreen(onPaketClick = { selectedPaket = it }, onJadwalClick = { selectedTripId = it })
                     2 -> QuranScreen(
                         onSurahClick = { selectedSurah = it },
                         onHafalanClick = { resetSubPages(); selectedTab = 4 }
@@ -680,10 +684,13 @@ fun BerandaScreen(
 }
 
 @Composable
-fun PaketListScreen(onPaketClick: (PaketUmrah) -> Unit) {
+fun PaketListScreen(
+    onPaketClick: (PaketUmrah) -> Unit,
+    onJadwalClick: (Int) -> Unit = {}
+) {
     LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
-            JadwalKeberangkatanSection(showHeader = true)
+            JadwalKeberangkatanSection(showHeader = true, onJadwalClick = onJadwalClick)
         }
         item {
             Spacer(Modifier.height(8.dp))
