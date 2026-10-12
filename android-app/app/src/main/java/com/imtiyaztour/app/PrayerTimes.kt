@@ -287,7 +287,7 @@ fun PrayerTimesCard() {
                 LinearProgressIndicator(Modifier.fillMaxWidth())
             }
             Spacer(Modifier.height(6.dp))
-            Text("Estimasi Ummul Qura -- rujuk adzan Masjidil Haram/Nabawi setempat", fontSize = 8.sp, color = Color.LightGray)
+            Text("Estimasi Ummul Qura", fontSize = 8.sp, color = Color.LightGray)
 
             Spacer(Modifier.height(10.dp))
             Divider()

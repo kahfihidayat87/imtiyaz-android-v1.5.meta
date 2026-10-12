@@ -472,7 +472,7 @@ fun ImtiyazApp() {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Column { Text("Imtiyaz Tour", fontWeight = FontWeight.Bold, color = Color(0xFF0F7A5A)); Text("PPIU U383/2021 • Travel Umrah Nyaman Lansia", fontSize = 11.sp, color = Color.Gray) } },
+                title = { Column { Text("Imtiyaz Tour | UmrohMU", fontWeight = FontWeight.Bold, color = Color(0xFF0F7A5A)); Text("PPIU U383/2021 • Travel Umrah Nyaman Lansia", fontSize = 11.sp, color = Color.Gray) } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
             )
         },
@@ -526,7 +526,7 @@ fun ImtiyazApp() {
                         onReminderClick = { showReminder = true },
                         onAnnouncementClick = { showAnnouncementDetail = true }
                     )
-                    1 -> PaketListScreen(onPaketClick = { selectedPaket = it }, onJadwalClick = { selectedTripId = it })
+                    1 -> PaketListScreen(onJadwalClick = { selectedTripId = it })
                     2 -> QuranScreen(
                         onSurahClick = { selectedSurah = it },
                         onHafalanClick = { resetSubPages(); selectedTab = 4 }
@@ -685,24 +685,12 @@ fun BerandaScreen(
 
 @Composable
 fun PaketListScreen(
-    onPaketClick: (PaketUmrah) -> Unit,
     onJadwalClick: (Int) -> Unit = {}
 ) {
     LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             JadwalKeberangkatanSection(showHeader = true, onJadwalClick = onJadwalClick)
         }
-        item {
-            Spacer(Modifier.height(8.dp))
-            Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFFE5E7EB)))
-            Spacer(Modifier.height(8.dp))
-        }
-        item {
-            Text("Paket Umrah", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-            Text("${AppData.paket.size} pilihan, profesional & amanah", fontSize = 11.sp, color = Color.Gray)
-            Spacer(Modifier.height(4.dp))
-        }
-        items(AppData.paket) { paket -> PaketCard(paket = paket, onClick = { onPaketClick(paket) }) }
     }
 }
 
