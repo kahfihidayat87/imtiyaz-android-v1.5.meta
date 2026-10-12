@@ -1,6 +1,6 @@
 # Imtiyaz Tour — Project Handoff Document
 
-**Terakhir update:** 10 Okt 2026 (v2.13.0, TAHAP 22 SELESAI, rilis build 115)
+**Terakhir update:** 12 Okt 2026 (v2.13.0, TAHAP 23 SELESAI, rilis build 117+)
 **Repo utama:** https://github.com/kahfihidayat87/imtiyaz-android-v1.5.meta
 **Local path:** C:\Users\DELL\Documents\GitHub\imtiyaz-android-v1.5.meta
 
@@ -699,3 +699,102 @@ di-autofill browser. Setiap admin edit jamaah (isi kesehatan, ubah paket)
    - Quick action Find Jamaah (copy koord, share WA)
    - Rekam radio LiveKit (Egress)
    - Hapus `LocateService.kt` (ntfy legacy) → v2.14.0
+
+---
+
+## TAHAP 23 — Admin Login Fix + Jadwal UI + Trip Fasilitas (12 Okt 2026)
+
+**Status:** ✅ Selesai
+
+### Bug #1 — Admin app tidak bisa login (DNS mismatch)
+
+**Gejala:** App admin error:
+failed to connect to pastiumrah.com/88.223.91.143 (port 443)
+from 172.16.11.249 (port 47550) after 60000ms
+
+**Root cause:**
+- IP `88.223.91.143` tidak ada di DNS record `pastiumrah.com`
+- DNS publik: `212.1.212.67` / `191.101.104.69`
+- Server DNS intermittent resolve IPv6-only
+
+**Fix (Android + Server):**
+- Android: `ApiConfig.BASE_URL` dari `pastiumrah.com` → `api.pastiumrah.com`
+- Android: `AdminApi.kt` 28 endpoint dari `wp-json/imtiyaz/v1/admin-X` → `api/admin/admin-X`
+- Server: `app.js` proxy generik `/api/admin/:endpoint` (27 endpoint POST + 1 GET)
+- Server: override DNS lookup di HTTPS agent (paksa `pastiumrah.com` → `127.0.0.1`)
+
+**Commit admin repo:**
+- `370c859` fix(admin): alihkan endpoint admin ke Node.js proxy
+- `2ff2e50` chore(gitignore): blokir console.log + stderr.log
+- `dfe3567` style(icon): ganti ikon app — logo hitam + background putih
+
+**File baru admin:** — (tidak ada, hanya modifikasi)
+**Server-side (tidak di git):** `app.js` — proxy admin + DNS override
+
+### Fitur #1 — Ikon Admin baru
+
+- Foreground adaptive: 432×432 dari `icon-hitam.png`
+- Raster legacy mdpi..xxxhdpi regenerate (background putih #FFFFFF)
+- Round icon regenerate
+- Commit `dfe3567`
+
+### Fitur #2 — Jadwal Keberangkatan pindah ke tab Jadwal
+
+**Perubahan:**
+- Tab bottom nav: `Paket` → `Jadwal` (icon DateRange)
+- `JadwalKeberangkatan.kt`: pecah jadi `Section` (inline, Column) + `Screen` (wrapper)
+- `PaketListScreen`: 2 section — Jadwal (atas) + Paket Umrah (bawah) + Divider
+- `BerandaScreen`: hapus Card Jadwal + param `onJadwalClick` (fix overlap dengan Card Itinerary)
+- Bersihkan state `showJadwal` + BackHandler + render overlay
+
+**Commit:** `c5f490c` feat(ui): pindah Jadwal Keberangkatan ke tab Jadwal + fix overlap
+
+### Fitur #3 — Trip Fasilitas (Termasuk/Tidak Termasuk)
+
+**Fitur:** Klik Card jadwal → buka `TripFasilitasScreen` dengan data lengkap:
+- Header hijau: nama paket + tanggal + harga (asli + coret)
+- Card Fasilitas Termasuk (✅ 13 item)
+- Card Tidak Termasuk (❌ 4 item)
+- CTA "Tanya / Daftar via WhatsApp"
+
+**Server-side (tidak di git):**
+
+**WP `imtiyaz-connector.php`:**
+- Endpoint baru: `GET /imtiyaz/v1/trip-fasilitas/{id}`
+- Fasilitas **TIDAK** di `post_content` (hanya 131 char) — di-render runtime oleh WP Travel Engine block
+- Solusi: **scrape HTML** via `wp_remote_get()` + regex `wte-block-icon__check` / `wte-block-icon__times`
+- Cache 1 jam via `set_transient()` (hindari scrape berulang)
+- Dedup hasil
+
+**Node.js `app.js`:**
+- Proxy `GET /api/trip-fasilitas/:id` ke WP
+
+**Android:**
+- `TripFasilitasScreen.kt` (baru, ~200 baris)
+- `JadwalKeberangkatan.kt`: `TripFasilitasResponse` data class + `getTripFasilitas()` API + `JadwalCard` clickable
+- `MainActivity.kt`: state `selectedTripId` + navigasi + wire ke `PaketListScreen`
+
+**Commit jamaah repo:**
+- `c7d4c3f` feat(jadwal): klik card jadwal -> TripFasilitasScreen
+- `b634207` fix(jadwal): import clickable (Unresolved androidx di CI)
+
+**Bukti test (trip 827 - Paket Linuwih 17 Okt 2026):**
+- Response JSON: 13 termasuk + 4 tidak termasuk
+- Sample: "Visa umrah", "Asuransi perjalanan", "Hotel selama program"
+- Tidak termasuk: "Biaya pembuatan paspor", "Vaksin meningitis dan polio"
+
+### Catatan Server
+
+- DNS intermittent `pastiumrah.com` resolve IPv6-only → di-fix dengan custom lookup di HTTPS agent
+- **Jangan hapus blok `_imtiyazLookup`** di `app.js` (fix DNS intermittent)
+- **Jangan hapus blok `api_trip_fasilitas`** di `imtiyaz-connector.php` (scrape + cache)
+- Backup terbaru: `/tmp/app.js.bak-trip-fasilitas-*`, `/tmp/imtiyaz-connector.php.bak-scrape-*`
+
+### Kandidat TAHAP 24
+
+- Bump versi app jamaah ke 2.14.0 (banyak fitur + fix)
+- Hapus `LocateService.kt` (ntfy legacy) → v2.14.0
+- Firebase Custom Auth (rules Firestore masih terbuka)
+- Quick action Find Jamaah (copy koord, share WA)
+- Optimasi cold start `/api/paket` (2s → <500ms)
+- SEO website (DR 0.1 → 1.0 dalam 3 bulan)
