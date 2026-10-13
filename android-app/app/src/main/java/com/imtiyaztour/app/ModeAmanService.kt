@@ -173,12 +173,29 @@ class ModeAmanService : Service() {
     }
 
     private suspend fun refreshLoop() {
+        // v2.14.0-rev4: warm-up GPS — panggil LocationHelper di iterasi pertama
+        // dengan timeout panjang supaya chip GPS "panas" untuk iterasi berikutnya.
+        try {
+            Log.d(TAG, "Warm-up GPS dimulai...")
+            val warmFix = LocationHelper.getBestLocation(
+                context = this,
+                timeoutMs = 60_000L,
+                maxSamples = 5,
+                adaptiveByBattery = false
+            )
+            Log.d(TAG, "Warm-up selesai: status=${warmFix.status}, accuracy=${warmFix.bestAccuracy}")
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Warm-up gagal: ${e.message}")
+        }
+
         while (scope.isActive) {
             try {
                 // v2.14.0: pakai LocationHelper.getBestLocation() supaya GPS fresh
                 val fix = LocationHelper.getBestLocation(
                     context = this,
-                    timeoutMs = 25_000L,  // v2.14.0-rev3: 10s → 25s biar GPS punya waktu lock
+                    timeoutMs = LocationHelper.DEFAULT_TIMEOUT_MS,  // v2.14.0-rev4: samakan dengan FCM trigger
                     adaptiveByBattery = true
                 )
                 // FIX v2.14.0-rev2: kalau GPS fresh null (indoor/timeout),
