@@ -1,6 +1,6 @@
 # Imtiyaz Tour — Project Handoff Document
 
-**Terakhir update:** 12 Okt 2026 (v2.13.0, TAHAP 23 SELESAI, rilis build 117+)
+**Terakhir update:** 13 Okt 2026 (v2.13.0, TAHAP 24 SELESAI, rilis build 120+)
 **Repo utama:** https://github.com/kahfihidayat87/imtiyaz-android-v1.5.meta
 **Local path:** C:\Users\DELL\Documents\GitHub\imtiyaz-android-v1.5.meta
 
@@ -933,3 +933,147 @@ Contoh: 15 pax → 3 quad + 1 triple = 4 kamar
 - D4 Visa Tracking
 - Cleanup `LocateService.kt` (ntfy legacy) → hapus di v2.14.0
 - Bump versi 2.14.0 (banyak fitur baru)
+
+---
+
+## TAHAP 24 — Firebase Custom Auth + Fix Mode Aman GPS (13 Okt 2026)
+
+**Status:** ✅ Selesai, teruji end-to-end
+
+### Fokus
+
+1. **Firebase Custom Auth (A1-A4)** — ganti Firestore rules terbuka → ketat berbasis custom claims
+2. **Fix Mode Aman GPS** — fallback + warm-up untuk HP chip GPS lemah
+3. **Optimasi server** — pre-warm cache + endpoint `/health` + keep-alive
+4. **Auto-sync role TL** — hook `save_post_jamaah` di WP plugin
+
+### Firebase Custom Auth
+
+| Batch | Isi | Bukti |
+|---|---|---|
+| **A1** | Endpoint `POST /api/firebase-token` (jamaah) + `POST /api/firebase-token-admin` | ✅ verify via WP `resolve-token` / `admin-me` |
+| **A2** | Android Firebase Auth di app jamaah | ✅ `FirebaseAuthHelper.kt` + login/logout |
+| **A3** | Firestore rules berbasis custom claims | ✅ `isSelf()`, `isTourLeader()`, `isAdmin()` |
+| **A4** | Auto-sync role TL via `save_post_jamaah` hook | ✅ race condition di-fix dengan baca `$_POST` langsung |
+
+### Format Custom Claims
+
+**Jamaah (`jamaah_{id}`):**
+```json
+{ "role": "jamaah" | "tour_leader", "jamaahId": "1453" }
+Admin (admin_{id}):
+
+json
+{ "role": "admin" | "super_admin" | "keuangan", "adminId": "1", "platform": "admin" }
+// Jamaah context
+function isSelf(jamaahId) { return isSignedIn() && request.auth.token.jamaahId == jamaahId; }
+function isTourLeader() { return hasRole('tour_leader'); }
+
+// Admin context
+function isAdmin() { return isSignedIn() && request.auth.token.platform == 'admin'; }
+function isAdminOrManager() { return isAdmin() && request.auth.token.role in ['admin', 'super_admin', 'keuangan']; }
+
+// Jamaah collections — self + TL
+match /jamaah_tokens/{jamaahId} { allow read: if isSelf || isTourLeader(); allow write: if isSelf; }
+match /lokasi_jamaah/{jamaahId} { ... }
+match /alert_izin/{jamaahId} { ... }
+
+// Trips (D3) — admin only
+match /trips/{tripId}/{document=**} {
+  allow read: if isAdmin();
+  allow write: if isAdminOrManager();
+}
+Endpoint Baru di app.js
+Endpoint	Fungsi
+POST /api/firebase-token	Custom token jamaah
+POST /api/firebase-token-admin	Custom token admin (+ auto-create user)
+POST /api/sync-role	Sync claims role TL (guard x-api-key)
+GET /health	Keep-alive target
+Fix Mode Aman GPS (v2.14.0)
+Masalah: ModeAmanService pakai lastLocation (network provider ~100m) atau getBestLocation timeout → loop mati (Job was cancelled).
+
+Fix:
+
+LocationHelper.getBestLocation() dengan timeoutMs = DEFAULT_TIMEOUT_MS (30s) — samakan FCM trigger
+
+Fallback lastLocation kalau GPS fresh null → tetap update
+
+Re-throw CancellationException — loop tidak mati
+
+Warm-up GPS 60s di awal refreshLoop() — panaskan chip GPS
+
+Flag accuracy_quality: "high" | "medium" | "low" di Firestore
+
+Hasil:
+
+HP chip GPS bagus (TL 1454): akurasi < 2m
+
+HP chip GPS lemah (jamaah 1453): fallback 100m, tidak crash
+
+Loop konsisten update tiap ~70 detik
+
+Optimasi Server
+Pre-warm cache saat startup: paket, dokumen, jadwal, doa-audio, pembimbing
+
+Endpoint /health → GitHub Actions cron 5 menit (.github/workflows/keep-alive.yml)
+
+Script restart-api.sh di-fix: match lsnode.*api\.pastiumrah (bukan hanya node app.js)
+
+Hasil: cold /api/paket 2 s → TTFB server ~47 ms (target < 500 ms tercapai)
+
+Bug Fix Sesi Ini
+Bug	Root Cause	Fix
+/api/firebase-token-admin 401	Node cek r.data.admin_id, WP return id	Cek ke r.data.id
+setCustomUserClaims user not found	User Firebase belum ada	createUser dulu
+2 proses Node.js rebutan port	lsnode LiteSpeed + node app.js manual	Kill lsnode lama
+Node tidak reload patch	LiteSpeed serve kode lama	Kill lsnode
+Mode Aman Job was cancelled	CancellationException ditelan	Re-throw
+GPS selalu TIMEOUT	Chip GPS HP lambat	Warm-up 60s
+Auto-sync TL race condition	Hook beda fire tidak urut	Baca $_POST['is_tour_leader'] langsung
+File Baru (App Jamaah)
+File	Fungsi
+FirebaseAuthHelper.kt	Login/logout Firebase Auth
+.github/workflows/keep-alive.yml	Cron 5 menit ping /health
+File Dimodifikasi
+File	Perubahan
+MainActivity.kt	+ import Firebase Auth, endpoint firebaseToken, wire login/logout
+build.gradle	+ firebase-auth-ktx
+ModeAmanService.kt	Fix GPS (warm-up + fallback + re-throw)
+app.js (server)	+ endpoint firebase-token, firebase-token-admin, sync-role, /health, pre-warm
+imtiyaz-connector.php	+ hook sync_role_after_save
+restart-api.sh (server)	Fix pattern grep
+Commit Log
+9861f45 ci: keep-alive server 5 menit via GitHub Actions
+
+ce3906f feat(auth): Firebase Custom Auth (A2) — login/logout + endpoint firebaseToken
+
+f05e2b5 fix(location): ModeAman pakai LocationHelper.getBestLocation
+
+7c8682e fix(mode-aman): re-throw CancellationException + fallback lastLocation
+
+70cf5ea fix(mode-aman): timeout 10s → 25s
+
+59815ab fix(mode-aman): warm-up GPS 60s + timeout 30s
+
+Catatan Server
+lsnode LiteSpeed = proses utama yang serve API. node app.js manual = proses bantu.
+
+Kalau restart, kill keduanya + spawn manual 1x.
+
+console.error di LiteSpeed tidak muncul di stderr.log — pakai console.log untuk debug.
+
+Jangan hapus blok _imtiyazLookup (fix DNS intermittent).
+
+Repo Admin — TAHAP 24 Terpisah
+Fitur D3 Auto-Assign Kamar (Trip + Hotel + Kamar + PDF) ada di repo imtiyaz-admin-android. Lihat HANDOFF.md di repo itu untuk detail lengkap.
+
+Kandidat TAHAP 25
+LiveKit self-host untuk radio TL (uji device end-to-end)
+
+D2 Manifest Real-time (auto-populate jamaah dari WP)
+
+D1 Planning Trip (Gantt chart)
+
+Bump versi 2.14.0 (karena banyak fitur baru)
+
+Cleanup LocateService.kt (ntfy legacy) → hapus di v2.14.0
