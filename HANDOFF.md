@@ -798,3 +798,138 @@ from 172.16.11.249 (port 47550) after 60000ms
 - Quick action Find Jamaah (copy koord, share WA)
 - Optimasi cold start `/api/paket` (2s → <500ms)
 - SEO website (DR 0.1 → 1.0 dalam 3 bulan)
+
+---
+
+## TAHAP 24 — Firebase Custom Auth + D3 Auto-Assign Kamar (13 Okt 2026)
+
+**Status:** ✅ Selesai, teruji end-to-end
+
+### Fokus
+
+1. **Firebase Custom Auth** — ganti Firestore rules `allow read/write if true` (DEV) → ketat berbasis custom claims
+2. **D3 Auto-Assign Kamar** — fitur agensi di App Admin untuk kelola trip & pembagian kamar
+3. **Fix Mode Aman GPS** — fallback + warm-up untuk HP dengan chip GPS lambat
+4. **Optimasi server** — `/health` endpoint + pre-warm cache + auto-sync role TL
+
+### Firebase Custom Auth (A1-A4)
+
+| Batch | Isi | Bukti |
+|---|---|---|
+| A1 | Endpoint `/api/firebase-token` (jamaah) | ✅ `POST` + verify token WP |
+| A2 | Android Firebase Auth di app jamaah | ✅ login/logout + `FirebaseAuthHelper.kt` |
+| A3 | Firestore rules berbasis claims (`role`, `jamaahId`) | ✅ `isSelf()`, `isTourLeader()`, `isAdmin()` |
+| A4 | Auto-sync role TL via `save_post_jamaah` hook | ✅ race condition di-fix |
+
+**Firestore Rules final:**
+- `jamaah_tokens`, `lokasi_jamaah`, `alert_izin` — self-write + TL read
+- `trips/**` — admin-only (read all, write admin/super_admin/keuangan)
+
+**Custom claims format:**
+- Jamaah: `{ role: "jamaah"|"tour_leader", jamaahId: "1453" }`
+- Admin: `{ role: "admin"|"super_admin"|"keuangan", adminId: "1", platform: "admin" }`
+
+### Endpoint Baru di `app.js` (Node.js)
+
+| Endpoint | Fungsi |
+|---|---|
+| `POST /api/firebase-token` | Custom token untuk jamaah |
+| `POST /api/firebase-token-admin` | Custom token untuk admin (auto-create user) |
+| `POST /api/sync-role` | Sync claims role TL (guard `x-api-key`) |
+| `GET /health` | Keep-alive target |
+
+### Optimasi Server
+
+- **Pre-warm cache** saat startup: `paket, dokumen, jadwal, doa-audio, pembimbing`
+- **`/health` endpoint** → GitHub Actions cron 5 menit
+- **Keep-alive workflow** `.github/workflows/keep-alive.yml`
+- **Script `restart-api.sh`** di-fix: match `lsnode.*api\.pastiumrah` (bukan hanya `node app.js`)
+
+**Hasil:** cold `/api/paket` 2 s → TTFB server ~47 ms (target <500 ms tercapai)
+
+### Fix Mode Aman GPS (v2.14.0)
+
+**Masalah:** `ModeAmanService` pakai `lastLocation` (network provider, akurasi ~100m) atau `getBestLocation` timeout → loop mati.
+
+**Fix:**
+1. `LocationHelper.getBestLocation()` dengan `timeoutMs = 30s` (samakan FCM trigger)
+2. Fallback `lastLocation` kalau GPS fresh null
+3. Re-throw `CancellationException` (loop tidak mati)
+4. **Warm-up GPS** 60s di awal `refreshLoop()` — panaskan chip GPS
+5. Flag `accuracy_quality: "high"|"medium"|"low"` di Firestore
+
+**Hasil:** GPS lock akurasi < 2m di HP chip bagus (TL 1454), fallback 100m di HP chip lemah (jamaah 1453) — tidak crash.
+
+### App Admin — D3 Auto-Assign Kamar
+
+**Repo:** `imtiyaz-admin-android`
+
+**Fitur:**
+- Firebase Custom Auth (setup Firebase SDK + login/logout)
+- Trip CRUD (create/edit/delete) + Hotel CRUD
+- **2 mode generate kamar:**
+  - **Manual:** input pax L/P + jumlah kamar per tipe (quint/quad/triple/double/single)
+  - **Auto:** input pax L/P saja → sistem hitung quad→triple→double→single (tanpa quint)
+- **Auto-assign engine:** proporsional (gender fair, terbesar dulu)
+- **Edit nama penghuni + nomor kamar** per kamar (sync ke manifest)
+- **Export PDF** daftar kamar (A4 profesional, multi-page, header/footer)
+- **Warna kamar:** biru (L), pink (P), abu (kosong)
+- **Sortir kamar:** nomor / tipe / L / P
+
+**Algoritma `hitungKamarOtomatis(pax)`:**
+sisa = pax
+while sisa > 0:
+if sisa >= 4: quad, sisa -= 4
+elif sisa == 3: triple, sisa -= 3
+elif sisa == 2: double, sisa -= 2
+else: single, sisa = 0
+
+Contoh: 15 pax → 3 quad + 1 triple = 4 kamar
+
+### File Terkait
+
+**App Jamaah:**
+- `FirebaseAuthHelper.kt` (baru)
+- `ModeAmanService.kt` (fix GPS)
+- `LocationHelper.kt` (reuse getBestLocation)
+- `.github/workflows/keep-alive.yml` (baru)
+
+**App Admin (`imtiyaz-admin-android`):**
+- `FirebaseAuthHelper.kt`, `TripModels.kt`, `TripRepository.kt`, `RoomAssignEngine.kt`
+- `TripListScreen.kt`, `AddTripScreen.kt`, `TripDetailScreen.kt`, `AddHotelScreen.kt`
+- `HotelRoomScreen.kt`, `GenerateRoomsScreen.kt`, `GenerateKamarAutoScreen.kt`
+- `RoomListPdfExporter.kt`
+
+**Server (tidak di git):**
+- `app.js` — endpoint baru + debug cleanup
+- `imtiyaz-connector.php` — hook `sync_role_after_save`
+- `restart-api.sh` — pattern fix
+
+### Bug Fix Sesi 13 Okt 2026
+
+| Bug | Root Cause | Fix |
+|---|---|---|
+| `/api/firebase-token-admin` 401 | Node.js cek `r.data.admin_id`, WP return `id` | Ganti cek ke `r.data.id` |
+| `setCustomUserClaims` user not found | User Firebase belum dibuat | `createUser` langsung, abaikan kalau ada |
+| `lsnode` + `node app.js` duplikat | 2 proses rebutan port | Kill semua, spawn 1 manual |
+| Node.js tidak reload patch | LiteSpeed `lsnode` serve kode lama | Kill `lsnode` lama |
+| Mode Aman `Job was cancelled` | `CancellationException` ditelan | Re-throw + fallback lastLocation |
+| GPS selalu TIMEOUT | Chip GPS HP lambat | Warm-up 60s di refreshLoop |
+
+### Pelajaran Kritis
+
+- `setCustomUserClaims` **butuh user Firebase existing** — createUser dulu
+- `CancellationException` di `suspendCancellableCoroutine` **wajib re-throw**
+- Firebase Admin SDK v14: error code `user-not-found` **tanpa prefix `auth/`** — cek pakai `.includes()`
+- **2 proses Node.js** (manual + `lsnode`) rebutan port — LiteSpeed proxy pakai `lsnode`, bukan yang manual
+- `console.error` di LiteSpeed **tidak muncul** di `stderr.log` — perlu `console.log` untuk debug
+- Fallback `lastLocation` penting untuk HP dengan GPS lemah
+
+### Kandidat TAHAP 25
+
+- LiveKit self-host untuk radio TL (uji device end-to-end)
+- D2 Manifest Real-time (auto-populate jamaah dari WP)
+- D1 Planning Trip (Gantt chart)
+- D4 Visa Tracking
+- Cleanup `LocateService.kt` (ntfy legacy) → hapus di v2.14.0
+- Bump versi 2.14.0 (banyak fitur baru)
