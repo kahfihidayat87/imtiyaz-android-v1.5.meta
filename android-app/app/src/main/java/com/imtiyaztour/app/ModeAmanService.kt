@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.google.android.gms.location.LocationServices
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.CoroutineScope
@@ -175,13 +176,17 @@ class ModeAmanService : Service() {
         while (scope.isActive) {
             try {
                 // v2.14.0: pakai LocationHelper.getBestLocation() supaya GPS fresh
-                // (bukan lastLocation yang bisa dari network provider, akurasi ~100m).
                 val fix = LocationHelper.getBestLocation(
                     context = this,
-                    timeoutMs = 15_000L,
+                    timeoutMs = 10_000L,
                     adaptiveByBattery = true
                 )
-                val loc = fix.location
+                // FIX v2.14.0-rev2: kalau GPS fresh null (indoor/timeout),
+                // fallback ke lastLocation supaya tetap ada update.
+                val loc = fix.location ?: run {
+                    Log.w(TAG, "GPS fresh null (status=${fix.status}), fallback lastLocation")
+                    LocationServices.getFusedLocationProviderClient(this).lastLocation.await()
+                }
                 if (loc != null) {
                     val jamaahId = Prefs.getJamaahId(this)
                     if (jamaahId.isNotBlank()) {
@@ -212,10 +217,18 @@ class ModeAmanService : Service() {
                         Log.d(TAG, "Cache lokasi terkirim & disimpan: $jamaahId")
                     }
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Loop di-cancel (service di-stop) — re-throw supaya coroutine tahu
+                Log.w(TAG, "Refresh loop dibatalkan (service stop?)")
+                throw e
             } catch (e: Exception) {
-                Log.w(TAG, "Refresh lokasi gagal: ${e.message}")
+                Log.w(TAG, "Refresh lokasi gagal: ${e.message}", e)
             }
-            delay(REFRESH_INTERVAL_MS)
+            try {
+                delay(REFRESH_INTERVAL_MS)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            }
         }
     }
 
