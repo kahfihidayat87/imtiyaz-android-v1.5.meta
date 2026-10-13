@@ -6,6 +6,9 @@ import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.tasks.await
 import com.google.firebase.messaging.FirebaseMessaging
+import com.google.firebase.auth.ktx.auth
+import com.google.firebase.ktx.Firebase
+import kotlinx.coroutines.launch
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -39,7 +42,6 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
@@ -209,6 +211,10 @@ interface ApiService {
 
     @retrofit2.http.POST("api/kesehatan-me")
     suspend fun kesehatanMe(@Body body: Map<String, String>): KesehatanMeResponse
+
+    // v2.14.0: Firebase Custom Token — akses Firestore dengan rules berbasis custom claims
+    @POST("api/firebase-token")
+    suspend fun firebaseToken(@Body body: Map<String, String>): FirebaseTokenResponse
 }
 
 object ApiClient {
@@ -966,6 +972,12 @@ fun LoginScreen(onLoggedIn: () -> Unit, onCancel: (() -> Unit)? = null) {
                         val resp = withContext(Dispatchers.IO) { ApiClient.service.login(LoginRequest(username.trim(), password)) }
                         if (resp.success == true && resp.token != null && resp.jamaah_id != null) {
                             Prefs.saveLogin(context, resp.jamaah_id.toString(), resp.token, resp.nama ?: "")
+                            // v2.14.0: Firebase Custom Auth (async, jangan blok login)
+                            CoroutineScope(Dispatchers.IO).launch {
+                                FirebaseAuthHelper.loginFirebase(
+                                    resp.jamaah_id.toString(), resp.token
+                                )
+                            }
                             // FCM: subscribe ke topic jamaah supaya bisa terima "minta-lokasi"
                             CoroutineScope(Dispatchers.IO).launch {
                                 try {
@@ -1100,7 +1112,9 @@ fun SayaScreen(
         }
 
         if (is401) {
-            Prefs.clearLogin(context); loggedIn = false; return true
+            Prefs.clearLogin(context); loggedIn = false
+            FirebaseAuthHelper.logout()
+            return true
         }
         return false
     }
@@ -1187,6 +1201,7 @@ fun SayaScreen(
                     scope.launch {
                         try { withContext(Dispatchers.IO) { ApiClient.service.logout(LogoutRequest(jamaahId, token)) } } catch (e: Exception) {}
                         Prefs.clearLogin(context); loggedIn = false
+                        FirebaseAuthHelper.logout()
                     }
                 }) { Text("Keluar", fontSize = 12.sp) }
             }
