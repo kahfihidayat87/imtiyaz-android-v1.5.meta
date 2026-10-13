@@ -12,7 +12,6 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.google.android.gms.location.LocationServices
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.CoroutineScope
@@ -173,10 +172,16 @@ class ModeAmanService : Service() {
     }
 
     private suspend fun refreshLoop() {
-        val fused = LocationServices.getFusedLocationProviderClient(this)
         while (scope.isActive) {
             try {
-                val loc = fused.lastLocation.await()
+                // v2.14.0: pakai LocationHelper.getBestLocation() supaya GPS fresh
+                // (bukan lastLocation yang bisa dari network provider, akurasi ~100m).
+                val fix = LocationHelper.getBestLocation(
+                    context = this,
+                    timeoutMs = 15_000L,
+                    adaptiveByBattery = true
+                )
+                val loc = fix.location
                 if (loc != null) {
                     val jamaahId = Prefs.getJamaahId(this)
                     if (jamaahId.isNotBlank()) {
@@ -188,6 +193,7 @@ class ModeAmanService : Service() {
                                     "latitude" to loc.latitude,
                                     "longitude" to loc.longitude,
                                     "accuracy" to loc.accuracy.toDouble(),
+                                    "accuracy_quality" to if (loc.accuracy < 30f) "high" else if (loc.accuracy < 100f) "medium" else "low",
                                     "updated_at" to System.currentTimeMillis(),
                                     "source" to "mode_aman_service",
                                     "age_ms" to 0L
