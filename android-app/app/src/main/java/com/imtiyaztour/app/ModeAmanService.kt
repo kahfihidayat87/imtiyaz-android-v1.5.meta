@@ -178,7 +178,7 @@ class ModeAmanService : Service() {
                 // v2.14.0: pakai LocationHelper.getBestLocation() supaya GPS fresh
                 val fix = LocationHelper.getBestLocation(
                     context = this,
-                    timeoutMs = 10_000L,
+                    timeoutMs = 25_000L,  // v2.14.0-rev3: 10s → 25s biar GPS punya waktu lock
                     adaptiveByBattery = true
                 )
                 // FIX v2.14.0-rev2: kalau GPS fresh null (indoor/timeout),
