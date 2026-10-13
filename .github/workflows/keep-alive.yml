@@ -1,0 +1,25 @@
+name: Keep-Alive Server
+
+on:
+  schedule:
+    # Setiap 5 menit (minimum GitHub Actions)
+    - cron: '*/5 * * * *'
+  workflow_dispatch:  # manual trigger
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping /health
+        run: |
+          echo "Ping: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          code=$(curl -s -o /tmp/health.txt -w "%{http_code}" \
+            --max-time 30 \
+            https://api.pastiumrah.com/health)
+          echo "HTTP $code"
+          cat /tmp/health.txt
+          echo ""
+          if [ "$code" != "200" ]; then
+            echo "Health check tidak 200"
+            exit 1
+          fi
