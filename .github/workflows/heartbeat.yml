@@ -13,17 +13,30 @@ jobs:
       - name: Kirim heartbeat ke semua jamaah
         run: |
           echo "Trigger heartbeat @ $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          response=$(curl -s -w "\n%{http_code}" -X POST \
-            https://api.pastiumrah.com/api/heartbeat-broadcast \
-            -H "x-api-key: ${{ secrets.API_KEY_PASTIUMRAH }}" \
-            -H "Content-Type: application/json" \
-            --max-time 30)
-          http_code=$(echo "$response" | tail -1)
-          body=$(echo "$response" | head -n -1)
-          echo "HTTP $http_code"
-          echo "Body: $body"
-          if [ "$http_code" != "200" ]; then
-            echo "::error::Heartbeat gagal (HTTP $http_code)"
+          success=0
+          for attempt in 1 2 3; do
+            echo "--- Attempt $attempt ---"
+            response=$(curl -s -w "\n%{http_code}" -X POST \
+              https://api.pastiumrah.com/api/heartbeat-broadcast \
+              -H "x-api-key: ${{ secrets.API_KEY_PASTIUMRAH }}" \
+              -H "Content-Type: application/json" \
+              --connect-timeout 15 \
+              --max-time 60 \
+              --retry 2 \
+              --retry-delay 5 || echo -e "\n000")
+            http_code=$(echo "$response" | tail -1)
+            body=$(echo "$response" | head -n -1)
+            echo "HTTP $http_code"
+            echo "Body: $body"
+            if [ "$http_code" = "200" ]; then
+              success=1
+              echo "✓ Heartbeat terkirim"
+              break
+            fi
+            echo "Attempt $attempt gagal, tunggu 10 detik..."
+            sleep 10
+          done
+          if [ "$success" != "1" ]; then
+            echo "::error::Heartbeat gagal setelah 3 percobaan"
             exit 1
           fi
-          echo "✓ Heartbeat terkirim"
