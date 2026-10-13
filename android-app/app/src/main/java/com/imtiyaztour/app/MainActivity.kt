@@ -488,7 +488,7 @@ fun ImtiyazApp() {
                 NavigationBarItem(selected = selectedTab == 1, onClick = { resetSubPages(); selectedTab = 1 }, icon = { Icon(Icons.Default.DateRange, null) }, label = { Text("Jadwal", fontSize = 9.sp) })
                 NavigationBarItem(selected = selectedTab == 2, onClick = { resetSubPages(); selectedTab = 2 }, icon = { Icon(Icons.Default.MenuBook, null) }, label = { Text("Quran", fontSize = 9.sp) })
                 NavigationBarItem(selected = selectedTab == 3, onClick = { resetSubPages(); selectedTab = 3 }, icon = { Icon(Icons.Default.Favorite, null) }, label = { Text("Doa", fontSize = 9.sp) })
-                NavigationBarItem(selected = selectedTab == 4, onClick = { resetSubPages(); selectedTab = 4 }, icon = { Icon(Icons.Default.Edit, null) }, label = { Text("Quiz", fontSize = 9.sp) })
+                NavigationBarItem(selected = selectedTab == 4, onClick = { resetSubPages(); selectedTab = 4 }, icon = { Icon(Icons.Default.PlayArrow, null) }, label = { Text("Game", fontSize = 9.sp) })
                 NavigationBarItem(selected = selectedTab == 5, onClick = { resetSubPages(); selectedTab = 5 }, icon = { Icon(Icons.Default.Person, null) }, label = { Text("Saya", fontSize = 9.sp) })
             }
         }
@@ -534,14 +534,13 @@ fun ImtiyazApp() {
                     )
                     1 -> PaketListScreen(onJadwalClick = { selectedTripId = it })
                     2 -> QuranScreen(
-                        onSurahClick = { selectedSurah = it },
-                        onHafalanClick = { resetSubPages(); selectedTab = 4 }
+                        onSurahClick = { selectedSurah = it }
                     )
                     3 -> DoaListScreen(
                         onDoaClick = { selectedDoa = it },
                         onMatsuratClick = { showMatsurat = true }
                     )
-                    4 -> HafalanQuranScreen(onBack = { selectedTab = 0 })
+                    4 -> TerbangKeMakkahScreen(onBack = { selectedTab = 0 })
                     5 -> SayaScreen(
                         onRadioClick = { showRadio = true },
                         onFindJamaahClick = { showFindJamaah = true },

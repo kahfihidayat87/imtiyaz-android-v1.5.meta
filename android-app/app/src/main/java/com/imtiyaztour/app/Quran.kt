@@ -105,7 +105,7 @@ object QuranData {
 }
 
 @Composable
-fun QuranScreen(onSurahClick: (Int) -> Unit, onHafalanClick: () -> Unit = {}) {
+fun QuranScreen(onSurahClick: (Int) -> Unit) {
     val scope = rememberCoroutineScope()
     var query by remember { mutableStateOf("") }
 
@@ -123,29 +123,7 @@ fun QuranScreen(onSurahClick: (Int) -> Unit, onHafalanClick: () -> Unit = {}) {
         Text("114 surat, teks Arab, Latin, terjemahan & audio murottal", fontSize = 11.sp, color = Color.Gray)
         Spacer(Modifier.height(12.dp))
 
-        // Card CTA: Latihan Hafalan (Juz 30) - masuk ke tab Quiz
-        Card(
-            shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFF0FDF4)),
-            elevation = CardDefaults.cardElevation(0.dp),
-            modifier = Modifier.fillMaxWidth().clickable { onHafalanClick() }
-        ) {
-            Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier.size(40.dp).background(Color(0xFF0F7A5A), RoundedCornerShape(10.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.Edit, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
-                }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("Latihan Hafalan Juz 30", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF0F7A5A))
-                    Text("Tebak kata & susun ayat - dari An-Nas mundur ke An-Naba", fontSize = 10.sp, color = Color.Gray)
-                }
-                Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF0F7A5A), modifier = Modifier.size(20.dp))
-            }
-        }
-        Spacer(Modifier.height(12.dp))
+        
 
         OutlinedTextField(
             value = query, onValueChange = { query = it },
