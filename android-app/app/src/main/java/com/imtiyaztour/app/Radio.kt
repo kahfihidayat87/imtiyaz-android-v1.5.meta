@@ -79,9 +79,17 @@ import java.util.Locale
 data class RadioSendResponse(val success: Boolean? = null, val channel: String? = null, val error: String? = null)
 data class RadioMessage(val id: String, val jamaah_id: String? = null, val nama: String, val time: Long, val audio: String? = null)
 data class RadioPollRequest(val jamaah_id: String, val token: String, val after: Long)
+data class GelombangInfo(
+    val kode: String? = null,
+    val nama: String? = null,
+    val tl_nama: String? = null,
+    val is_tl: Boolean? = null
+)
+
 data class RadioPollResponse(
     val channel: String? = null, val channel_nama: String? = null, val nama_saya: String? = null, val my_jamaah_id: String? = null,
     val is_fallback_channel: Boolean? = null, val is_tour_leader: Boolean? = null, val server_time: Long? = null,
+    val mode: String? = null, val gelombang: GelombangInfo? = null,
     val messages: List<RadioMessage> = emptyList(), val error: String? = null
 )
 
@@ -91,6 +99,7 @@ interface RadioApiService {
     suspend fun send(
         @Part("jamaah_id") jamaahId: okhttp3.RequestBody,
         @Part("token") token: okhttp3.RequestBody,
+        @Part("kode_gelombang") kodeGelombang: okhttp3.RequestBody,
         @Part audio: MultipartBody.Part
     ): RadioSendResponse
 
@@ -216,6 +225,8 @@ fun RadioScreen(onBack: () -> Unit) {
     var isCreatingGelombang by remember { mutableStateOf(false) }
     var isJoiningGelombang by remember { mutableStateOf(false) }
     var gelombangError by remember { mutableStateOf("") }
+    var showVoiceCreateDialog by remember { mutableStateOf(false) }
+    var showVoiceJoinDialog by remember { mutableStateOf(false) }
 
     fun handleCreateGelombang(nama: String) {
         isCreatingGelombang = true
@@ -318,7 +329,8 @@ fun RadioScreen(onBack: () -> Unit) {
     }
 
     // Polling loop -- ini yang menggantikan "streaming langsung" (lihat catatan di atas).
-    LaunchedEffect(Unit) {
+    LaunchedEffect(kodeGelombang) {
+        if (kodeGelombang.isBlank()) return@LaunchedEffect
         while (isActive) {
             try {
                 val resp = withContext(Dispatchers.IO) {
@@ -372,7 +384,12 @@ fun RadioScreen(onBack: () -> Unit) {
             try {
                 val part = MultipartBody.Part.createFormData("audio", file.name, file.asRequestBody("audio/mp4".toMediaTypeOrNull()))
                 withContext(Dispatchers.IO) {
-                    RadioApiClient.service.send(jamaahId.asBody(), jamaahToken.asBody(), part)
+                    RadioApiClient.service.send(
+                        jamaahId.asBody(),
+                        jamaahToken.asBody(),
+                        kodeGelombang.asBody(),
+                        part
+                    )
                 }
                 statusMsg = ""
             } catch (e: Exception) {
@@ -454,31 +471,148 @@ fun RadioScreen(onBack: () -> Unit) {
         Spacer(Modifier.height(8.dp))
 
         if (mode == "voice") {
-        LazyColumn(Modifier.weight(1f).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (messages.isEmpty()) {
-                item { Text("Belum ada suara masuk di kanal ini.", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(top = 16.dp)) }
-            }
-            items(messages) { m ->
-                Card(shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(1.dp), modifier = Modifier.fillMaxWidth()) {
-                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Mic, contentDescription = null, tint = Color(0xFF0F7A5A), modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(m.nama, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                        Text(formatWaktu(m.time), fontSize = 10.sp, color = Color.Gray)
+            if (kodeGelombang.isBlank()) {
+                Column(
+                    Modifier.fillMaxWidth().padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Spacer(Modifier.height(16.dp))
+                    Box(
+                        modifier = Modifier.size(72.dp).background(Color(0xFF9CA3AF), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            if (isTourLeader) Icons.Default.Mic else Icons.Default.Headset,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        if (isTourLeader) "Mode Voice Note (TL)" else "Mode Mendengarkan (Voice Note)",
+                        fontWeight = FontWeight.Bold, fontSize = 14.sp
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    Card(
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF0FDF4)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(Modifier.padding(16.dp)) {
+                            Text(
+                                if (isTourLeader) "Buat Gelombang Baru" else "Masukkan Kode Gelombang",
+                                fontWeight = FontWeight.Bold, fontSize = 14.sp,
+                                color = Color(0xFF0F7A5A)
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                if (isTourLeader)
+                                    "Anda akan mendapat kode unik. Bagikan kode ke jamaah agar bisa bergabung."
+                                else
+                                    "Minta kode gelombang dari Tour Leader Anda, lalu masukkan di sini.",
+                                fontSize = 11.sp, color = Color.Gray
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            Button(
+                                onClick = {
+                                    if (isTourLeader) showVoiceCreateDialog = true
+                                    else showVoiceJoinDialog = true
+                                },
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text(
+                                    if (isTourLeader) "BUAT GELOMBANG BARU" else "MASUKKAN KODE",
+                                    fontWeight = FontWeight.Bold, fontSize = 13.sp
+                                )
+                            }
+                        }
+                    }
+                    if (gelombangError.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(gelombangError, color = Color(0xFFDC2626), fontSize = 11.sp)
                     }
                 }
-            }
-        }
 
-        // Status Tour Leader ditentukan Admin (centang pada akun jamaah), dikirim
-        // server lewat is_tour_leader -- TIDAK ADA cara lain untuk membukanya dari
-        // sisi aplikasi. Jamaah biasa selalu dapat ikon earphone, tanpa modifier
-        // apa pun yang bisa memicu perekaman.
-        if (isTourLeader) {
-            PushToTalkButton(isRecording, isSending, interactionSource)
-        } else {
-            ListenOnlyIndicator()
-        }
+                if (showVoiceCreateDialog) {
+                    CreateGelombangDialog(
+                        isLoading = isCreatingGelombang,
+                        onDismiss = { showVoiceCreateDialog = false },
+                        onCreate = { nama -> showVoiceCreateDialog = false; handleCreateGelombang(nama) }
+                    )
+                }
+                if (showVoiceJoinDialog) {
+                    JoinGelombangDialog(
+                        isLoading = isJoiningGelombang,
+                        onDismiss = { showVoiceJoinDialog = false },
+                        onJoin = { kode -> showVoiceJoinDialog = false; handleJoinGelombang(kode) }
+                    )
+                }
+            } else {
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF7ED)),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+                ) {
+                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("📻 Kode: $kodeGelombang", fontSize = 11.sp,
+                                color = Color(0xFFD97706), fontWeight = FontWeight.Bold)
+                            Text(gelombangNama, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            if (!isTourLeader && gelombangTLNama.isNotBlank()) {
+                                Text("TL: $gelombangTLNama", fontSize = 10.sp, color = Color.Gray)
+                            }
+                        }
+                        IconButton(onClick = {
+                            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            cm.setPrimaryClip(ClipData.newPlainText("Kode", kodeGelombang))
+                            Toast.makeText(context, "Kode disalin", Toast.LENGTH_SHORT).show()
+                        }) { Text("📋", fontSize = 18.sp) }
+                        IconButton(onClick = {
+                            val txt = "Assalamualaikum\n\nGabung gelombang radio IMTIYAZ:\n\nKode: $kodeGelombang\nNama: $gelombangNama\nTL: $gelombangTLNama\n\nCara gabung:\n1. Buka app Imtiyaz Tour\n2. Tab Radio - Voice Note\n3. Masukkan kode di atas\n\nIMTIYAZ TOUR & TRAVEL"
+                            val i = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, txt)
+                            }
+                            context.startActivity(Intent.createChooser(i, "Bagikan Kode"))
+                        }) { Text("📤", fontSize = 18.sp) }
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+
+                LazyColumn(Modifier.weight(1f).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (messages.isEmpty()) {
+                        item { Text("Belum ada suara masuk di gelombang ini.", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(top = 16.dp)) }
+                    }
+                    items(messages) { m ->
+                        Card(shape = RoundedCornerShape(10.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(1.dp), modifier = Modifier.fillMaxWidth()) {
+                            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Mic, contentDescription = null, tint = Color(0xFF0F7A5A), modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text(m.nama, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                                Text(formatWaktu(m.time), fontSize = 10.sp, color = Color.Gray)
+                            }
+                        }
+                    }
+                }
+
+                if (isTourLeader) {
+                    PushToTalkButton(isRecording, isSending, interactionSource)
+                } else {
+                    ListenOnlyIndicator()
+                }
+                Spacer(Modifier.height(8.dp))
+                TextButton(onClick = {
+                    if (isTourLeader) handleRevokeGelombang() else handleLeaveGelombang()
+                }) {
+                    Text(
+                        if (isTourLeader) "Akhiri Gelombang" else "Keluar dari Gelombang",
+                        color = Color(0xFFDC2626), fontSize = 12.sp
+                    )
+                }
+            }
         } else {
             // v2.14.0: Mode Siaran Live (LiveKit WebRTC)
             LiveKitSection(
