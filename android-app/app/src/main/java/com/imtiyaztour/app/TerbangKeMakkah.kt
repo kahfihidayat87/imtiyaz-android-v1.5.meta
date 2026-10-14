@@ -62,9 +62,9 @@ private val WARNING_RED = Color(0xFFDC2626)
 private val GOLD = Color(0xFFFFD700)
 private val INFO_BLUE = Color(0xFF0EA5E9)
 
-private const val FLIGHT_TOTAL_SECONDS = 35400f
+private const val FLIGHT_TOTAL_SECONDS = 10800f  // 3 jam game = 3 menit real
 private const val FLIGHT_TOTAL_KM = 8000f
-private const val REAL_TO_GAME_TIME = 120f
+private const val REAL_TO_GAME_TIME = 60f     // 1 detik real = 60 detik game
 private const val ALTITUDE_FT = 38000
 private const val PLANE_Y = 0.75f
 private const val PLANE_R = 0.035f
@@ -189,7 +189,7 @@ fun TerbangKeMakkahScreen(onBack: () -> Unit) {
     fun resetFlight() {
         gameSeconds = 0f; planeX = 0.5f; targetX = 0.5f
         shieldUntil = 0L; nextShieldKm = 500f; shakeUntil = 0L
-        lastWaypointIdx = -1; nextWarningAt = 50f
+        lastWaypointIdx = -1; nextWarningAt = 15f * 60f  // first warning at 15s real
         meteors.clear(); coins.clear(); particles.clear()
         bgScroll = 0f; midScroll = 0f; fgScroll = 0f
         warningUntil = 0L; announcement = null; announcementUntil = 0L
@@ -352,7 +352,7 @@ fun TerbangKeMakkahScreen(onBack: () -> Unit) {
                 // Meteor warning
                 if (gameSeconds >= nextWarningAt && warningUntil < nowMs) {
                     warningUntil = nowMs + 6000
-                    nextWarningAt = gameSeconds + 140f
+                    nextWarningAt = gameSeconds + 15f * REAL_TO_GAME_TIME  // tiap 15 detik real
                     repeat(8) {
                         meteors.add(Meteor(
                             x = 0.05f + Random.nextFloat() * 0.9f,
@@ -733,7 +733,7 @@ private fun PlayingHud(
 
 @Composable
 private fun AnnouncementBanner(text: String) {
-    Box(Modifier.fillMaxSize().padding(top = 150.dp, start = 16.dp, end = 16.dp),
+    Box(Modifier.fillMaxSize().padding(top = 62.dp, start = 16.dp, end = 16.dp),
         contentAlignment = Alignment.TopCenter) {
         Surface(color = Color.Black.copy(alpha = 0.78f), shape = RoundedCornerShape(12.dp)) {
             Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -747,16 +747,19 @@ private fun AnnouncementBanner(text: String) {
 
 @Composable
 private fun MeteorWarningBanner() {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    Box(
+        Modifier.fillMaxSize().padding(top = 130.dp, start = 12.dp, end = 12.dp),
+        contentAlignment = Alignment.TopCenter
+    ) {
         Surface(color = WARNING_RED.copy(alpha = 0.92f),
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier.padding(20.dp)) {
-            Column(Modifier.padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth(0.92f)) {
+            Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("⚠️ PERINGATAN HUJAN METEOR", color = Color.White,
-                    fontWeight = FontWeight.Bold, fontSize = 14.sp, textAlign = TextAlign.Center)
-                Spacer(Modifier.height(8.dp))
-                Text("Mohon kenakan sabuk pengaman.\nJangan gunakan kamar mandi\nselama hujan meteor berlangsung.",
-                    color = Color.White, fontSize = 12.sp, textAlign = TextAlign.Center)
+                    fontWeight = FontWeight.Bold, fontSize = 12.sp, textAlign = TextAlign.Center)
+                Spacer(Modifier.height(4.dp))
+                Text("Mohon kenakan sabuk pengaman. Jangan gunakan kamar mandi.",
+                    color = Color.White, fontSize = 10.5.sp, textAlign = TextAlign.Center)
             }
         }
     }
