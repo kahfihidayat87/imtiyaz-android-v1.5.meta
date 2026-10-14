@@ -405,7 +405,7 @@ fun ImtiyazApp() {
                   showItinerary || showRadio || showPembimbingList ||
                   selectedPembimbing != null || showManasik || showJournalList ||
                   showJournalEditActive || showReminder || showFindJamaah || showInvoiceList ||
-                  showDokumen || showMatsurat
+                  showDokumen || showMatsurat || showChecklistBarang
     ) {
         when {
             selectedTripId != null -> selectedTripId = null
@@ -424,6 +424,7 @@ fun ImtiyazApp() {
             showInvoiceList -> showInvoiceList = false
             showDokumen -> showDokumen = false
             showMatsurat -> showMatsurat = false
+            showChecklistBarang -> showChecklistBarang = false
         }
     }
 
@@ -534,6 +535,7 @@ fun ImtiyazApp() {
                 )
                 showDokumen -> DokumenScreen(onBack = { showDokumen = false })
                 showMatsurat -> AlMatsuratScreen(onBack = { showMatsurat = false })
+                showChecklistBarang -> ChecklistBarangScreen(onBack = { showChecklistBarang = false })
                 else -> when (selectedTab) {
                     0 -> BerandaScreen(
                         onPaketClick = { selectedPaket = it },
