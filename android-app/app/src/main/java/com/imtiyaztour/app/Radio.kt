@@ -1,10 +1,14 @@
 package com.imtiyaztour.app
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.MediaRecorder
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -204,6 +208,104 @@ fun RadioScreen(onBack: () -> Unit) {
     var liveActive by remember { mutableStateOf(false) }
     val playedIds = remember { mutableSetOf<String>() }
     val recorder = remember { RadioRecorder(context) }
+    // v2.15.0: Gelombang Radio
+    var kodeGelombang by remember { mutableStateOf("") }
+    var gelombangNama by remember { mutableStateOf("") }
+    var gelombangTLNama by remember { mutableStateOf("") }
+    var gelombangPeserta by remember { mutableIntStateOf(0) }
+    var isCreatingGelombang by remember { mutableStateOf(false) }
+    var isJoiningGelombang by remember { mutableStateOf(false) }
+    var gelombangError by remember { mutableStateOf("") }
+
+    fun handleCreateGelombang(nama: String) {
+        isCreatingGelombang = true
+        gelombangError = ""
+        scope.launch {
+            try {
+                val resp = withContext(Dispatchers.IO) {
+                    GelombangApiClient.service.create(mapOf(
+                        "jamaah_id" to jamaahId,
+                        "token" to jamaahToken,
+                        "nama" to nama
+                    ))
+                }
+                if (resp.kode != null) {
+                    kodeGelombang = resp.kode!!
+                    gelombangNama = resp.nama ?: nama
+                    gelombangTLNama = resp.tl_nama ?: ""
+                    gelombangPeserta = 1
+                    gelombangError = ""
+                } else {
+                    gelombangError = resp.error ?: "Gagal buat gelombang"
+                }
+            } catch (e: Exception) {
+                gelombangError = "Gagal: ${e.message}"
+            }
+            isCreatingGelombang = false
+        }
+    }
+
+    fun handleJoinGelombang(kode: String) {
+        isJoiningGelombang = true
+        gelombangError = ""
+        scope.launch {
+            try {
+                val resp = withContext(Dispatchers.IO) {
+                    GelombangApiClient.service.join(mapOf(
+                        "jamaah_id" to jamaahId,
+                        "token" to jamaahToken,
+                        "kode" to kode.uppercase().trim()
+                    ))
+                }
+                if (resp.kode != null) {
+                    kodeGelombang = resp.kode!!
+                    gelombangNama = resp.nama ?: ""
+                    gelombangTLNama = resp.tl_nama ?: ""
+                    gelombangPeserta = resp.jumlah_peserta ?: 1
+                    gelombangError = ""
+                } else {
+                    gelombangError = resp.error ?: "Gagal join"
+                }
+            } catch (e: Exception) {
+                gelombangError = "Gagal: ${e.message}"
+            }
+            isJoiningGelombang = false
+        }
+    }
+
+    fun handleLeaveGelombang() {
+        scope.launch {
+            try {
+                RadioLiveKit.berhenti()
+                liveActive = false; liveStatus = ""
+                withContext(Dispatchers.IO) {
+                    GelombangApiClient.service.leave(mapOf(
+                        "jamaah_id" to jamaahId, "token" to jamaahToken
+                    ))
+                }
+            } catch (_: Exception) { }
+            kodeGelombang = ""; gelombangNama = ""
+            gelombangTLNama = ""; gelombangPeserta = 0
+        }
+    }
+
+    fun handleRevokeGelombang() {
+        scope.launch {
+            try {
+                RadioLiveKit.berhenti()
+                liveActive = false; liveStatus = ""
+                withContext(Dispatchers.IO) {
+                    GelombangApiClient.service.revoke(mapOf(
+                        "jamaah_id" to jamaahId, "token" to jamaahToken,
+                        "kode" to kodeGelombang
+                    ))
+                }
+            } catch (_: Exception) { }
+            kodeGelombang = ""; gelombangNama = ""
+            gelombangTLNama = ""; gelombangPeserta = 0
+        }
+    }
+
 
     fun handleUnauthorized() { Prefs.clearLogin(context); isJamaah = false }
 
@@ -383,11 +485,18 @@ fun RadioScreen(onBack: () -> Unit) {
                 isTourLeader = isTourLeader,
                 liveStatus = liveStatus,
                 liveActive = liveActive,
+                kodeGelombang = kodeGelombang,
+                gelombangNama = gelombangNama,
+                gelombangTLNama = gelombangTLNama,
+                gelombangPeserta = gelombangPeserta,
+                isCreatingGelombang = isCreatingGelombang,
+                isJoiningGelombang = isJoiningGelombang,
+                gelombangError = gelombangError,
                 onStart = {
                     if (!hasMicPermission) {
                         micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                     } else {
-                        RadioLiveKit.mulai(context, jamaahId, jamaahToken) { s ->
+                        RadioLiveKit.mulai(context, jamaahId, jamaahToken, kodeGelombang) { s ->
                             liveStatus = s
                             liveActive = RadioLiveKit.sedangAktif()
                         }
@@ -397,7 +506,11 @@ fun RadioScreen(onBack: () -> Unit) {
                     RadioLiveKit.berhenti()
                     liveStatus = ""
                     liveActive = false
-                }
+                },
+                onCreateGelombang = { nama -> handleCreateGelombang(nama) },
+                onJoinGelombang = { kode -> handleJoinGelombang(kode) },
+                onLeaveGelombang = { handleLeaveGelombang() },
+                onRevokeGelombang = { handleRevokeGelombang() }
             )
         }
     }
@@ -408,17 +521,34 @@ private fun LiveKitSection(
     isTourLeader: Boolean,
     liveStatus: String,
     liveActive: Boolean,
+    kodeGelombang: String,
+    gelombangNama: String,
+    gelombangTLNama: String,
+    gelombangPeserta: Int,
+    isCreatingGelombang: Boolean,
+    isJoiningGelombang: Boolean,
+    gelombangError: String,
     onStart: () -> Unit,
-    onStop: () -> Unit
+    onStop: () -> Unit,
+    onCreateGelombang: (String) -> Unit,
+    onJoinGelombang: (String) -> Unit,
+    onLeaveGelombang: () -> Unit,
+    onRevokeGelombang: () -> Unit
 ) {
+    val context = LocalContext.current
+    var showCreateDialog by remember { mutableStateOf(false) }
+    var showJoinDialog by remember { mutableStateOf(false) }
+    var showLeaveConfirm by remember { mutableStateOf(false) }
+    var showRevokeConfirm by remember { mutableStateOf(false) }
+
     Column(
-        Modifier.fillMaxSize().padding(24.dp),
+        Modifier.fillMaxSize().padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = Arrangement.Top
     ) {
         Box(
             modifier = Modifier
-                .size(120.dp)
+                .size(72.dp)
                 .background(
                     if (liveActive) Color(0xFFDC2626) else Color(0xFF9CA3AF),
                     CircleShape
@@ -429,66 +559,300 @@ private fun LiveKitSection(
                 if (isTourLeader) Icons.Default.Mic else Icons.Default.Headset,
                 contentDescription = null,
                 tint = Color.White,
-                modifier = Modifier.size(48.dp)
+                modifier = Modifier.size(32.dp)
             )
         }
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(12.dp))
         Text(
             if (isTourLeader) "Mode Siaran Langsung (TL)" else "Mode Mendengarkan (Live)",
-            fontWeight = FontWeight.Bold, fontSize = 16.sp
+            fontWeight = FontWeight.Bold, fontSize = 14.sp
         )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            if (liveStatus.isNotEmpty()) liveStatus
-            else if (liveActive) "Tersambung"
-            else "Menyiapkan...",
-            fontSize = 12.sp,
-            color = if (liveActive) Color(0xFF0F7A5A) else Color.Gray,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(Modifier.height(16.dp))
-        if (isTourLeader) {
+        if (liveStatus.isNotEmpty()) {
+            Spacer(Modifier.height(4.dp))
             Text(
-                "Suara Anda langsung tersiar ke seluruh jamaah di kanal ini tanpa delay. Pastikan mikrofon HP aktif.",
-                fontSize = 11.sp, color = Color.Gray,
-                modifier = Modifier.padding(horizontal = 16.dp)
+                liveStatus,
+                fontSize = 12.sp,
+                color = if (liveActive) Color(0xFF0F7A5A) else Color.Gray,
+                fontWeight = FontWeight.Bold
             )
         }
+
         Spacer(Modifier.height(20.dp))
-        if (liveActive) {
-            Button(
-                onClick = onStop,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
-                modifier = Modifier.fillMaxWidth(0.6f).height(48.dp),
-                shape = RoundedCornerShape(10.dp)
+
+        if (kodeGelombang.isBlank()) {
+            // Belum di gelombang
+            Card(
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFF0FDF4)),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    if (isTourLeader) "Akhiri Siaran" else "Berhenti Mendengarkan",
-                    fontSize = 13.sp, fontWeight = FontWeight.Bold
-                )
+                Column(Modifier.padding(16.dp)) {
+                    Text(
+                        if (isTourLeader) "Buat Gelombang Baru"
+                        else "Masukkan Kode Gelombang",
+                        fontWeight = FontWeight.Bold, fontSize = 14.sp,
+                        color = Color(0xFF0F7A5A)
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        if (isTourLeader)
+                            "Anda akan mendapat kode unik. Bagikan kode ke jamaah agar bisa bergabung."
+                        else
+                            "Minta kode gelombang dari Tour Leader Anda, lalu masukkan di sini.",
+                        fontSize = 11.sp, color = Color.Gray
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Button(
+                        onClick = {
+                            if (isTourLeader) showCreateDialog = true
+                            else showJoinDialog = true
+                        },
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text(
+                            if (isTourLeader) "BUAT GELOMBANG BARU" else "MASUKKAN KODE",
+                            fontWeight = FontWeight.Bold, fontSize = 13.sp
+                        )
+                    }
+                }
             }
         } else {
-            Button(
-                onClick = onStart,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)),
-                modifier = Modifier.fillMaxWidth(0.6f).height(48.dp),
-                shape = RoundedCornerShape(10.dp)
+            // Sudah di gelombang
+            Card(
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF7ED)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Text("📻 KODE GELOMBANG",
+                        fontSize = 10.sp, color = Color(0xFFD97706), fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(4.dp))
+                    Text(kodeGelombang,
+                        fontSize = 28.sp, fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0F7A5A))
+                    Spacer(Modifier.height(8.dp))
+                    Text("Nama: $gelombangNama", fontSize = 12.sp)
+                    if (!isTourLeader) {
+                        Text("TL: $gelombangTLNama", fontSize = 12.sp)
+                    } else {
+                        Text("Peserta: $gelombangPeserta jamaah", fontSize = 12.sp)
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                cm.setPrimaryClip(ClipData.newPlainText("Kode Gelombang", kodeGelombang))
+                                Toast.makeText(context, "Kode disalin: $kodeGelombang", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.weight(1f).height(42.dp),
+                            shape = RoundedCornerShape(10.dp)
+                        ) { Text("📋 Salin", fontSize = 12.sp) }
+                        Button(
+                            onClick = {
+                                val shareText = "Assalamualaikum 🌙\n\n" +
+                                    "Silakan gabung di gelombang radio IMTIYAZ:\n\n" +
+                                    "📻 Kode: $kodeGelombang\n" +
+                                    "Nama: $gelombangNama\n" +
+                                    "TL: $gelombangTLNama\n\n" +
+                                    "Cara gabung:\n" +
+                                    "1. Buka aplikasi Imtiyaz Tour\n" +
+                                    "2. Tab Radio → Siaran Live\n" +
+                                    "3. Masukkan kode di atas\n\n" +
+                                    "📿 IMTIYAZ TOUR & TRAVEL"
+                                val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_TEXT, shareText)
+                                }
+                                context.startActivity(Intent.createChooser(sendIntent, "Bagikan Kode Gelombang"))
+                            },
+                            modifier = Modifier.weight(1f).height(42.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
+                            shape = RoundedCornerShape(10.dp)
+                        ) { Text("📤 Share WA", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            if (liveActive) {
+                Button(
+                    onClick = onStop,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text(
+                        if (isTourLeader) "AKHIRI SIARAN" else "BERHENTI MENDENGARKAN",
+                        fontSize = 13.sp, fontWeight = FontWeight.Bold
+                    )
+                }
+            } else {
+                Button(
+                    onClick = onStart,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)),
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text(
+                        if (isTourLeader) "MULAI SIARAN LIVE" else "MULAI MENDENGARKAN",
+                        fontSize = 13.sp, fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+            TextButton(
+                onClick = {
+                    if (isTourLeader) showRevokeConfirm = true else showLeaveConfirm = true
+                }
             ) {
                 Text(
-                    if (isTourLeader) "Mulai Siaran Live" else "Mulai Mendengarkan",
-                    fontSize = 13.sp, fontWeight = FontWeight.Bold
+                    if (isTourLeader) "Akhiri & Hapus Gelombang" else "Keluar dari Gelombang",
+                    color = Color(0xFFDC2626), fontSize = 12.sp
                 )
             }
         }
-        if (!isTourLeader) {
+
+        if (gelombangError.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
-            Text(
-                if (liveActive) "Tap tombol untuk berhenti."
-                else "Tap tombol untuk mulai.",
-                fontSize = 10.sp, color = Color.Gray
-            )
+            Text(gelombangError, color = Color(0xFFDC2626), fontSize = 11.sp)
         }
     }
+
+    // Dialogs
+    if (showCreateDialog) {
+        CreateGelombangDialog(
+            isLoading = isCreatingGelombang,
+            onDismiss = { showCreateDialog = false },
+            onCreate = { nama -> showCreateDialog = false; onCreateGelombang(nama) }
+        )
+    }
+    if (showJoinDialog) {
+        JoinGelombangDialog(
+            isLoading = isJoiningGelombang,
+            onDismiss = { showJoinDialog = false },
+            onJoin = { kode -> showJoinDialog = false; onJoinGelombang(kode) }
+        )
+    }
+    if (showLeaveConfirm) {
+        AlertDialog(
+            onDismissRequest = { showLeaveConfirm = false },
+            title = { Text("Keluar dari Gelombang?") },
+            text = { Text("Anda akan berhenti mendengarkan gelombang ini.") },
+            confirmButton = {
+                TextButton(onClick = { showLeaveConfirm = false; onLeaveGelombang() }) {
+                    Text("Keluar", color = Color(0xFFDC2626), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLeaveConfirm = false }) { Text("Batal") }
+            }
+        )
+    }
+    if (showRevokeConfirm) {
+        AlertDialog(
+            onDismissRequest = { showRevokeConfirm = false },
+            title = { Text("Akhiri Gelombang?") },
+            text = { Text("Gelombang akan dihapus dan semua peserta otomatis keluar.") },
+            confirmButton = {
+                TextButton(onClick = { showRevokeConfirm = false; onRevokeGelombang() }) {
+                    Text("Akhiri", color = Color(0xFFDC2626), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRevokeConfirm = false }) { Text("Batal") }
+            }
+        )
+    }
+}
+
+@Composable
+private fun CreateGelombangDialog(
+    isLoading: Boolean,
+    onDismiss: () -> Unit,
+    onCreate: (String) -> Unit
+) {
+    var nama by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = { if (!isLoading) onDismiss() },
+        title = { Text("Buat Gelombang Radio") },
+        text = {
+            Column {
+                Text("Beri nama gelombang (misal: Linuwih 17 Okt). Sistem akan generate kode unik.",
+                    fontSize = 12.sp, color = Color.Gray)
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = nama,
+                    onValueChange = { nama = it },
+                    label = { Text("Nama Gelombang") },
+                    placeholder = { Text("Linuwih 17 Okt 2026") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { if (nama.isNotBlank() && !isLoading) onCreate(nama.trim()) },
+                enabled = nama.isNotBlank() && !isLoading
+            ) {
+                if (isLoading) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                else Text("BUAT", fontWeight = FontWeight.Bold, color = Color(0xFF0F7A5A))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !isLoading) { Text("Batal") }
+        }
+    )
+}
+
+@Composable
+private fun JoinGelombangDialog(
+    isLoading: Boolean,
+    onDismiss: () -> Unit,
+    onJoin: (String) -> Unit
+) {
+    var kode by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = { if (!isLoading) onDismiss() },
+        title = { Text("Gabung Gelombang") },
+        text = {
+            Column {
+                Text("Masukkan kode gelombang dari Tour Leader Anda.",
+                    fontSize = 12.sp, color = Color.Gray)
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = kode,
+                    onValueChange = { kode = it.uppercase() },
+                    label = { Text("Kode Gelombang") },
+                    placeholder = { Text("LINU-7K3M") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { if (kode.isNotBlank() && !isLoading) onJoin(kode.trim()) },
+                enabled = kode.isNotBlank() && !isLoading
+            ) {
+                if (isLoading) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                else Text("GABUNG", fontWeight = FontWeight.Bold, color = Color(0xFF0F7A5A))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !isLoading) { Text("Batal") }
+        }
+    )
 }
 
 @Composable

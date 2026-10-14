@@ -55,6 +55,7 @@ object RadioLiveKit {
         context: Context,
         jamaahId: String,
         token: String,
+        kodeGelombang: String? = null,
         onStatus: (String) -> Unit
     ) {
         if (room != null) {
@@ -68,7 +69,11 @@ object RadioLiveKit {
 
                 // Fetch token di IO thread
                 val resp = withContext(Dispatchers.IO) {
-                    api.getToken(mapOf("jamaah_id" to jamaahId, "token" to token))
+                    val body = mutableMapOf("jamaah_id" to jamaahId, "token" to token)
+                    if (!kodeGelombang.isNullOrBlank()) {
+                        body["kode_gelombang"] = kodeGelombang
+                    }
+                    api.getToken(body)
                 }
 
                 if (resp.token == null || resp.url == null) {
