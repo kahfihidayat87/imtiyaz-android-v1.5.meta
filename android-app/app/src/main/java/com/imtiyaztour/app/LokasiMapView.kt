@@ -141,8 +141,21 @@ fun LokasiMapView(
             points.add(GeoPoint(lat, lon))
         }
 
-        // Center peta ke rata-rata titik
-        if (points.isNotEmpty()) {
+        // v2.14.0: AUTO-FOCUS ke jamaah target kalau ada
+        // (setelah TL cari jamaah, peta langsung zoom ke titik jamaah — tidak perlu zoom out manual)
+        val target = highlightJamaahId?.let { hid ->
+            allJamaah.firstOrNull {
+                it.jamaah_id == hid && it.latitude != null && it.longitude != null
+            }
+        }
+        if (target != null) {
+            mapView.controller.animateTo(
+                GeoPoint(target.latitude!!, target.longitude!!),
+                17.0,   // zoom level tinggi (dekat)
+                900L    // animasi 900ms
+            )
+        } else if (points.isNotEmpty()) {
+            // Fallback: center ke rata-rata titik (behavior lama)
             val avgLat = points.sumOf { it.latitude } / points.size
             val avgLon = points.sumOf { it.longitude } / points.size
             mapView.controller.setCenter(GeoPoint(avgLat, avgLon))

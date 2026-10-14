@@ -264,6 +264,17 @@ object Prefs {
     fun setChecklistItem(context: Context, key: String, value: Boolean) =
         get(context).edit().putBoolean("doc_$key", value).apply()
 
+    // v2.14.0: Checklist Barang Bawaan Umrah (lokal, per-jamaah)
+    fun getBarangItem(context: Context, key: String): Boolean =
+        get(context).getBoolean("barang_$key", false)
+    fun setBarangItem(context: Context, key: String, value: Boolean) =
+        get(context).edit().putBoolean("barang_$key", value).apply()
+    fun resetBarangItems(context: Context, keys: List<String>) {
+        val e = get(context).edit()
+        keys.forEach { e.remove("barang_$it") }
+        e.apply()
+    }
+
     // Setup Wizard + Mode Aman state (TAHAP 22, v2.13.0)
     fun isSetupComplete(context: Context): Boolean = get(context).getBoolean("setup_complete", false)
     fun setSetupComplete(context: Context, value: Boolean) = get(context).edit().putBoolean("setup_complete", value).apply()
@@ -355,6 +366,7 @@ fun ImtiyazApp() {
     var showPembimbingList by remember { mutableStateOf(false) }
     var selectedPembimbing by remember { mutableStateOf<Pembimbing?>(null) }
     var showDokumen by remember { mutableStateOf(false) }
+    var showChecklistBarang by remember { mutableStateOf(false) }
     var showMatsurat by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
@@ -545,7 +557,8 @@ fun ImtiyazApp() {
                         onRadioClick = { showRadio = true },
                         onFindJamaahClick = { showFindJamaah = true },
                         onInvoiceClick = { showInvoiceList = true },
-                        onDokumenClick = { showDokumen = true }
+                        onDokumenClick = { showDokumen = true },
+                        onBarangClick = { showChecklistBarang = true }
                     )
                 }
             }
@@ -1021,7 +1034,8 @@ fun SayaScreen(
     onRadioClick: () -> Unit,
     onFindJamaahClick: () -> Unit = {},
     onInvoiceClick: () -> Unit = {},
-    onDokumenClick: () -> Unit = {}
+    onDokumenClick: () -> Unit = {},
+    onBarangClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -1419,6 +1433,22 @@ fun SayaScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)),
                         shape = RoundedCornerShape(12.dp)
                     ) { Text("Buka Checklist Dokumen") }
+                }
+            }
+        }
+
+        item {
+            Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(2.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text("Checklist Barang Bawaan", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text("Perlengkapan, pakaian, obat, makanan — persiapan umrah", fontSize = 11.sp, color = Color.Gray)
+                    Spacer(Modifier.height(12.dp))
+                    Button(
+                        onClick = onBarangClick,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text("Buka Checklist Barang") }
                 }
             }
         }
