@@ -19,3 +19,14 @@ patch-*.py
 
 # Test logs folder
 logs/
+
+# v2.15.0: cleanup tambahan
+firebase-rules-backup/
+_patches/
+_handoff_backups/
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+*.hprof
+captures/
