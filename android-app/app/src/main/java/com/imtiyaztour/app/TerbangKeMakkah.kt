@@ -3,8 +3,11 @@ package com.imtiyaztour.app
 import android.content.Context
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Pause
@@ -34,9 +37,11 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 // ============================================================================
-// "Terbang ke Makkah" — penerbangan YIA Yogyakarta → Bandara Internasional
-// King Abdul Aziz Jeddah. Durasi 9 jam 50 menit. Ketinggian jelajah 38.000
-// kaki. Hindari hujan meteor.
+// SIMULASI PENERBANGAN UMRAH "TERBANG KE MAKKAH"
+// IMTIYAZ AIRLINE — flight IZ-6711 · YIA Yogyakarta → JED King Abdul Aziz
+// 9 jam 50 menit · 38.000 kaki · rute via Selat Sunda, Malaka, Andaman,
+// Teluk Benggala, India, Arab Saudi. Tanpa "kecelakaan" — pesawat selalu
+// mendarat dengan selamat. Fokus: pengalaman spiritual perjalanan umrah.
 // ============================================================================
 
 private val SKY_TOP = Color(0xFF1E1B4B)
@@ -52,15 +57,18 @@ private val SHIELD_COLOR = Color(0xFF06B6D4)
 private val COIN_COLOR = Color(0xFFFBBF24)
 private val COIN_EDGE = Color(0xFFB45309)
 private val BRAND_GREEN = Color(0xFF0F7A5A)
+private val BRAND_BLUE = Color(0xFF1E40AF)
 private val WARNING_RED = Color(0xFFDC2626)
 private val GOLD = Color(0xFFFFD700)
+private val INFO_BLUE = Color(0xFF0EA5E9)
 
-private const val FLIGHT_TOTAL_SECONDS = 35400f   // 590 menit = 9j50m
+private const val FLIGHT_TOTAL_SECONDS = 35400f
 private const val FLIGHT_TOTAL_KM = 8000f
-private const val REAL_TO_GAME_TIME = 120f        // 1 detik real = 120 detik game
+private const val REAL_TO_GAME_TIME = 120f
 private const val ALTITUDE_FT = 38000
 private const val PLANE_Y = 0.75f
 private const val PLANE_R = 0.035f
+private const val FLIGHT_NO = "IZ-6711"
 
 private data class Meteor(var x: Float, var y: Float, val radius: Float, var nearMissed: Boolean = false)
 private data class Star(val x: Float, val y: Float, val radius: Float, val alpha: Float, val phase: Float)
@@ -69,6 +77,7 @@ private data class Cloud(var x: Float, var y: Float, val size: Float)
 private data class Particle(var x: Float, var y: Float, var vx: Float, var vy: Float, var life: Float, val maxLife: Float, val color: Color, val radius: Float)
 private data class Coin(var x: Float, var y: Float, var taken: Boolean)
 private data class Badge(val id: String, val emoji: String, val title: String, val minKm: Int)
+private data class Waypoint(val km: Float, val nama: String, val tts: String)
 
 private val BADGES = listOf(
     Badge("penerbang_muda", "🛫", "Penerbang Muda", 1000),
@@ -77,7 +86,25 @@ private val BADGES = listOf(
     Badge("sampai_makkah", "🕋", "Sampai Makkah", 8000),
 )
 
-private enum class GameState { MENU, PLAYING, PAUSED, GAME_OVER, FINISHED }
+// Rute YIA → JED (10 waypoint)
+private val ROUTE = listOf(
+    Waypoint(0f, "YIA Yogyakarta", "Pesawat IMTIYAZ AIRLINE lepas landas dari Yogyakarta menuju Jeddah. Selamat terbang, semoga menjadi umrah yang mabrur."),
+    Waypoint(400f, "Selat Sunda", "Melewati Selat Sunda."),
+    Waypoint(1200f, "Selat Malaka", "Melewati Selat Malaka, perairan Indonesia."),
+    Waypoint(2400f, "Laut Andaman", "Memasuki wilayah udara internasional, melewati Laut Andaman."),
+    Waypoint(3500f, "Teluk Benggala", "Melewati Teluk Benggala."),
+    Waypoint(4800f, "India Selatan", "Melewati langit India Selatan."),
+    Waypoint(6200f, "Laut Arab", "Melewati Laut Arab menuju Jazirah Arab."),
+    Waypoint(7300f, "Oman (Maskat)", "Memasuki wilayah udara Oman."),
+    Waypoint(7700f, "Arab Saudi", "Memasuki wilayah udara Kerajaan Arab Saudi."),
+    Waypoint(7950f, "Jeddah Mendekat", "Pesawat mulai menurun. Bersiap mendarat di Bandara Internasional King Abdul Aziz, Jeddah."),
+)
+
+private enum class GameState {
+    MENU,
+    BANDARA_PINTU, BANDARA_CHECKIN, BANDARA_SCREENING, BANDARA_IMIGRASI, BANDARA_BOARDING,
+    PLAYING, PAUSED, FINISHED
+}
 
 private object TkmPrefs {
     private const val NAME = "terbang_ke_makkah"
@@ -92,28 +119,45 @@ private object TkmPrefs {
 
 private fun fmtTime(gameSeconds: Float): String {
     val totalMin = (gameSeconds / 60f).toInt()
-    val h = totalMin / 60
-    val m = totalMin % 60
-    return "${h}j ${m.toString().padStart(2, '0')}m"
+    return "${totalMin / 60}j ${(totalMin % 60).toString().padStart(2, '0')}m"
 }
 
 @Composable
 fun TerbangKeMakkahScreen(onBack: () -> Unit) {
     val context = LocalContext.current
+
+    // TTS init sekali
+    DisposableEffect(Unit) {
+        TerbangKeMakkahTts.init(context)
+        onDispose { TerbangKeMakkahTts.stop() }
+    }
+
     var state by remember { mutableStateOf(GameState.MENU) }
-    var gameSeconds by remember { mutableFloatStateOf(0f) }
-    var lives by remember { mutableIntStateOf(3) }
-    var bonusScore by remember { mutableIntStateOf(0) }
     var highScore by remember { mutableIntStateOf(TkmPrefs.getHighScore(context)) }
     var badges by remember { mutableStateOf(TkmPrefs.getBadges(context)) }
     var newBadge by remember { mutableStateOf<Badge?>(null) }
     var distanceReached by remember { mutableIntStateOf(0) }
     var coinsCollected by remember { mutableIntStateOf(0) }
+    var scoreExperience by remember { mutableIntStateOf(0) }
 
+    // ============ BANDARA states ============
+    // (state machine di dalam layar komponen bandara — lihat AirportFaseScreen)
+
+    // ============ FLIGHT states ============
+    var gameSeconds by remember { mutableFloatStateOf(0f) }
     var planeX by remember { mutableFloatStateOf(0.5f) }
     var targetX by remember { mutableFloatStateOf(0.5f) }
     var shieldUntil by remember { mutableLongStateOf(0L) }
     var nextShieldKm by remember { mutableFloatStateOf(500f) }
+    var shakeUntil by remember { mutableLongStateOf(0L) }
+    var lastWaypointIdx by remember { mutableIntStateOf(-1) }
+    var announcement by remember { mutableStateOf<String?>(null) }
+    var announcementUntil by remember { mutableLongStateOf(0L) }
+    var warningUntil by remember { mutableLongStateOf(0L) }
+    var nextWarningAt by remember { mutableFloatStateOf(50f) }
+    var comboText by remember { mutableStateOf<String?>(null) }
+    var comboUntil by remember { mutableLongStateOf(0L) }
+
     val meteors = remember { mutableStateListOf<Meteor>() }
     val coins = remember { mutableStateListOf<Coin>() }
     val particles = remember { mutableStateListOf<Particle>() }
@@ -121,16 +165,6 @@ fun TerbangKeMakkahScreen(onBack: () -> Unit) {
     var bgScroll by remember { mutableFloatStateOf(0f) }
     var midScroll by remember { mutableFloatStateOf(0f) }
     var fgScroll by remember { mutableFloatStateOf(0f) }
-
-    var announcement by remember { mutableStateOf<String?>(null) }
-    var announcementUntil by remember { mutableLongStateOf(0L) }
-    var warningUntil by remember { mutableLongStateOf(0L) }
-    var nextWarningAt by remember { mutableFloatStateOf(50f) }
-    var milestoneText by remember { mutableStateOf<String?>(null) }
-    var milestoneUntil by remember { mutableLongStateOf(0L) }
-    var lastMilestone by remember { mutableIntStateOf(0) }
-    var comboText by remember { mutableStateOf<String?>(null) }
-    var comboUntil by remember { mutableLongStateOf(0L) }
 
     val stars = remember {
         List(70) {
@@ -152,36 +186,37 @@ fun TerbangKeMakkahScreen(onBack: () -> Unit) {
         }
     }
 
-    fun resetGame() {
-        gameSeconds = 0f; lives = 3; bonusScore = 0; coinsCollected = 0
-        planeX = 0.5f; targetX = 0.5f; shieldUntil = 0L; nextShieldKm = 500f
+    fun resetFlight() {
+        gameSeconds = 0f; planeX = 0.5f; targetX = 0.5f
+        shieldUntil = 0L; nextShieldKm = 500f; shakeUntil = 0L
+        lastWaypointIdx = -1; nextWarningAt = 50f
         meteors.clear(); coins.clear(); particles.clear()
         bgScroll = 0f; midScroll = 0f; fgScroll = 0f
-        nextWarningAt = 50f; lastMilestone = 0
         warningUntil = 0L; announcement = null; announcementUntil = 0L
-        milestoneText = null; comboText = null
+        comboText = null; comboUntil = 0L
+        coinsCollected = 0; scoreExperience = 0
     }
 
-    fun endGame(arrived: Boolean) {
-        distanceReached = (gameSeconds / FLIGHT_TOTAL_SECONDS * FLIGHT_TOTAL_KM).toInt()
-        state = if (arrived) GameState.FINISHED else GameState.GAME_OVER
-        if (bonusScore > highScore) {
-            highScore = bonusScore
-            TkmPrefs.saveHighScore(context, bonusScore)
+    fun finishFlight() {
+        distanceReached = 8000
+        state = GameState.FINISHED
+        scoreExperience = coinsCollected * 50
+        if (scoreExperience > highScore) {
+            highScore = scoreExperience
+            TkmPrefs.saveHighScore(context, scoreExperience)
         }
-        BADGES.firstOrNull { distanceReached >= it.minKm && !badges.contains(it.id) }?.let { b ->
+        BADGES.firstOrNull { !badges.contains(it.id) && distanceReached >= it.minKm }?.let { b ->
             TkmPrefs.unlockBadge(context, b.id)
             badges = TkmPrefs.getBadges(context)
             newBadge = b
         }
+        TerbangKeMakkahTts.speak("Alhamdulillah, pesawat mendarat dengan selamat di Bandara Internasional King Abdul Aziz, Jeddah. Selamat datang di Tanah Suci. Semoga ibadah Anda diterima Allah Subhanahu wa Ta'ala.")
     }
 
+    // Flight loop
     LaunchedEffect(state) {
         if (state != GameState.PLAYING) return@LaunchedEffect
         var last = 0L
-        announcement = "Selamat datang di penerbangan Imtiyaz Tour. Tujuan: Bandara Internasional King Abdul Aziz, Jeddah. Durasi 9 jam 50 menit. Ketinggian jelajah 38.000 kaki. Mohon kenakan sabuk pengaman."
-        announcementUntil = System.currentTimeMillis() + 7000
-
         while (state == GameState.PLAYING) {
             withFrameNanos { now ->
                 val dt = if (last == 0L) 0f else (now - last) / 1_000_000_000f
@@ -193,7 +228,7 @@ fun TerbangKeMakkahScreen(onBack: () -> Unit) {
                 val distanceKm = progress * FLIGHT_TOTAL_KM
                 val nowMs = System.currentTimeMillis()
 
-                // Plane
+                // Plane movement
                 val maxSpeed = 1.5f
                 planeX = (planeX + (targetX - planeX).coerceIn(-maxSpeed * dt, maxSpeed * dt))
                     .coerceIn(0.08f, 0.92f)
@@ -202,13 +237,22 @@ fun TerbangKeMakkahScreen(onBack: () -> Unit) {
                 bgScroll = (bgScroll + dt * 0.02f) % 1f
                 midScroll = (midScroll + dt * 0.10f) % 1f
                 fgScroll = (fgScroll + dt * 0.28f) % 1f
-
                 clouds.forEach { c ->
                     c.y += dt * 0.18f
                     if (c.y > 1.15f) { c.y = -0.12f; c.x = Random.nextFloat() }
                 }
 
-                // Shield auto-spawn
+                // Waypoint milestone
+                val idx = ROUTE.indexOfLast { distanceKm >= it.km }
+                if (idx > lastWaypointIdx) {
+                    lastWaypointIdx = idx
+                    val wp = ROUTE[idx]
+                    announcement = "✈️ ${wp.nama}"
+                    announcementUntil = nowMs + 3500
+                    TerbangKeMakkahTts.speak(wp.tts)
+                }
+
+                // Shield auto
                 if (distanceKm >= nextShieldKm && shieldUntil < nowMs) {
                     shieldUntil = nowMs + 5000
                     nextShieldKm += 1500f
@@ -235,13 +279,10 @@ fun TerbangKeMakkahScreen(onBack: () -> Unit) {
                     coins.add(Coin(x = 0.05f + Random.nextFloat() * 0.9f, y = -0.05f, taken = false))
                 }
                 coins.forEach { c -> c.y += (mSpeed * 0.9f) * dt }
-
                 coins.filter { !it.taken }.forEach { c ->
                     if (abs(c.x - planeX) < 0.06f && abs(c.y - PLANE_Y) < 0.06f) {
-                        c.taken = true
-                        bonusScore += 50
-                        coinsCollected++
-                        comboText = "💰 +50"
+                        c.taken = true; coinsCollected++
+                        comboText = "⭐ +50 Pahala"
                         comboUntil = nowMs + 700
                         repeat(6) {
                             particles.add(Particle(
@@ -256,28 +297,30 @@ fun TerbangKeMakkahScreen(onBack: () -> Unit) {
                 }
                 coins.removeAll { it.y > 1.15f || it.taken }
 
-                // Collision
+                // Turbulensi (meteor tabrakan) — goyang, bukan mati
                 val shieldActive = shieldUntil > nowMs
                 if (!shieldActive) {
                     val hit = meteors.firstOrNull { m ->
                         hypot((m.x - planeX).toDouble(), (m.y - PLANE_Y).toDouble()) < (m.radius + PLANE_R)
                     }
                     if (hit != null) {
-                        lives--
-                        repeat(14) {
+                        shakeUntil = nowMs + 700
+                        announcement = "⚠️ TURBULENSI! Mohon kenakan sabuk pengaman."
+                        announcementUntil = nowMs + 2500
+                        TerbangKeMakkahTts.speak("Perhatian. Pesawat sedang mengalami turbulensi. Mohon tetap duduk dan kenakan sabuk pengaman.")
+                        repeat(10) {
                             particles.add(Particle(
                                 x = planeX, y = PLANE_Y,
                                 vx = (Random.nextFloat() - 0.5f) * 0.9f,
                                 vy = (Random.nextFloat() - 0.5f) * 0.9f,
                                 life = 0.65f, maxLife = 0.65f,
                                 color = if (Random.nextBoolean()) METEOR_ORANGE else Color.White,
-                                radius = 0.013f
+                                radius = 0.011f
                             ))
                         }
                         meteors.removeAll { m ->
                             hypot((m.x - planeX).toDouble(), (m.y - PLANE_Y).toDouble()) < 0.15
                         }
-                        if (lives <= 0) endGame(false)
                     }
                 } else {
                     meteors.removeAll { m ->
@@ -292,24 +335,24 @@ fun TerbangKeMakkahScreen(onBack: () -> Unit) {
                         val thr = (m.radius + PLANE_R)
                         if (d > thr && d < thr + 0.05f) {
                             m.nearMissed = true
-                            bonusScore += 10
-                            comboText = "✨ NEAR MISS! +10"
+                            comboText = "✨ Near miss! +10"
                             comboUntil = nowMs + 900
+                            coinsCollected++  // bonus kecil
                         }
                     }
                 }
 
-                // Particles update
+                // Particles
                 particles.forEach { p ->
                     p.x += p.vx * dt; p.y += p.vy * dt
                     p.vy += 0.3f * dt; p.life -= dt
                 }
                 particles.removeAll { it.life <= 0f }
 
-                // Meteor shower warning
+                // Meteor warning
                 if (gameSeconds >= nextWarningAt && warningUntil < nowMs) {
-                    warningUntil = nowMs + 5000
-                    nextWarningAt = gameSeconds + 110f
+                    warningUntil = nowMs + 6000
+                    nextWarningAt = gameSeconds + 140f
                     repeat(8) {
                         meteors.add(Meteor(
                             x = 0.05f + Random.nextFloat() * 0.9f,
@@ -317,82 +360,77 @@ fun TerbangKeMakkahScreen(onBack: () -> Unit) {
                             radius = 0.03f + Random.nextFloat() * 0.03f
                         ))
                     }
+                    TerbangKeMakkahTts.speak("Perhatian seluruh penumpang. Diperkirakan akan terjadi hujan meteor. Mohon kenakan sabuk pengaman dan jangan menggunakan kamar mandi selama hujan meteor berlangsung.")
                 }
 
-                // Milestones every 1500 km
-                val m = (distanceKm / 1500f).toInt()
-                if (m > lastMilestone) {
-                    lastMilestone = m
-                    milestoneText = when (m) {
-                        1 -> "🌊 Melewati Samudera Hindia"
-                        2 -> "🕌 Memasuki wilayah Arab Saudi"
-                        3 -> "✈️ Dekat Bandara King Abdul Aziz"
-                        4 -> "🕋 Hampir sampai Makkah"
-                        else -> "✨ ${m * 1500} km"
-                    }
-                    milestoneUntil = nowMs + 2500
-                }
-
-                if (gameSeconds >= FLIGHT_TOTAL_SECONDS) endGame(true)
+                if (gameSeconds >= FLIGHT_TOTAL_SECONDS) finishFlight()
             }
         }
     }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
-        Canvas(
-            modifier = Modifier.fillMaxSize().pointerInput(state) {
-                if (state != GameState.PLAYING) return@pointerInput
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        if (event.type == PointerEventType.Press || event.type == PointerEventType.Move) {
-                            val x = event.changes.firstOrNull()?.position?.x
-                            if (x != null) targetX = (x / size.width).coerceIn(0.08f, 0.92f)
-                        }
-                    }
-                }
-            }
-        ) {
-            val W = size.width; val H = size.height
-            drawSky(W, H, bgScroll)
-            drawStarsT(stars, W, H)
-            drawMoon(W, H)
-            drawMountainsLayer(mountains, midScroll, W, H, SILHOUETTE_FAR, 0.78f, 0.055f)
-            drawMountainsLayer(mountains, fgScroll, W, H, SILHOUETTE_NEAR, 0.85f, 0.095f)
-            drawCloudsC(clouds, W, H)
-            drawKaabah(W, H)
-            drawCoinsC(coins, W, H)
-            drawMeteorsC(meteors, W, H)
-            drawParticlesC(particles, W, H)
-            drawPlaneV(planeX, PLANE_Y, W, H, shieldUntil > System.currentTimeMillis())
-        }
-
         when (state) {
-            GameState.MENU -> MenuOverlay(
+            GameState.MENU -> MenuScreen(
                 highScore = highScore, badges = badges,
-                onStart = { resetGame(); state = GameState.PLAYING },
+                onStart = {
+                    resetFlight()
+                    state = GameState.BANDARA_PINTU
+                },
                 onBack = onBack
             )
+            GameState.BANDARA_PINTU, GameState.BANDARA_CHECKIN,
+            GameState.BANDARA_SCREENING, GameState.BANDARA_IMIGRASI,
+            GameState.BANDARA_BOARDING -> AirportFaseScreen(
+                state = state,
+                onBack = onBack,
+                onNext = { st -> state = st }
+            )
             GameState.PLAYING -> {
+                // Canvas game
+                Canvas(
+                    modifier = Modifier.fillMaxSize().pointerInput(state) {
+                        if (state != GameState.PLAYING) return@pointerInput
+                        awaitPointerEventScope {
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                if (event.type == PointerEventType.Press || event.type == PointerEventType.Move) {
+                                    val x = event.changes.firstOrNull()?.position?.x
+                                    if (x != null) targetX = (x / size.width).coerceIn(0.08f, 0.92f)
+                                }
+                            }
+                        }
+                    }
+                ) {
+                    val W = size.width; val H = size.height
+                    drawSky()
+                    drawStarsT(stars, W, H)
+                    drawMoon(W, H)
+                    drawMountainsLayer(mountains, midScroll, W, H, SILHOUETTE_FAR, 0.78f, 0.055f)
+                    drawMountainsLayer(mountains, fgScroll, W, H, SILHOUETTE_NEAR, 0.85f, 0.095f)
+                    drawCloudsC(clouds, W, H)
+                    drawCoinsC(coins, W, H)
+                    drawMeteorsC(meteors, W, H)
+                    drawParticlesC(particles, W, H)
+                    val shake = if (System.currentTimeMillis() < shakeUntil) {
+                        ((System.currentTimeMillis() % 40) - 20) / 8f
+                    } else 0f
+                    drawPlaneV(planeX + shake / W * 0.02f, PLANE_Y, W, H, shieldUntil > System.currentTimeMillis())
+                }
+
                 PlayingHud(
-                    lives = lives, bonusScore = bonusScore, highScore = highScore,
-                    shieldActive = shieldUntil > System.currentTimeMillis(),
+                    distanceKm = (gameSeconds / FLIGHT_TOTAL_SECONDS * FLIGHT_TOTAL_KM).toInt(),
                     gameSeconds = gameSeconds,
+                    coins = coinsCollected,
+                    shieldActive = shieldUntil > System.currentTimeMillis(),
                     onPause = { state = GameState.PAUSED }
                 )
-                // Announcement
+
                 if (announcement != null && System.currentTimeMillis() < announcementUntil) {
                     AnnouncementBanner(announcement!!)
                 }
-                // Meteor warning
                 if (System.currentTimeMillis() < warningUntil) {
                     MeteorWarningBanner()
                 }
-                // Milestone
-                if (milestoneText != null && System.currentTimeMillis() < milestoneUntil) {
-                    MilestoneBanner(milestoneText!!)
-                }
-                // Combo
                 if (comboText != null && System.currentTimeMillis() < comboUntil) {
                     ComboBanner(comboText!!)
                 }
@@ -402,16 +440,11 @@ fun TerbangKeMakkahScreen(onBack: () -> Unit) {
                 onMenu = { state = GameState.MENU },
                 onBack = onBack
             )
-            GameState.GAME_OVER -> GameOverOverlay(
-                distanceKm = distanceReached, bonusScore = bonusScore,
-                highScore = highScore, newBadge = newBadge, coins = coinsCollected,
-                onRetry = { resetGame(); newBadge = null; state = GameState.PLAYING },
-                onMenu = { newBadge = null; state = GameState.MENU },
-                onBack = onBack
-            )
             GameState.FINISHED -> FinishedOverlay(
-                bonusScore = bonusScore, highScore = highScore,
-                newBadge = newBadge, coins = coinsCollected,
+                coins = coinsCollected,
+                score = scoreExperience,
+                highScore = highScore,
+                newBadge = newBadge,
                 onMenu = { newBadge = null; state = GameState.MENU },
                 onBack = onBack
             )
@@ -419,11 +452,427 @@ fun TerbangKeMakkahScreen(onBack: () -> Unit) {
     }
 }
 
+// ============ FASE BANDARA ============
+@Composable
+private fun AirportFaseScreen(
+    state: GameState,
+    onBack: () -> Unit,
+    onNext: (GameState) -> Unit
+) {
+    val context = LocalContext.current
+    val pages = listOf(
+        AirportPage(
+            title = "YOGYAKARTA INTERNATIONAL AIRPORT",
+            subtitle = "Pintu Masuk · YIA",
+            icon = "🛫",
+            bullets = listOf(
+                "Selamat datang, Jamaah Imtiyaz Tour",
+                "Harap siapkan paspor, tiket, dan dokumen vaksin",
+                "Check-in dibuka 3 jam sebelum keberangkatan",
+                "Bagasi kabin maks 7 kg · bagasi utama maks 30 kg"
+            ),
+            tts = "Selamat datang di Bandara Internasional Yogyakarta. Jamaah Imtiyaz Tour, mohon siapkan paspor, tiket, dan dokumen vaksin Anda.",
+            nextState = GameState.BANDARA_CHECKIN
+        ),
+        AirportPage(
+            title = "CHECK-IN COUNTER",
+            subtitle = "Konfirmasi Keberangkatan",
+            icon = "🎫",
+            bullets = listOf(
+                "Serahkan paspor dan tiket kepada petugas",
+                "Konfirmasi nomor kursi dan bagasi",
+                "Simpan boarding pass dengan aman",
+                "Jangan titipkan barang berharga di bagasi"
+            ),
+            tts = "Silakan menuju konter check-in. Serahkan paspor dan tiket Anda kepada petugas, dan konfirmasi nomor kursi Anda.",
+            nextState = GameState.BANDARA_SCREENING
+        ),
+        AirportPage(
+            title = "SCREENING & X-RAY",
+            subtitle = "Pemeriksaan Keamanan",
+            icon = "🔍",
+            bullets = listOf(
+                "LEPAS: jaket, ikat pinggang, jam tangan, topi, sepatu",
+                "KELUARKAN dari tas: laptop, HP, tablet, power bank",
+                "AIR MINUM: maksimal 100 ml per wadah · total 1 liter",
+                "DILARANG: benda tajam, gunting, korek api, petasan",
+                "OBAT: sertakan resep dokter untuk obat keras",
+                "Makanan padat diperbolehkan"
+            ),
+            tts = "Mohon lepaskan jaket, ikat pinggang, jam tangan, topi, dan sepatu Anda. Keluarkan laptop, telepon seluler, dan power bank dari tas. Air minum maksimal 100 mililiter per wadah. Benda tajam dan korek api dilarang. Terima kasih atas kerja samanya.",
+            nextState = GameState.BANDARA_IMIGRASI
+        ),
+        AirportPage(
+            title = "IMIGRASI",
+            subtitle = "Verifikasi Identitas",
+            icon = "🛂",
+            bullets = listOf(
+                "Serahkan paspor dan visa umrah",
+                "Verifikasi sidik jari dan wajah",
+                "Jawab pertanyaan petugas dengan jujur",
+                "Pastikan stempel keluar sudah tercetak"
+            ),
+            tts = "Silakan menuju konter imigrasi. Serahkan paspor dan visa umrah Anda. Ikuti proses verifikasi sidik jari dan wajah.",
+            nextState = GameState.BANDARA_BOARDING
+        ),
+        AirportPage(
+            title = "BOARDING GATE",
+            subtitle = "Menuju Pesawat",
+            icon = "🚪",
+            bullets = listOf(
+                "Penerbangan: IMTIYAZ AIRLINE $FLIGHT_NO",
+                "Gate boarding sesuai papan informasi",
+                "Antri sesuai grup kursi (A/B/C/D)",
+                "Prioritas: lansia, ibu hamil, disabilitas",
+                "Selamat jalan, semoga menjadi umrah mabrur"
+            ),
+            tts = "Penerbangan IMTIYAZ AIRLINE nomor IZ 6711 telah siap boarding. Silakan menuju gate sesuai papan informasi. Prioritas diberikan kepada lansia, ibu hamil, dan penumpang dengan kebutuhan khusus. Selamat jalan, semoga menjadi umrah yang mabrur.",
+            nextState = GameState.PLAYING
+        ),
+    )
+
+    val pageIdx = when (state) {
+        GameState.BANDARA_PINTU -> 0
+        GameState.BANDARA_CHECKIN -> 1
+        GameState.BANDARA_SCREENING -> 2
+        GameState.BANDARA_IMIGRASI -> 3
+        GameState.BANDARA_BOARDING -> 4
+        else -> 0
+    }
+    val page = pages[pageIdx]
+
+    // TTS auto per halaman
+    LaunchedEffect(pageIdx) {
+        TerbangKeMakkahTts.speak(page.tts)
+    }
+
+    Box(
+        Modifier.fillMaxSize()
+            .background(Brush.verticalGradient(listOf(SKY_TOP, SKY_MID1, BRAND_BLUE)))
+    ) {
+        Column(
+            Modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Spacer(Modifier.height(20.dp))
+            Text(page.icon, fontSize = 72.sp)
+            Spacer(Modifier.height(12.dp))
+            Text(page.title, color = Color.White, fontWeight = FontWeight.Bold,
+                fontSize = 22.sp, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(4.dp))
+            Text(page.subtitle, color = GOLD, fontSize = 13.sp)
+            Spacer(Modifier.height(20.dp))
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.95f)),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(18.dp)) {
+                    page.bullets.forEach { b ->
+                        Row(Modifier.padding(vertical = 5.dp),
+                            verticalAlignment = Alignment.Top) {
+                            Text("✓", color = BRAND_GREEN, fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp)
+                            Spacer(Modifier.width(8.dp))
+                            Text(b, fontSize = 12.5.sp, color = Color(0xFF1F2937))
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(24.dp))
+            Button(
+                onClick = { onNext(page.nextState) },
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = BRAND_GREEN),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    if (page.nextState == GameState.PLAYING) "NAIK PESAWAT" else "LANJUT",
+                    fontWeight = FontWeight.Bold, color = Color.White, fontSize = 15.sp
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            OutlinedButton(
+                onClick = onBack,
+                modifier = Modifier.fillMaxWidth().height(46.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+            ) {
+                Icon(Icons.Default.ArrowBack, contentDescription = null, tint = Color.White)
+                Spacer(Modifier.width(6.dp))
+                Text("Kembali", color = Color.White)
+            }
+            Spacer(Modifier.height(20.dp))
+        }
+    }
+}
+
+private data class AirportPage(
+    val title: String, val subtitle: String, val icon: String,
+    val bullets: List<String>, val tts: String, val nextState: GameState
+)
+
+// ============ MENU ============
+@Composable
+private fun MenuScreen(
+    highScore: Int, badges: Set<String>,
+    onStart: () -> Unit, onBack: () -> Unit
+) {
+    Box(
+        Modifier.fillMaxSize()
+            .background(Brush.verticalGradient(listOf(SKY_TOP, SKY_MID1, SKY_MID2, SKY_BOTTOM))),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(Modifier.fillMaxWidth().padding(28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("✈️", fontSize = 56.sp)
+            Spacer(Modifier.height(8.dp))
+            Text("IMTIYAZ AIRLINE", color = Color.White,
+                fontWeight = FontWeight.Bold, fontSize = 20.sp)
+            Spacer(Modifier.height(4.dp))
+            Text("TERBANG KE MAKKAH", color = GOLD,
+                fontWeight = FontWeight.Bold, fontSize = 26.sp, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(10.dp))
+            Text("YIA Yogyakarta → King Abdul Aziz Jeddah",
+                color = Color.White.copy(alpha = 0.9f),
+                fontSize = 13.sp, textAlign = TextAlign.Center)
+            Text("Flight $FLIGHT_NO · 9 jam 50 menit · 38.000 kaki",
+                color = Color.White.copy(alpha = 0.8f),
+                fontSize = 11.sp, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(16.dp))
+            Text("Simulasi perjalanan umrah — dari bandara,\nterbang melewati langit dunia,\nsampai mendarat di Tanah Suci.",
+                color = Color.White.copy(alpha = 0.85f),
+                fontSize = 12.sp, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(20.dp))
+            Card(colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.15f)),
+                shape = RoundedCornerShape(12.dp)) {
+                Column(Modifier.padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("🏆 BEST PAHALA", color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp)
+                    Text("$highScore", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+            if (badges.isNotEmpty()) {
+                Spacer(Modifier.height(14.dp))
+                Text("Badge", color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp)
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    BADGES.filter { badges.contains(it.id) }.forEach { b ->
+                        Text(b.emoji, fontSize = 22.sp)
+                    }
+                }
+            }
+            Spacer(Modifier.height(24.dp))
+            Button(onClick = onStart, modifier = Modifier.fillMaxWidth().height(52.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = BRAND_GREEN),
+                shape = RoundedCornerShape(12.dp)) {
+                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White)
+                Spacer(Modifier.width(6.dp))
+                Text("MULAI PERJALANAN", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 15.sp)
+            }
+            Spacer(Modifier.height(10.dp))
+            OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth().height(46.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)) {
+                Icon(Icons.Default.ArrowBack, contentDescription = null, tint = Color.White)
+                Spacer(Modifier.width(6.dp))
+                Text("Kembali", color = Color.White)
+            }
+        }
+    }
+}
+
+// ============ HUD & OVERLAYS ============
+@Composable
+private fun PlayingHud(
+    distanceKm: Int, gameSeconds: Float, coins: Int,
+    shieldActive: Boolean, onPause: () -> Unit
+) {
+    val progress = (distanceKm.toFloat() / FLIGHT_TOTAL_KM).coerceIn(0f, 1f)
+    val timeStr = fmtTime(gameSeconds)
+    Column(Modifier.fillMaxWidth().padding(12.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column {
+                Text("IMTIYAZ AIRLINE", fontSize = 9.sp, color = GOLD, fontWeight = FontWeight.Bold)
+                Text("$FLIGHT_NO · ${ALTITUDE_FT / 1000},000 ft",
+                    fontSize = 10.sp, color = Color.White)
+            }
+            if (shieldActive) { Spacer(Modifier.width(8.dp)); Text("🛡️", fontSize = 14.sp) }
+            Spacer(Modifier.weight(1f))
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("YIA ✈ JED", fontSize = 10.sp, color = Color.White.copy(alpha = 0.85f),
+                    fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.weight(1f))
+            IconButton(onClick = onPause, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Default.Pause, contentDescription = "Pause",
+                    tint = Color.White, modifier = Modifier.size(22.dp))
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("$distanceKm km", fontSize = 11.sp, color = Color.White,
+                fontWeight = FontWeight.Bold)
+            Text("$timeStr / 9j 50m", fontSize = 11.sp, color = Color.White.copy(alpha = 0.85f))
+            Text("${(progress * 100).toInt()}%", fontSize = 11.sp, color = Color.White,
+                fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.height(4.dp))
+        Box(Modifier.fillMaxWidth().height(5.dp)
+            .background(Color.White.copy(alpha = 0.25f), RoundedCornerShape(3.dp))
+        ) {
+            Box(Modifier.fillMaxWidth(progress).fillMaxHeight()
+                .background(BRAND_GREEN, RoundedCornerShape(3.dp)))
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("⭐ Pahala: ${coins * 50}", fontSize = 12.sp, color = GOLD,
+                fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun AnnouncementBanner(text: String) {
+    Box(Modifier.fillMaxSize().padding(top = 150.dp, start = 16.dp, end = 16.dp),
+        contentAlignment = Alignment.TopCenter) {
+        Surface(color = Color.Black.copy(alpha = 0.78f), shape = RoundedCornerShape(12.dp)) {
+            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("📢", fontSize = 18.sp)
+                Spacer(Modifier.width(8.dp))
+                Text(text, color = Color.White, fontSize = 11.5.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun MeteorWarningBanner() {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Surface(color = WARNING_RED.copy(alpha = 0.92f),
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.padding(20.dp)) {
+            Column(Modifier.padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("⚠️ PERINGATAN HUJAN METEOR", color = Color.White,
+                    fontWeight = FontWeight.Bold, fontSize = 14.sp, textAlign = TextAlign.Center)
+                Spacer(Modifier.height(8.dp))
+                Text("Mohon kenakan sabuk pengaman.\nJangan gunakan kamar mandi\nselama hujan meteor berlangsung.",
+                    color = Color.White, fontSize = 12.sp, textAlign = TextAlign.Center)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ComboBanner(text: String) {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+        Surface(color = BRAND_GREEN.copy(alpha = 0.92f), shape = RoundedCornerShape(20.dp),
+            modifier = Modifier.padding(bottom = 80.dp)) {
+            Text(text, color = Color.White, fontWeight = FontWeight.Bold,
+                fontSize = 13.sp, modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp))
+        }
+    }
+}
+
+@Composable
+private fun PausedOverlay(onResume: () -> Unit, onMenu: () -> Unit, onBack: () -> Unit) {
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)),
+        contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("⏸️", fontSize = 48.sp)
+            Spacer(Modifier.height(12.dp))
+            Text("PENERBANGAN DIJEDA", color = Color.White,
+                fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Spacer(Modifier.height(24.dp))
+            Button(onClick = onResume, modifier = Modifier.width(220.dp).height(48.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = BRAND_GREEN),
+                shape = RoundedCornerShape(12.dp)) {
+                Text("LANJUTKAN", color = Color.White, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.height(10.dp))
+            OutlinedButton(onClick = onMenu, modifier = Modifier.width(220.dp).height(46.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)) {
+                Text("MENU UTAMA", color = Color.White)
+            }
+            Spacer(Modifier.height(8.dp))
+            TextButton(onClick = onBack) {
+                Text("Keluar", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun FinishedOverlay(
+    coins: Int, score: Int, highScore: Int, newBadge: Badge?,
+    onMenu: () -> Unit, onBack: () -> Unit
+) {
+    Box(
+        Modifier.fillMaxSize()
+            .background(Brush.verticalGradient(listOf(SKY_TOP, SKY_MID1, SKY_MID2))),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(Modifier.fillMaxWidth().padding(28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("🕋", fontSize = 64.sp)
+            Spacer(Modifier.height(8.dp))
+            Text("ALHAMDULILLAH", color = GOLD, fontWeight = FontWeight.Bold, fontSize = 22.sp)
+            Spacer(Modifier.height(4.dp))
+            Text("Pesawat mendarat dengan selamat\ndi Bandara Internasional King Abdul Aziz",
+                color = Color.White, fontSize = 13.sp, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(6.dp))
+            Text("9 jam 50 menit · 8.000 km · 38.000 kaki",
+                color = Color.White.copy(alpha = 0.75f), fontSize = 11.sp)
+            Spacer(Modifier.height(18.dp))
+            Card(colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.15f)),
+                shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("⭐ PAHALA TERKUMPUL", color = Color.White.copy(alpha = 0.75f), fontSize = 11.sp)
+                    Text("$score", color = GOLD, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(6.dp))
+                    Text("🏆 Best: $highScore", color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp)
+                    Text("⭐ ${coins} kenangan terkumpul", color = Color.White.copy(alpha = 0.7f),
+                        fontSize = 10.sp)
+                }
+            }
+            if (newBadge != null) {
+                Spacer(Modifier.height(14.dp))
+                Card(colors = CardDefaults.cardColors(containerColor = GOLD.copy(alpha = 0.9f)),
+                    shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(newBadge.emoji, fontSize = 30.sp)
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text("BADGE BARU!", color = Color.Black.copy(alpha = 0.6f), fontSize = 10.sp)
+                            Text(newBadge.title, color = Color.Black,
+                                fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            Text("Selamat datang di Tanah Suci.\nSemoga ibadah Anda diterima Allah SWT.",
+                color = Color.White.copy(alpha = 0.9f),
+                fontSize = 12.sp, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(20.dp))
+            Button(onClick = onMenu, modifier = Modifier.fillMaxWidth().height(50.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = BRAND_GREEN),
+                shape = RoundedCornerShape(12.dp)) {
+                Text("KEMBALI KE MENU", fontWeight = FontWeight.Bold, color = Color.White)
+            }
+            Spacer(Modifier.height(8.dp))
+            TextButton(onClick = onBack) {
+                Text("Keluar", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
+            }
+        }
+    }
+}
+
 // ============ DRAW HELPERS ============
-private fun DrawScope.drawSky(W: Float, H: Float, offset: Float) {
+private fun DrawScope.drawSky() {
     drawRect(brush = Brush.verticalGradient(
         colors = listOf(SKY_TOP, SKY_MID1, SKY_MID2, SKY_BOTTOM),
-        startY = 0f, endY = H
+        startY = 0f, endY = size.height
     ))
 }
 
@@ -468,22 +917,11 @@ private fun DrawScope.drawMountainsLayer(
 
 private fun DrawScope.drawCloudsC(clouds: List<Cloud>, W: Float, H: Float) {
     clouds.forEach { c ->
-        val cx = c.x * W
-        val cy = c.y * H
-        val r = c.size * W
+        val cx = c.x * W; val cy = c.y * H; val r = c.size * W
         drawCircle(Color.White.copy(alpha = 0.20f), r, Offset(cx, cy))
         drawCircle(Color.White.copy(alpha = 0.15f), r * 0.7f, Offset(cx - r * 0.6f, cy + r * 0.15f))
         drawCircle(Color.White.copy(alpha = 0.15f), r * 0.8f, Offset(cx + r * 0.7f, cy + r * 0.1f))
     }
-}
-
-private fun DrawScope.drawKaabah(W: Float, H: Float) {
-    val horizonY = H * 0.85f
-    val kw = 42.dp.toPx(); val kh = 58.dp.toPx()
-    val kx = W / 2f
-    val ky = horizonY - kh + 8.dp.toPx()
-    drawRect(SILHOUETTE_NEAR, Offset(kx - kw / 2, ky), Size(kw, kh))
-    drawRect(Color(0xFFD4AF37), Offset(kx - kw / 2, ky + kh * 0.32f), Size(kw, 4.dp.toPx()))
 }
 
 private fun DrawScope.drawCoinsC(coins: List<Coin>, W: Float, H: Float) {
@@ -499,8 +937,7 @@ private fun DrawScope.drawCoinsC(coins: List<Coin>, W: Float, H: Float) {
 
 private fun DrawScope.drawMeteorsC(meteors: List<Meteor>, W: Float, H: Float) {
     meteors.forEach { m ->
-        val cx = m.x * W; val cy = m.y * H
-        val r = m.radius * W
+        val cx = m.x * W; val cy = m.y * H; val r = m.radius * W
         for (i in 1..6) {
             drawCircle(
                 color = METEOR_ORANGE.copy(alpha = (0.5f - i * 0.07f).coerceAtLeast(0f)),
@@ -522,22 +959,18 @@ private fun DrawScope.drawParticlesC(particles: List<Particle>, W: Float, H: Flo
 }
 
 private fun DrawScope.drawPlaneV(x: Float, y: Float, W: Float, H: Float, shield: Boolean) {
-    val pcx = x * W; val pcy = y * H
-    val ps = 22.dp.toPx()
+    val pcx = x * W; val pcy = y * H; val ps = 22.dp.toPx()
 
-    // Engine trail
     drawCircle(Color.White.copy(alpha = 0.25f), ps * 0.4f, Offset(pcx, pcy + ps * 1.15f))
     drawCircle(Color.White.copy(alpha = 0.15f), ps * 0.3f, Offset(pcx, pcy + ps * 1.45f))
     drawCircle(Color.White.copy(alpha = 0.08f), ps * 0.2f, Offset(pcx, pcy + ps * 1.75f))
 
-    // Shield ring
     if (shield) {
         drawCircle(SHIELD_COLOR.copy(alpha = 0.30f), ps * 1.8f, Offset(pcx, pcy))
         drawCircle(SHIELD_COLOR.copy(alpha = 0.9f), ps * 1.8f, Offset(pcx, pcy),
             style = Stroke(width = 2.5.dp.toPx()))
     }
 
-    // Fuselage
     drawRoundRect(
         color = Color.White,
         topLeft = Offset(pcx - ps * 0.20f, pcy - ps * 1.00f),
@@ -545,7 +978,6 @@ private fun DrawScope.drawPlaneV(x: Float, y: Float, W: Float, H: Float, shield:
         cornerRadius = CornerRadius(ps * 0.20f, ps * 0.20f)
     )
 
-    // Nose cone
     val nose = Path().apply {
         moveTo(pcx, pcy - ps * 1.18f)
         lineTo(pcx - ps * 0.20f, pcy - ps * 0.75f)
@@ -554,7 +986,6 @@ private fun DrawScope.drawPlaneV(x: Float, y: Float, W: Float, H: Float, shield:
     }
     drawPath(nose, Color.White)
 
-    // Wings
     val wingL = Path().apply {
         moveTo(pcx - ps * 0.20f, pcy)
         lineTo(pcx - ps * 1.15f, pcy + ps * 0.45f)
@@ -562,6 +993,7 @@ private fun DrawScope.drawPlaneV(x: Float, y: Float, W: Float, H: Float, shield:
         close()
     }
     drawPath(wingL, Color(0xFFF1F5F9))
+
     val wingR = Path().apply {
         moveTo(pcx + ps * 0.20f, pcy)
         lineTo(pcx + ps * 1.15f, pcy + ps * 0.45f)
@@ -570,7 +1002,6 @@ private fun DrawScope.drawPlaneV(x: Float, y: Float, W: Float, H: Float, shield:
     }
     drawPath(wingR, Color(0xFFF1F5F9))
 
-    // Tail fins
     val tailL = Path().apply {
         moveTo(pcx - ps * 0.20f, pcy + ps * 0.75f)
         lineTo(pcx - ps * 0.60f, pcy + ps * 0.98f)
@@ -578,6 +1009,7 @@ private fun DrawScope.drawPlaneV(x: Float, y: Float, W: Float, H: Float, shield:
         close()
     }
     drawPath(tailL, Color(0xFFF1F5F9))
+
     val tailR = Path().apply {
         moveTo(pcx + ps * 0.20f, pcy + ps * 0.75f)
         lineTo(pcx + ps * 0.60f, pcy + ps * 0.98f)
@@ -586,343 +1018,12 @@ private fun DrawScope.drawPlaneV(x: Float, y: Float, W: Float, H: Float, shield:
     }
     drawPath(tailR, Color(0xFFF1F5F9))
 
-    // Cockpit window
     drawCircle(BRAND_GREEN, ps * 0.18f, Offset(pcx, pcy - ps * 0.45f))
 
-    // Passenger windows
     repeat(3) { i ->
         drawCircle(Color(0x553B82F6), ps * 0.055f,
             Offset(pcx, pcy - ps * 0.05f + i * ps * 0.28f))
     }
 
-    // Tail logo
     drawCircle(GOLD, ps * 0.08f, Offset(pcx, pcy + ps * 0.88f))
-}
-
-// ============ OVERLAYS ============
-@Composable
-private fun PlayingHud(
-    lives: Int, bonusScore: Int, highScore: Int, shieldActive: Boolean,
-    gameSeconds: Float, onPause: () -> Unit
-) {
-    val progress = (gameSeconds / FLIGHT_TOTAL_SECONDS).coerceIn(0f, 1f)
-    val distanceKm = (progress * FLIGHT_TOTAL_KM).toInt()
-    val timeStr = fmtTime(gameSeconds)
-    val totalStr = "9j 50m"
-
-    Column(Modifier.fillMaxWidth().padding(12.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("❤".repeat(lives.coerceAtLeast(0)), fontSize = 18.sp, color = Color.White)
-            if (shieldActive) { Spacer(Modifier.width(6.dp)); Text("🛡️", fontSize = 16.sp) }
-            Spacer(Modifier.weight(1f))
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("YIA ✈ JED", fontSize = 10.sp, color = Color.White.copy(alpha = 0.8f),
-                    fontWeight = FontWeight.Bold)
-                Text("${ALTITUDE_FT / 1000},000 ft", fontSize = 11.sp, color = Color.White)
-            }
-            Spacer(Modifier.weight(1f))
-            IconButton(onClick = onPause, modifier = Modifier.size(36.dp)) {
-                Icon(Icons.Default.Pause, contentDescription = "Pause",
-                    tint = Color.White, modifier = Modifier.size(22.dp))
-            }
-        }
-        Spacer(Modifier.height(6.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("$distanceKm km", fontSize = 11.sp, color = Color.White,
-                fontWeight = FontWeight.Bold)
-            Text("$timeStr / $totalStr", fontSize = 11.sp, color = Color.White.copy(alpha = 0.85f))
-            Text("${(progress * 100).toInt()}%", fontSize = 11.sp, color = Color.White,
-                fontWeight = FontWeight.Bold)
-        }
-        Spacer(Modifier.height(4.dp))
-        Box(Modifier.fillMaxWidth().height(5.dp)
-            .background(Color.White.copy(alpha = 0.25f), RoundedCornerShape(3.dp))
-        ) {
-            Box(Modifier.fillMaxWidth(progress).fillMaxHeight()
-                .background(BRAND_GREEN, RoundedCornerShape(3.dp)))
-        }
-        Spacer(Modifier.height(6.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("💰 $bonusScore", fontSize = 12.sp, color = GOLD, fontWeight = FontWeight.Bold)
-            Text("🏆 BEST $highScore", fontSize = 11.sp,
-                color = Color.White.copy(alpha = 0.7f))
-        }
-    }
-}
-
-@Composable
-private fun AnnouncementBanner(text: String) {
-    Box(Modifier.fillMaxSize().padding(top = 140.dp, start = 16.dp, end = 16.dp),
-        contentAlignment = Alignment.TopCenter) {
-        Surface(color = Color.Black.copy(alpha = 0.75f), shape = RoundedCornerShape(12.dp)) {
-            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("📢", fontSize = 18.sp)
-                Spacer(Modifier.width(8.dp))
-                Text(text, color = Color.White, fontSize = 11.5.sp)
-            }
-        }
-    }
-}
-
-@Composable
-private fun MeteorWarningBanner() {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Surface(
-            color = WARNING_RED.copy(alpha = 0.92f),
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier.padding(24.dp)
-        ) {
-            Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("⚠️ PERINGATAN HUJAN METEOR", color = Color.White,
-                    fontWeight = FontWeight.Bold, fontSize = 15.sp, textAlign = TextAlign.Center)
-                Spacer(Modifier.height(8.dp))
-                Text("Mohon kenakan sabuk pengaman.\nJangan gunakan kamar mandi\nselama hujan meteor berlangsung.",
-                    color = Color.White, fontSize = 12.sp, textAlign = TextAlign.Center)
-            }
-        }
-    }
-}
-
-@Composable
-private fun MilestoneBanner(text: String) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Surface(color = GOLD.copy(alpha = 0.92f), shape = RoundedCornerShape(12.dp)) {
-            Text(text, color = Color.Black, fontWeight = FontWeight.Bold,
-                fontSize = 16.sp, modifier = Modifier.padding(14.dp))
-        }
-    }
-}
-
-@Composable
-private fun ComboBanner(text: String) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
-        Surface(color = BRAND_GREEN.copy(alpha = 0.9f), shape = RoundedCornerShape(20.dp),
-            modifier = Modifier.padding(bottom = 80.dp)) {
-            Text(text, color = Color.White, fontWeight = FontWeight.Bold,
-                fontSize = 13.sp, modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp))
-        }
-    }
-}
-
-@Composable
-private fun MenuOverlay(
-    highScore: Int, badges: Set<String>,
-    onStart: () -> Unit, onBack: () -> Unit
-) {
-    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)),
-        contentAlignment = Alignment.Center) {
-        Column(Modifier.fillMaxWidth().padding(28.dp),
-            horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("✈️", fontSize = 56.sp)
-            Spacer(Modifier.height(10.dp))
-            Text("TERBANG KE MAKKAH", color = Color.White,
-                fontWeight = FontWeight.Bold, fontSize = 24.sp, textAlign = TextAlign.Center)
-            Spacer(Modifier.height(4.dp))
-            Text("YIA Yogyakarta → King Abdul Aziz Jeddah\n9 jam 50 menit · 38.000 kaki",
-                color = Color.White.copy(alpha = 0.85f),
-                fontSize = 12.sp, textAlign = TextAlign.Center)
-            Spacer(Modifier.height(8.dp))
-            Text("Kemudikan pesawat agar terhindar dari hujan meteor!",
-                color = Color.White.copy(alpha = 0.75f),
-                fontSize = 11.sp, textAlign = TextAlign.Center)
-            Spacer(Modifier.height(20.dp))
-
-            Card(colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.15f)),
-                shape = RoundedCornerShape(12.dp)) {
-                Column(Modifier.padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("🏆 BEST BONUS", color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp)
-                    Text("$highScore", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                }
-            }
-            if (badges.isNotEmpty()) {
-                Spacer(Modifier.height(14.dp))
-                Text("Badge", color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp)
-                Spacer(Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    BADGES.filter { badges.contains(it.id) }.forEach { b ->
-                        Text(b.emoji, fontSize = 22.sp)
-                    }
-                }
-            }
-            Spacer(Modifier.height(24.dp))
-            Button(onClick = onStart, modifier = Modifier.fillMaxWidth().height(52.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = BRAND_GREEN),
-                shape = RoundedCornerShape(12.dp)) {
-                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White)
-                Spacer(Modifier.width(6.dp))
-                Text("MULAI TERBANG", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 15.sp)
-            }
-            Spacer(Modifier.height(10.dp))
-            OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth().height(46.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)) {
-                Icon(Icons.Default.ArrowBack, contentDescription = null, tint = Color.White)
-                Spacer(Modifier.width(6.dp))
-                Text("Kembali", color = Color.White)
-            }
-        }
-    }
-}
-
-@Composable
-private fun PausedOverlay(onResume: () -> Unit, onMenu: () -> Unit, onBack: () -> Unit) {
-    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)),
-        contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("⏸️", fontSize = 48.sp)
-            Spacer(Modifier.height(12.dp))
-            Text("PENERBANGAN DIJEDA", color = Color.White,
-                fontWeight = FontWeight.Bold, fontSize = 18.sp)
-            Spacer(Modifier.height(24.dp))
-            Button(onClick = onResume, modifier = Modifier.width(220.dp).height(48.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = BRAND_GREEN),
-                shape = RoundedCornerShape(12.dp)) {
-                Text("LANJUTKAN", color = Color.White, fontWeight = FontWeight.Bold)
-            }
-            Spacer(Modifier.height(10.dp))
-            OutlinedButton(onClick = onMenu, modifier = Modifier.width(220.dp).height(46.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)) {
-                Text("MENU UTAMA", color = Color.White)
-            }
-            Spacer(Modifier.height(8.dp))
-            TextButton(onClick = onBack) {
-                Text("Keluar", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
-            }
-        }
-    }
-}
-
-@Composable
-private fun GameOverOverlay(
-    distanceKm: Int, bonusScore: Int, highScore: Int,
-    newBadge: Badge?, coins: Int,
-    onRetry: () -> Unit, onMenu: () -> Unit, onBack: () -> Unit
-) {
-    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.65f)),
-        contentAlignment = Alignment.Center) {
-        Column(Modifier.fillMaxWidth().padding(28.dp),
-            horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("💥", fontSize = 56.sp)
-            Spacer(Modifier.height(8.dp))
-            Text("PESAWAT JATUH", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-            Spacer(Modifier.height(12.dp))
-            Card(colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.15f)),
-                shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("JARAK TERCAPAI", color = Color.White.copy(alpha = 0.75f), fontSize = 11.sp)
-                    Text("$distanceKm km", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("💰 BONUS", color = Color.White.copy(alpha = 0.7f), fontSize = 10.sp)
-                            Text("$bonusScore", color = GOLD, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("🪙 KOIN", color = Color.White.copy(alpha = 0.7f), fontSize = 10.sp)
-                            Text("$coins", color = GOLD, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                    Spacer(Modifier.height(6.dp))
-                    Text("Best: $highScore", color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp)
-                }
-            }
-            if (newBadge != null) {
-                Spacer(Modifier.height(14.dp))
-                Card(colors = CardDefaults.cardColors(containerColor = GOLD.copy(alpha = 0.9f)),
-                    shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
-                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(newBadge.emoji, fontSize = 30.sp)
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text("BADGE BARU!", color = Color.Black.copy(alpha = 0.6f), fontSize = 10.sp)
-                            Text(newBadge.title, color = Color.Black,
-                                fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                        }
-                    }
-                }
-            }
-            Spacer(Modifier.height(20.dp))
-            Button(onClick = onRetry, modifier = Modifier.fillMaxWidth().height(50.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = BRAND_GREEN),
-                shape = RoundedCornerShape(12.dp)) {
-                Text("COBA LAGI", fontWeight = FontWeight.Bold, color = Color.White)
-            }
-            Spacer(Modifier.height(8.dp))
-            OutlinedButton(onClick = onMenu, modifier = Modifier.fillMaxWidth().height(44.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)) {
-                Text("MENU", color = Color.White)
-            }
-            Spacer(Modifier.height(6.dp))
-            TextButton(onClick = onBack) {
-                Text("Keluar", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
-            }
-        }
-    }
-}
-
-@Composable
-private fun FinishedOverlay(
-    bonusScore: Int, highScore: Int, newBadge: Badge?, coins: Int,
-    onMenu: () -> Unit, onBack: () -> Unit
-) {
-    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)),
-        contentAlignment = Alignment.Center) {
-        Column(Modifier.fillMaxWidth().padding(28.dp),
-            horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("🕋", fontSize = 64.sp)
-            Spacer(Modifier.height(8.dp))
-            Text("SELAMAT!", color = GOLD, fontWeight = FontWeight.Bold, fontSize = 26.sp)
-            Spacer(Modifier.height(4.dp))
-            Text("Anda telah sampai di Makkah", color = Color.White,
-                fontSize = 14.sp, textAlign = TextAlign.Center)
-            Spacer(Modifier.height(6.dp))
-            Text("9 jam 50 menit · 8.000 km · 38.000 kaki",
-                color = Color.White.copy(alpha = 0.75f), fontSize = 11.sp)
-            Spacer(Modifier.height(16.dp))
-            Card(colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.15f)),
-                shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("💰 BONUS", color = Color.White.copy(alpha = 0.7f), fontSize = 10.sp)
-                            Text("$bonusScore", color = GOLD, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("🪙 KOIN", color = Color.White.copy(alpha = 0.7f), fontSize = 10.sp)
-                            Text("$coins", color = GOLD, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                    Spacer(Modifier.height(6.dp))
-                    Text("Best: $highScore", color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp)
-                }
-            }
-            if (newBadge != null) {
-                Spacer(Modifier.height(14.dp))
-                Card(colors = CardDefaults.cardColors(containerColor = GOLD.copy(alpha = 0.9f)),
-                    shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
-                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(newBadge.emoji, fontSize = 30.sp)
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text("BADGE BARU!", color = Color.Black.copy(alpha = 0.6f), fontSize = 10.sp)
-                            Text(newBadge.title, color = Color.Black,
-                                fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                        }
-                    }
-                }
-            }
-            Spacer(Modifier.height(20.dp))
-            Button(onClick = onMenu, modifier = Modifier.fillMaxWidth().height(50.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = BRAND_GREEN),
-                shape = RoundedCornerShape(12.dp)) {
-                Text("KEMBALI KE MENU", fontWeight = FontWeight.Bold, color = Color.White)
-            }
-            Spacer(Modifier.height(8.dp))
-            TextButton(onClick = onBack) {
-                Text("Keluar", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
-            }
-        }
-    }
 }
