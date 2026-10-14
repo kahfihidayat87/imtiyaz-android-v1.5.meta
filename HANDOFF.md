@@ -1,6 +1,6 @@
 # Imtiyaz Tour — Project Handoff Document
 
-**Terakhir update:** 13 Okt 2026 (v2.13.0, TAHAP 24 SELESAI, rilis build 120+)
+**Terakhir update:** 14 Okt 2026 (v2.15.0, TAHAP 25 SELESAI)
 **Repo utama:** https://github.com/kahfihidayat87/imtiyaz-android-v1.5.meta
 **Local path:** C:\Users\DELL\Documents\GitHub\imtiyaz-android-v1.5.meta
 
@@ -925,155 +925,258 @@ Contoh: 15 pax → 3 quad + 1 triple = 4 kamar
 - `console.error` di LiteSpeed **tidak muncul** di `stderr.log` — perlu `console.log` untuk debug
 - Fallback `lastLocation` penting untuk HP dengan GPS lemah
 
-### Kandidat TAHAP 25
-
-- LiveKit self-host untuk radio TL (uji device end-to-end)
-- D2 Manifest Real-time (auto-populate jamaah dari WP)
-- D1 Planning Trip (Gantt chart)
-- D4 Visa Tracking
-- Cleanup `LocateService.kt` (ntfy legacy) → hapus di v2.14.0
-- Bump versi 2.14.0 (banyak fitur baru)
-
 ---
 
-## TAHAP 24 — Firebase Custom Auth + Fix Mode Aman GPS (13 Okt 2026)
+## TAHAP 25 — Radio Gelombang + Game Simulasi Penerbangan + Checklist Barang (14 Okt 2026)
 
 **Status:** ✅ Selesai, teruji end-to-end
+**Versi:** 2.15.0 (versionCode 16)
 
 ### Fokus
 
-1. **Firebase Custom Auth (A1-A4)** — ganti Firestore rules terbuka → ketat berbasis custom claims
-2. **Fix Mode Aman GPS** — fallback + warm-up untuk HP chip GPS lemah
-3. **Optimasi server** — pre-warm cache + endpoint `/health` + keep-alive
-4. **Auto-sync role TL** — hook `save_post_jamaah` di WP plugin
+1. **Radio Gelombang** — TL buat kode, jamaah join via kode (Live + Voice Note)
+2. **Game "Terbang ke Makkah" v3** — simulasi penerbangan umrah YIA → JED dengan TTS
+3. **Checklist Barang Bawaan** — item baru di tab Saya
+4. **GPS Auto-Focus** — peta otomatis zoom ke jamaah target
+5. **Fix gate TL di Radio** — fetch `is_tour_leader` di awal RadioScreen
+6. **Heartbeat workflow** — retry 3× + timeout 60s
 
-### Firebase Custom Auth
+---
 
-| Batch | Isi | Bukti |
-|---|---|---|
-| **A1** | Endpoint `POST /api/firebase-token` (jamaah) + `POST /api/firebase-token-admin` | ✅ verify via WP `resolve-token` / `admin-me` |
-| **A2** | Android Firebase Auth di app jamaah | ✅ `FirebaseAuthHelper.kt` + login/logout |
-| **A3** | Firestore rules berbasis custom claims | ✅ `isSelf()`, `isTourLeader()`, `isAdmin()` |
-| **A4** | Auto-sync role TL via `save_post_jamaah` hook | ✅ race condition di-fix dengan baca `$_POST` langsung |
+### 1. Radio Gelombang (v2.15.0)
 
-### Format Custom Claims
+**Konsep:** Ganti sistem kanal otomatis (admin assign WP) → **kode gelombang**.
+TL generate kode → share WA → jamaah input untuk join.
 
-**Jamaah (`jamaah_{id}`):**
-```json
-{ "role": "jamaah" | "tour_leader", "jamaahId": "1453" }
-Admin (admin_{id}):
+**Format kode (Hybrid):**
+- TL input nama: `"Linuwih 17 Okt"` → prefix `LINU`
+- Server generate suffix random: `LINU-7K3M` (9 char)
+- **Berlaku 24 jam** (auto expire)
 
-json
-{ "role": "admin" | "super_admin" | "keuangan", "adminId": "1", "platform": "admin" }
-// Jamaah context
-function isSelf(jamaahId) { return isSignedIn() && request.auth.token.jamaahId == jamaahId; }
-function isTourLeader() { return hasRole('tour_leader'); }
+**Server (`app.js`) — endpoint baru:**
+| Endpoint | Fungsi |
+|---|---|
+| `POST /api/radio/gelombang/create` | TL buat gelombang |
+| `POST /api/radio/gelombang/join` | Jamaah join via kode |
+| `POST /api/radio/gelombang/leave` | Jamaah keluar |
+| `POST /api/radio/gelombang/revoke` | TL akhiri |
+| `GET /api/radio/gelombang/info/:kode` | Preview |
 
-// Admin context
-function isAdmin() { return isSignedIn() && request.auth.token.platform == 'admin'; }
-function isAdminOrManager() { return isAdmin() && request.auth.token.role in ['admin', 'super_admin', 'keuangan']; }
+**Modifikasi endpoint existing:**
+- `radio/send`, `radio/poll`, `radio/token` — support field `kode_gelombang`
+- Fallback ke `kanal_id` (backward compat) kalau tidak ada kode
 
-// Jamaah collections — self + TL
-match /jamaah_tokens/{jamaahId} { allow read: if isSelf || isTourLeader(); allow write: if isSelf; }
-match /lokasi_jamaah/{jamaahId} { ... }
-match /alert_izin/{jamaahId} { ... }
+**Firestore:**
+gelombang/{kode}
+├── kode, nama, tl_id, tl_nama
+├── is_active, created_at, expires_at (24h)
+└── peserta: { "1453": { nama, joined_at, is_tl } }
 
-// Trips (D3) — admin only
-match /trips/{tripId}/{document=**} {
-  allow read: if isAdmin();
-  allow write: if isAdminOrManager();
+
+**Rules:** `allow read: if isSignedIn(); allow write: if false;` (write via admin SDK)
+
+**Android:**
+- `RadioGelombangApi.kt` (baru) — interface Retrofit + data class
+- `RadioLiveKit.kt` — terima `kodeGelombang` (LiveKit room: `imtiyaz-gelombang-{kode}`)
+- `Radio.kt` — UI create/join + panel kode + share WA + dialog
+
+**Aturan:**
+- 1 jamaah = **1 gelombang aktif** (harus leave dulu sebelum join lain)
+- TL buat gelombang baru → gelombang lama **auto-revoke**
+- Live mode & Voice Note mode **sama-sama pakai gelombang** (konsisten)
+
+---
+
+### 2. Game "Terbang ke Makkah" v3
+
+**Rewrite total** — dari endless runner hindari meteor → **simulasi penerbangan umrah**.
+
+**Story:** IMTIYAZ AIRLINE flight **IZ-6711** · YIA Yogyakarta → JED King Abdul Aziz · 9 jam 50 menit · 38.000 kaki.
+
+**Fase:**
+1. **Bandara (5 layar):** Pintu masuk · Check-in · Screening · Imigrasi · Boarding
+2. **Terbang:** Rute 10 waypoint + gameplay (kumpulkan koin pahala)
+3. **Mendarat:** Landing + pesan selamat datang di Tanah Suci
+
+**Aturan screening lengkap:**
+- Lepas: jaket, ikat pinggang, jam tangan, topi, sepatu
+- Keluarkan: laptop, HP, tablet, power bank
+- Air minum: max 100 ml/wadah, total 1 liter
+- Dilarang: benda tajam, gunting, korek api, petasan
+- Obat: sertakan resep dokter
+
+**Rute (10 waypoint):**
+| Km | Lokasi |
+|---|---|
+| 0 | YIA Yogyakarta |
+| 400 | Selat Sunda |
+| 1200 | Selat Malaka |
+| 2400 | Laut Andaman |
+| 3500 | Teluk Benggala |
+| 4800 | India Selatan |
+| 6200 | Laut Arab |
+| 7300 | Oman (Maskat) |
+| 7700 | Arab Saudi |
+| 7950 | Jeddah (mendarat) |
+
+**Fitur teknis:**
+- **TTS (TextToSpeech)** — bahasa Indonesia, auto-speak per milestone
+- **Meteor warning** tiap 15 detik real → "Mohon kenakan sabuk pengaman. Jangan gunakan kamar mandi."
+- **Turbulensi** (bukan kecelakaan) — pesawat goyang + TTS
+- **Koin ⭐ Pahala** (+50) + **Near-miss combo** (+10)
+- **Durasi 3 menit real** (10800 game detik / 60)
+- **Parallax 3 layer** (bintang twinkle, gunung 2 lapis, awan)
+- **Pesawat ikon detail** (fuselage + sayap + ekor + jendela)
+- **Badge:** Penerbang Muda (1000km) · Handal (3000) · Ulung (6000) · Sampai Makkah (8000)
+
+**File:**
+- `TerbangKeMakkah.kt` (~1100 baris) — game engine + UI
+- `TerbangKeMakkahTts.kt` (~80 baris) — wrapper TTS robust (pre-check + fallback + debug log)
+
+**Ganti:** `HafalanQuran.kt` + `SusunAyat.kt` (dihapus). Tab Quiz → **Game**.
+**Card di `Quran.kt`** ("Latihan Hafalan Juz 30") dihapus.
+
+---
+
+### 3. Checklist Barang Bawaan
+
+**File baru:** `ChecklistBarangScreen.kt` (~290 baris)
+
+**Isi (4 section, 19 item):**
+| Section | Item |
+|---|---|
+| 🎒 Perlengkapan | Al-Quran, HP+charger, dompet+KTP+ATM, stop kontak, hanger, sandal, tali raffia, kacamata (8) |
+| 👕 Pakaian | Ikhram/mukena, 4-5 set pakaian, seragam, jaket, kaos dalam (5) |
+| 💊 Obat | Obat rutin, obat warung, jamu (3) |
+| 🍲 Makanan | Garam, sambel/abon, pop mie (3) |
+
+**Info koper:**
+- Koper bagasi (24"): maks 20 kg · ❌ power bank, cairan, benda tajam
+- Koper kabin (18"): maks 7 kg · ✅ cairan maks 100 ml/pcs · ✅ power bank maks 10.000 mAh
+- Tas dokumen (slempang): paspor, KTP, tiket, visa
+
+**State:** lokal via `Prefs` (`barang_<id>`)
+**Fitur:** Progress bar, reset, auto-save
+**Entry:** Card di tab Saya, di bawah "Checklist Dokumen"
+
+**Bug fix:** Render pakai `when` block + BackHandler (bukan `if`).
+
+---
+
+### 4. GPS Auto-Focus
+
+**Masalah:** Setelah TL cari jamaah, peta tidak auto-zoom ke titik jamaah — perlu zoom out manual.
+
+**Fix (`LokasiMapView.kt`):**
+```kotlin
+val target = highlightJamaahId?.let { hid ->
+    allJamaah.firstOrNull { it.jamaah_id == hid && it.latitude != null }
 }
-Endpoint Baru di app.js
-Endpoint	Fungsi
-POST /api/firebase-token	Custom token jamaah
-POST /api/firebase-token-admin	Custom token admin (+ auto-create user)
-POST /api/sync-role	Sync claims role TL (guard x-api-key)
-GET /health	Keep-alive target
-Fix Mode Aman GPS (v2.14.0)
-Masalah: ModeAmanService pakai lastLocation (network provider ~100m) atau getBestLocation timeout → loop mati (Job was cancelled).
+if (target != null) {
+    mapView.controller.animateTo(GeoPoint(target.latitude!!, target.longitude!!), 17.0, 900L)
+} else if (points.isNotEmpty()) {
+    // fallback avg center
+}
 
-Fix:
+Efek: TL cari jamaah → peta langsung zoom 17 ke titik target.
+5. Fix Gate TL di Radio
+Masalah: Login sebagai TL, tapi di tab Radio muncul form "Masukkan Kode Gelombang" (form jamaah), bukan "Buat Gelombang Baru" (form TL).
 
-LocationHelper.getBestLocation() dengan timeoutMs = DEFAULT_TIMEOUT_MS (30s) — samakan FCM trigger
+Root cause: isTourLeader hanya di-set oleh poll loop. Setelah Batch C, poll loop di-guard if (kodeGelombang.isBlank()) return — jadi sebelum join, isTourLeader tetap false.
 
-Fallback lastLocation kalau GPS fresh null → tetap update
+Fix: Tambah LaunchedEffect(Unit) di awal RadioScreen — fetch is_tour_leader sekali via /api/radio/poll tanpa kode gelombang:
+LaunchedEffect(Unit) {
+    try {
+        val resp = withContext(Dispatchers.IO) {
+            RadioApiClient.service.poll(RadioPollRequest(jamaahId, jamaahToken, 0L))
+        }
+        isTourLeader = resp.is_tour_leader ?: false
+        // ... set channelNama, myId, isFallbackChannel
+    } catch (e: Exception) { /* skip */ }
+}
 
-Re-throw CancellationException — loop tidak mati
+6. Heartbeat Workflow Fix
+Masalah: Cron 6 jam gagal dengan exit code 28 (curl timeout 30s).
 
-Warm-up GPS 60s di awal refreshLoop() — panaskan chip GPS
+Fix (.github/workflows/heartbeat.yml):
 
-Flag accuracy_quality: "high" | "medium" | "low" di Firestore
+Timeout naik dari 30s → 60s
 
-Hasil:
+--connect-timeout 15 + --retry 2 --retry-delay 5
 
-HP chip GPS bagus (TL 1454): akurasi < 2m
+Retry 3× dengan delay 10s antar percobaan
 
-HP chip GPS lemah (jamaah 1453): fallback 100m, tidak crash
-
-Loop konsisten update tiap ~70 detik
-
-Optimasi Server
-Pre-warm cache saat startup: paket, dokumen, jadwal, doa-audio, pembimbing
-
-Endpoint /health → GitHub Actions cron 5 menit (.github/workflows/keep-alive.yml)
-
-Script restart-api.sh di-fix: match lsnode.*api\.pastiumrah (bukan hanya node app.js)
-
-Hasil: cold /api/paket 2 s → TTFB server ~47 ms (target < 500 ms tercapai)
+Hasil: Heartbeat cron berikutnya sukses (9s).
 
 Bug Fix Sesi Ini
 Bug	Root Cause	Fix
-/api/firebase-token-admin 401	Node cek r.data.admin_id, WP return id	Cek ke r.data.id
-setCustomUserClaims user not found	User Firebase belum ada	createUser dulu
-2 proses Node.js rebutan port	lsnode LiteSpeed + node app.js manual	Kill lsnode lama
-Node tidak reload patch	LiteSpeed serve kode lama	Kill lsnode
-Mode Aman Job was cancelled	CancellationException ditelan	Re-throw
-GPS selalu TIMEOUT	Chip GPS HP lambat	Warm-up 60s
-Auto-sync TL race condition	Hook beda fire tidak urut	Baca $_POST['is_tour_leader'] langsung
-File Baru (App Jamaah)
+Checklist Barang tidak bisa diklik	Render pakai when block, bukan if	Patch render branch + BackHandler
+Radio Voice mode auto-join	Belum migrasi ke gelombang	Batch C: gate + poll guard
+TL dilihat sebagai Jamaah	isTourLeader hanya di-set poll loop	Fetch awal via LaunchedEffect
+Progress bar error	Int division	toFloat() + .coerceIn(0f, 1f)
+TTS tidak keluar suara	Beberapa HP tidak support id-ID	Fallback ke Locale.getDefault()
+Heartbeat workflow fail	Curl timeout 30s transient	Retry 3× + timeout 60s
+Banner meteor tutup pesawat	Posisi center	Pindah ke top=130dp
+Game durasi 5 menit terlalu lama	REAL_TO_GAME_TIME 120f	Jadi 60f (3 menit real)
+File Baru
 File	Fungsi
-FirebaseAuthHelper.kt	Login/logout Firebase Auth
-.github/workflows/keep-alive.yml	Cron 5 menit ping /health
+RadioGelombangApi.kt	API client gelombang
+ChecklistBarangScreen.kt	UI checklist barang
+TerbangKeMakkah.kt	Game simulasi penerbangan
+TerbangKeMakkahTts.kt	Wrapper TTS
+File Dihapus
+File	Alasan
+HafalanQuran.kt	Diganti game
+SusunAyat.kt	Diganti game
 File Dimodifikasi
 File	Perubahan
-MainActivity.kt	+ import Firebase Auth, endpoint firebaseToken, wire login/logout
-build.gradle	+ firebase-auth-ktx
-ModeAmanService.kt	Fix GPS (warm-up + fallback + re-throw)
-app.js (server)	+ endpoint firebase-token, firebase-token-admin, sync-role, /health, pre-warm
-imtiyaz-connector.php	+ hook sync_role_after_save
-restart-api.sh (server)	Fix pattern grep
+MainActivity.kt	Render branch checklist barang
+Radio.kt	Gelombang UI + Voice Note gate + fetch TL awal
+RadioLiveKit.kt	Terima kodeGelombang
+LokasiMapView.kt	Auto-focus target
+Quran.kt	Hapus Card Latihan Hafalan
+app/build.gradle	Bump version 2.15.0
+.github/workflows/heartbeat.yml	Retry 3× + timeout 60s
+Server-Side (Tidak di Git)
+app.js (Node.js):
+
+5 endpoint gelombang baru
+
+Modifikasi radio/send, radio/poll, radio/token
+
+Debug log cleanup di /api/firebase-token-admin
+
+Firestore:
+
+Collection baru gelombang/{kode}
+
+Rules: read for signed-in, write via admin SDK
+
 Commit Log
-9861f45 ci: keep-alive server 5 menit via GitHub Actions
+6f81b50 feat(game): Terbang ke Makkah — endless runner (v1)
 
-ce3906f feat(auth): Firebase Custom Auth (A2) — login/logout + endpoint firebaseToken
+9a99b16 feat(game): v2 — parallax, pesawat ikon, partikel, koin, near-miss, pause
 
-f05e2b5 fix(location): ModeAman pakai LocationHelper.getBestLocation
+c3de5f5 feat(game-v3): simulasi penerbangan umrah
 
-7c8682e fix(mode-aman): re-throw CancellationException + fallback lastLocation
+b9a7824 fix: Checklist Barang render branch
 
-70cf5ea fix(mode-aman): timeout 10s → 25s
+de8426f feat(radio-v2.15.0): gelombang — TL create kode
 
-59815ab fix(mode-aman): warm-up GPS 60s + timeout 30s
+e0a1b84 feat(radio-v2.15.0): Voice Note mode ikut gelombang
 
-Catatan Server
-lsnode LiteSpeed = proses utama yang serve API. node app.js manual = proses bantu.
+(latest) fix(radio): fetch is_tour_leader di awal RadioScreen
 
-Kalau restart, kill keduanya + spawn manual 1x.
+Kandidat TAHAP 26
+LiveKit self-host untuk biaya radio
 
-console.error di LiteSpeed tidak muncul di stderr.log — pakai console.log untuk debug.
+D2 Manifest Real-time (Admin app)
 
-Jangan hapus blok _imtiyazLookup (fix DNS intermittent).
+D1 Planning Trip (Gantt)
 
-Repo Admin — TAHAP 24 Terpisah
-Fitur D3 Auto-Assign Kamar (Trip + Hotel + Kamar + PDF) ada di repo imtiyaz-admin-android. Lihat HANDOFF.md di repo itu untuk detail lengkap.
+D4 Visa Tracking
 
-Kandidat TAHAP 25
-LiveKit self-host untuk radio TL (uji device end-to-end)
+Game leaderboard antar jamaah (Firestore)
 
-D2 Manifest Real-time (auto-populate jamaah dari WP)
+Bump ke 2.16.0 kalau ada fitur besar berikutnya
 
-D1 Planning Trip (Gantt chart)
-
-Bump versi 2.14.0 (karena banyak fitur baru)
-
-Cleanup LocateService.kt (ntfy legacy) → hapus di v2.14.0
