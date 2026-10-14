@@ -217,6 +217,23 @@ fun RadioScreen(onBack: () -> Unit) {
     var liveActive by remember { mutableStateOf(false) }
     val playedIds = remember { mutableSetOf<String>() }
     val recorder = remember { RadioRecorder(context) }
+
+    // v2.15.0 FIX: fetch is_tour_leader sekali di awal supaya gate UI (TL vs Jamaah)
+    // benar SEBELUM user join gelombang. Sebelumnya hanya di-set oleh poll loop,
+    // padahal poll loop baru aktif setelah join — jadi TL selalu tampil sebagai jamaah.
+    LaunchedEffect(Unit) {
+        try {
+            val resp = withContext(Dispatchers.IO) {
+                RadioApiClient.service.poll(RadioPollRequest(jamaahId, jamaahToken, 0L))
+            }
+            isTourLeader = resp.is_tour_leader ?: false
+            channelNama = resp.channel_nama ?: ""
+            myId = resp.my_jamaah_id ?: ""
+            isFallbackChannel = resp.is_fallback_channel ?: false
+        } catch (e: Exception) {
+            // Diam-diam skip — bukan blocker utama. User bisa retry join.
+        }
+    }
     // v2.15.0: Gelombang Radio
     var kodeGelombang by remember { mutableStateOf("") }
     var gelombangNama by remember { mutableStateOf("") }
