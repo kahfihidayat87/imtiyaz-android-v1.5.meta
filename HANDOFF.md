@@ -1180,3 +1180,247 @@ Game leaderboard antar jamaah (Firestore)
 
 Bump ke 2.16.0 kalau ada fitur besar berikutnya
 
+---
+
+## Hotfix Infrastruktur — Migrasi Keep-Alive & Heartbeat ke cron-job.org (16 Okt 2026)
+
+**Status:** ✅ Selesai
+**Kategori:** Infrastruktur / WAF Mitigation
+
+---
+
+### Ringkasan
+
+Hostinger mengaktifkan **WAF/CDN JS Challenge** di depan `api.pastiumrah.com` sekitar 16 Okt 2026. WAF ini memblokir semua **IP datacenter** (GitHub Actions runners, AWS, GCP, Azure, dll), sehingga workflow `keep-alive.yml` dan `heartbeat.yml` gagal dengan **HTTP 403**.
+
+**Solusi:** Migrasi kedua cron ke **cron-job.org** — IP mereka sudah di-whitelist Hostinger (dibuktikan oleh `pastiumrah.com/wp-cron.php` yang sudah lama aktif di cron-job.org tanpa masalah).
+
+---
+
+### 1. Masalah Detail
+
+#### Gejala
+
+Workflow GitHub Actions `keep-alive.yml` gagal setiap 5 menit dengan response:
+HTTP 403
+
+<!DOCTYPE html><title>Checking your browser before accessing. Just a moment...</title> <script src="/hcdn-cgi/jschallenge"></script> ```
+Response body adalah halaman JS Challenge (mirip Cloudflare) — bukan response dari Node.js API.
+
+Bukti Diagnostik
+Sumber Request	HTTP Code	Kesimpulan
+Lokal (IP rumah)	200	✅ Residential IP lolos WAF
+Dengan User-Agent browser	200	✅ UA bukan faktor
+Direct IP (--resolve)	200	✅ Server OK
+GitHub Actions	403	❌ IP datacenter diblok
+SSH server Hostinger	200	✅ IP server lolos
+Kesimpulan: WAF Hostinger memblokir IP range datacenter (kebijakan anti-bot). Tidak bergantung User-Agent.
+
+Dampak
+Fitur	Efek
+Keep-alive (5 menit)	❌ Fail → server cold start berulang
+Heartbeat broadcast (6 jam)	❌ Fail → HP jamaah tidak bangun dari App Standby
+Pre-warm cache	Hilang saat cold start → /api/paket lambat ~2 detik untuk request pertama
+2. Solusi — cron-job.org
+Alasan pilih cron-job.org
+Alternatif	Status	Catatan
+cron-job.org	✅ Dipilih	IP sudah whitelisted (WP-Cron existing lolos)
+UptimeRobot	Backup	IP juga whitelisted, tapi fokus monitoring (bukan cron)
+hPanel Cron Jobs	Backup	Internal server, bypass WAF, tapi butuh akses hPanel
+GitHub Actions	❌ Dimatikan	Kena WAF
+Konfigurasi Cron Baru
+Cron 1 — Health Check (Keep-Alive):
+
+Field	Nilai
+Judul	Imtiyaz API Health Check
+URL	https://api.pastiumrah.com/health
+Method	GET
+Header	(tidak ada)
+Body	(tidak ada)
+Jadwal	*/5 * * * * (setiap 5 menit)
+Zona waktu	Asia/Jakarta
+Cron 2 — Heartbeat Broadcast:
+
+Field	Nilai
+Judul	Imtiyaz Heartbeat Broadcast
+URL	https://api.pastiumrah.com/api/heartbeat-broadcast
+Method	POST
+Header 1	x-api-key: <API_KEY_PASTIUMRAH>
+Header 2	Content-Type: application/json
+Body	{}
+Jadwal	0 */6 * * * (jam 00:00, 06:00, 12:00, 18:00 UTC = 07, 13, 19, 01 WIB)
+Zona waktu	Asia/Jakarta
+Verifikasi Berhasil
+Cron	Terakhir	Durasi	Status
+Imtiyaz API Health Check	9:20 PM	795 ms	✅ Berhasil
+Imtiyaz Heartbeat Broadcast	12:00 AM	—	✅ Berhasil (verified)
+Pastiumrah WP-Cron	9:20 PM	213 ms	✅ Berhasil (existing)
+3. Perubahan Repo
+Kedua workflow GitHub Actions di-rename ke .disabled (tidak dihapus, sebagai referensi):
+.github/workflows/heartbeat.yml       → .github/workflows/heartbeat.yml.disabled
+.github/workflows/keep-alive.yml      → .github/workflows/keep-alive.yml.disabled
+Commit:
+
+032a9e2 — ci: disable heartbeat GH Actions — diganti cron-job.org (bypass WAF Hostinger)
+
+c6c607e — ci: disable keep-alive GH Actions — diganti cron-job.org
+
+Alasan rename (bukan delete):
+
+Kalau WAF Hostinger di-disable di masa depan, workflow bisa di-enable kembali dengan mv *.disabled → .yml
+
+Menyimpan konfigurasi sebagai referensi (command curl, retry, dll)
+
+4. Catatan Infrastruktur Penting
+Aturan WAF Hostinger
+Semua endpoint publik api.pastiumrah.com memblokir IP datacenter.
+
+Yang lolos:
+
+IP residential (HP user, komputer pribadi)
+
+IP server Hostinger sendiri (localhost, SSH commands)
+
+IP cron-job.org (whitelisted partner)
+
+IP UptimeRobot (whitelisted partner)
+
+Yang diblokir:
+
+IP AWS/GCP/Azure (termasuk GitHub Actions runners)
+
+IP VPS pribadi (kemungkinan besar)
+
+IP datacenter umum lainnya
+
+Implikasi untuk Fitur Mendatang
+Fitur	Dampak
+FCM/Heartbeat	Harus via cron-job.org (bukan GH Actions)
+Cron backup database	Harus via hPanel Cron Jobs atau server-side
+Webhook dari GitHub	❌ Tidak bisa — GH Actions IP diblok
+Deploy automation dari CI	Harus pakai SSH (bukan HTTP endpoint)
+Monitoring uptime	Pakai UptimeRobot (bukan GH Actions)
+API request dari pihak ketiga	Cek dulu apakah IP mereka diblok
+Kalau Butuh Migrasi Lagi
+Kalau cron-job.org down atau butuh alternatif:
+
+UptimeRobot — https://uptimerobot.com
+
+Daftar gratis, 50 monitor 5 menit
+
+Sudah whitelisted Hostinger
+
+Fokus monitoring, tapi bisa ping GET
+
+hPanel Cron Jobs — Advanced → Cron Jobs
+
+Jalan dari server Hostinger sendiri
+
+Bypass WAF 100%
+
+Tapi butuh SSH command syntax
+
+Server-side Scheduler
+
+Setup node-cron atau setInterval di app.js
+
+Jalan selama server hidup
+
+Tidak butuh external cron
+
+Yang TIDAK Boleh Dilakukan
+❌ Jangan re-enable workflow GH Actions yang ping ke api.pastiumrah.com — akan kena 403
+
+❌ Jangan gunakan GH Actions untuk webhook endpoint (/api/*) — akan kena 403
+
+❌ Jangan hapus file .disabled — simpan sebagai referensi
+
+❌ Jangan lupa cek cron-job.org kalau heartbeat/health check terasa mati
+
+5. File Terkait
+File	Status	Fungsi
+.github/workflows/heartbeat.yml.disabled	⏸️ Disabled	Referensi heartbeat (dimigrasi)
+.github/workflows/keep-alive.yml.disabled	⏸️ Disabled	Referensi keep-alive (dimigrasi)
+cron-job.org — Imtiyaz API Health Check	✅ Aktif	Ping /health tiap 5 menit
+cron-job.org — Imtiyaz Heartbeat Broadcast	✅ Aktif	POST /api/heartbeat-broadcast tiap 6 jam
+cron-job.org — Pastiumrah WP-Cron	✅ Aktif	Existing (tidak berubah)
+6. Verifikasi Cepat (Kalau Meragukan)
+Cek server masih warm:
+
+bash
+ssh -p 65002 u120369480@153.92.10.222
+cd ~/domains/api.pastiumrah.com/hbuilds/current/nodejs
+tail -30 console.log | grep -E "jalan di port|Pre-warm"
+Expected: Kalau cron bekerja, tidak ada log Pre-warm baru setiap 5 menit. Server tetap warm.
+
+Cek cron-job.org history:
+
+Buka https://console.cron-job.org/jobs
+
+Klik RIWAYAT di Imtiyaz API Health Check
+
+Cek status: harusnya semua Berhasil dengan HTTP 200
+
+Cek dari server langsung:
+
+bash
+curl -s -o /dev/null -w "HTTP %{http_code} (%{time_total}s)\n" \
+  https://api.pastiumrah.com/health
+Expected: HTTP 200 (dari IP server, bypass WAF).
+
+7. Pelajaran
+Jangan asumsikan cron GH Actions selalu bekerja — layanan pihak ketiga (WAF, CDN) bisa berubah tanpa notice.
+
+Selalu test dari multiple IP saat debug HTTP issue — memisahkan masalah "endpoint down" vs "IP diblok".
+
+Renaming .disabled (bukan delete) adalah pattern baik untuk preserve konfigurasi yang tidak aktif.
+
+cron-job.org adalah fallback andal untuk cron di lingkungan dengan WAF ketat.
+
+Hostinger WAF aktif 16 Okt 2026 — catat tanggal ini kalau ada issue aneh di masa depan.
+
+----
+---
+
+## Hotfix — Migrasi Keep-Alive & Heartbeat ke cron-job.org (16 Okt 2026)
+
+**Status:** ✅ Selesai
+
+### Masalah
+Hostinger mengaktifkan **WAF/CDN JS Challenge** di depan `api.pastiumrah.com`. WAF ini memblokir IP datacenter (termasuk GitHub Actions), sehingga `keep-alive.yml` dan `heartbeat.yml` gagal (HTTP 403).
+
+### Solusi
+1. Workflow GH Actions di-disable (rename ke `.disabled`).
+2. Migrasi cron ke **cron-job.org** (IP whitelisted Hostinger):
+   - **Imtiyaz API Health Check**: GET `/health` (5 menit).
+   - **Imtiyaz Heartbeat Broadcast**: POST `/api/heartbeat-broadcast` (6 jam, butuh header `x-api-key`).
+**Commit:** `032a9e2`, `c6c607e`
+
+---
+
+## TAHAP 26 — CS Virtual AI Berbasis Suara (📋 RENCANA)
+
+**Status:** 📋 Belum dieksekusi (siap masuk Batch 1)
+
+### Konsep
+Jamaah bertanya seputar umrah (paket, sisa bayar) lewat suara, dijawab AI secara *real-time*.
+
+### Arsitektur
+- **STT:** `SpeechRecognizer` Android.
+- **LLM:** **Gemini 4 Argon** (halusinasi terendah, termurah).
+- **RAG:** Fetch dinamis dari WP REST (`/api/paket`, `/api/me`, dll).
+- **TTS:** Reuse `TerbangKeMakkahTts.kt`.
+- **Server:** Endpoint `/api/cs/tanya`.
+
+### Guardrails
+- **Boleh:** Harga, fasilitas, sisa tagihan, jadwal.
+- **DILARANG:** Fiqih/hukum, janji di luar paket. (Dialihkan ke WA Admin).
+
+### Rencana Batch (Total ~20 jam)
+1. **Server:** `/api/cs/tanya` + Gemini API + RAG.
+2. **Android UI:** `CsVirtualScreen.kt` (Chat Teks).
+3. **Android Voice:** Integrasi STT.
+4. **Android Audio:** Integrasi TTS + Animasi.
+5. **Safety:** Guardrails + Fallback WA.
+6. **Testing:** Device.
+
