@@ -188,13 +188,8 @@ fun RadioScreen(onBack: () -> Unit) {
 
     var isJamaah by remember { mutableStateOf(Prefs.isLoggedIn(context)) }
 
-    // Belum login -> gerbang login jamaah biasa (satu-satunya jalur sekarang; status
-    // Tour Leader ditentukan Admin lewat centang pada akun jamaah, bukan login terpisah).
-    // if (!isJamaah) // Bypassed for guest/code TL {
-        androidx.activity.compose.BackHandler(enabled = true) { onBack() }
-        // LoginScreen(onLoggedIn = { isJamaah = true }, onCancel = onBack)
-        // return
-    }
+    // v2.15.1: bypass login gate — guest mode untuk audien umum
+    androidx.activity.compose.BackHandler(enabled = true) { onBack() }
 
     // v2.15.1: guest mode — audien umum radio pengajian tanpa login
     val loggedJamaahId = Prefs.getJamaahId(context)

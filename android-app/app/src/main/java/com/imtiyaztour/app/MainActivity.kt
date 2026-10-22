@@ -557,7 +557,8 @@ fun ImtiyazApp() {
                         onManasikClick = { showManasik = true },
                         onJournalClick = { showJournalList = true },
                         onReminderClick = { showReminder = true },
-                        onAnnouncementClick = { showAnnouncementDetail = true }
+                        onAnnouncementClick = { showAnnouncementDetail = true },
+                        onRadioClick = { showRadio = true }
                     )
                     1 -> PaketListScreen(onJadwalClick = { selectedTripId = it })
                     2 -> QuranScreen(
