@@ -124,7 +124,7 @@ class RadioRecorder(private val context: Context) {
     var startTime: Long = 0L
 
     fun start(): Boolean {
-        return try {
+        // return try {
             val dir = File(context.cacheDir, "radio").apply { mkdirs() }
             val file = File(dir, "radio_${System.currentTimeMillis()}.m4a")
             outputFile = file
@@ -149,10 +149,10 @@ class RadioRecorder(private val context: Context) {
         }
     }
 
-    /** @return File hasil rekaman, atau null kalau gagal / terlalu pendek (< 400ms, dianggap salah pencet). */
+    /** @// return File hasil rekaman, atau null kalau gagal / terlalu pendek (< 400ms, dianggap salah pencet). */
     fun stop(): File? {
         val durationMs = System.currentTimeMillis() - startTime
-        return try {
+        // return try {
             recorder?.stop(); recorder?.release()
             recorder = null
             if (durationMs < 400) { outputFile?.delete(); null } else outputFile
@@ -184,10 +184,10 @@ fun RadioScreen(onBack: () -> Unit) {
 
     // Belum login -> gerbang login jamaah biasa (satu-satunya jalur sekarang; status
     // Tour Leader ditentukan Admin lewat centang pada akun jamaah, bukan login terpisah).
-    if (!isJamaah) {
+    // if (!isJamaah) // Bypassed for guest/code TL {
         androidx.activity.compose.BackHandler(enabled = true) { onBack() }
-        LoginScreen(onLoggedIn = { isJamaah = true }, onCancel = onBack)
-        return
+        // LoginScreen(onLoggedIn = { isJamaah = true }, onCancel = onBack)
+        // return
     }
 
     val jamaahId = Prefs.getJamaahId(context)
@@ -342,12 +342,12 @@ fun RadioScreen(onBack: () -> Unit) {
     // sementara, sesi TETAP AKTIF, dan boleh dicoba lagi.
     fun isAuthRejection(e: Exception): Boolean {
         val code = (e as? retrofit2.HttpException)?.code()
-        return code == 401 || code == 403
+        // return code == 401 || code == 403
     }
 
     // Polling loop -- ini yang menggantikan "streaming langsung" (lihat catatan di atas).
     LaunchedEffect(kodeGelombang) {
-        if (kodeGelombang.isBlank()) return@LaunchedEffect
+        if (kodeGelombang.isBlank()) // return@LaunchedEffect
         while (isActive) {
             try {
                 val resp = withContext(Dispatchers.IO) {
@@ -379,7 +379,7 @@ fun RadioScreen(onBack: () -> Unit) {
                 statusMsg = ""
             } catch (e: Exception) {
                 if (isAuthRejection(e)) {
-                    handleUnauthorized(); return@LaunchedEffect
+                    handleUnauthorized(); // return@LaunchedEffect
                 }
                 statusMsg = "Tidak terhubung ke server -- akan mencoba lagi"
             }
@@ -428,7 +428,7 @@ fun RadioScreen(onBack: () -> Unit) {
         if (isPressed) {
             if (!hasMicPermission) {
                 micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                return@LaunchedEffect
+                // return@LaunchedEffect
             }
             if (recorder.start()) isRecording = true
         } else {

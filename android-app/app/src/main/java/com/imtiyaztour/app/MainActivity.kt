@@ -589,7 +589,8 @@ fun BerandaScreen(
     onManasikClick: () -> Unit,
     onJournalClick: () -> Unit,
     onReminderClick: () -> Unit,
-    onAnnouncementClick: () -> Unit
+    onAnnouncementClick: () -> Unit,
+    onRadioClick: () -> Unit
 ) {
     val context = LocalContext.current
     val namaJamaah = Prefs.getNama(context)
@@ -614,6 +615,23 @@ fun BerandaScreen(
             }
             Spacer(Modifier.height(16.dp))
             PrayerTimesCard()
+              Spacer(Modifier.height(16.dp))
+              Card(
+                  shape = RoundedCornerShape(16.dp),
+                  colors = CardDefaults.cardColors(containerColor = Color.White),
+                  elevation = CardDefaults.cardElevation(1.dp),
+                  modifier = Modifier.fillMaxWidth().clickable { onRadioClick() }
+              ) {
+                  Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                      Icon(Icons.Default.Headset, contentDescription = null, tint = Color(0xFF0F7A5A))
+                      Spacer(Modifier.width(12.dp))
+                      Column(Modifier.weight(1f)) {
+                          Text("Radio Tour Leader", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                          Text("Dengarkan arahan atau masukkan kode gelombang TL", fontSize = 11.sp, color = Color.Gray)
+                      }
+                      Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF0F7A5A))
+                  }
+              }
             Spacer(Modifier.height(16.dp))
             Card(
                 shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -1405,15 +1423,9 @@ fun SayaScreen(
         }
 
         item {
-            // Radio Tour Leader (walkie-talkie) -- hanya muncul setelah login, sesuai
-            // permintaan; SayaScreen ini sendiri sudah menjadi gerbang login.
+            // Tombol Cari Lokasi Jamaah (Radio dipindah ke Beranda)
             Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(2.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text("Radio Tour Leader", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                    Text("Dengarkan arahan Tour Leader secara langsung selama prosesi umrah", fontSize = 11.sp, color = Color.Gray)
-                    Spacer(Modifier.height(12.dp))
-                    Button(onClick = onRadioClick, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)), shape = RoundedCornerShape(12.dp)) { Text("Buka Radio") }
-                    Spacer(Modifier.height(8.dp))
                     OutlinedButton(
                         onClick = { onFindJamaahClick() },
                         modifier = Modifier.fillMaxWidth(),
