@@ -152,10 +152,16 @@ class RadioRecorder(private val context: Context) {
     /** @// return File hasil rekaman, atau null kalau gagal / terlalu pendek (< 400ms, dianggap salah pencet). */
     fun stop(): File? {
         val durationMs = System.currentTimeMillis() - startTime
-        // return try {
-            recorder?.stop(); recorder?.release()
+        return try {
+            recorder?.stop()
+            recorder?.release()
             recorder = null
-            if (durationMs < 400) { outputFile?.delete(); null } else outputFile
+            if (durationMs < 400) {
+                outputFile?.delete()
+                null
+            } else {
+                outputFile
+            }
         } catch (e: Exception) {
             try { recorder?.release() } catch (e2: Exception) {}
             recorder = null
