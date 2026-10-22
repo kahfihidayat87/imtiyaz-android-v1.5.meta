@@ -124,7 +124,7 @@ class RadioRecorder(private val context: Context) {
     var startTime: Long = 0L
 
     fun start(): Boolean {
-        // return try {
+        return try {
             val dir = File(context.cacheDir, "radio").apply { mkdirs() }
             val file = File(dir, "radio_${System.currentTimeMillis()}.m4a")
             outputFile = file
