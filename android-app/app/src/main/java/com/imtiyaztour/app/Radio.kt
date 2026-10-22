@@ -196,8 +196,12 @@ fun RadioScreen(onBack: () -> Unit) {
         // return
     }
 
-    val jamaahId = Prefs.getJamaahId(context)
-    val jamaahToken = Prefs.getToken(context)
+    // v2.15.1: guest mode — audien umum radio pengajian tanpa login
+    val loggedJamaahId = Prefs.getJamaahId(context)
+    val loggedJamaahToken = Prefs.getToken(context)
+    val isGuest = loggedJamaahId.isBlank()
+    val jamaahId = if (isGuest) Prefs.getOrCreateGuestId(context) else loggedJamaahId
+    val jamaahToken = loggedJamaahToken
     // Back sistem dari layar radio yang sudah login -> keluar ke Beranda, bukan tutup app.
     androidx.activity.compose.BackHandler(enabled = true) { onBack() }
 
@@ -341,7 +345,13 @@ fun RadioScreen(onBack: () -> Unit) {
     }
 
 
-    fun handleUnauthorized() { Prefs.clearLogin(context); isJamaah = false }
+    fun handleUnauthorized() {
+        if (!isGuest) {
+            Prefs.clearLogin(context)
+            isJamaah = false
+        }
+        // guest: abaikan, tidak ada data login untuk dibersihkan
+    }
 
     // HANYA respons 401/403 dari server (bukti token memang ditolak) yang memicu
     // logout; error lain (jaringan, timeout, dll) cukup ditampilkan sebagai pesan

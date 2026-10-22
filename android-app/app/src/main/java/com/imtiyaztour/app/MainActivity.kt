@@ -257,6 +257,19 @@ object Prefs {
         get(context).edit().remove("jamaah_id").remove("jamaah_token").remove("jamaah_nama").apply()
     }
 
+    // v2.15.1: Guest ID untuk audien umum radio pengajian (tanpa login).
+    // Sticky di SharedPreferences, format guest_<8hex>. Dipakai sebagai jamaah_id
+    // untuk gelombang/join dan radio/poll. Server mengenali prefix guest_.
+    fun getOrCreateGuestId(context: Context): String {
+        val prefs = get(context)
+        val existing = prefs.getString("guest_id", null)
+        if (!existing.isNullOrBlank()) return existing
+        val hex = java.util.UUID.randomUUID().toString().replace("-", "").take(8)
+        val id = "guest_$hex"
+        prefs.edit().putString("guest_id", id).apply()
+        return id
+    }
+
     fun getChecklist(context: Context, dokumenList: List<Dokumen>): MutableMap<String, Boolean> {
         val prefs = get(context)
         return dokumenList.associate { it.id to prefs.getBoolean("doc_${it.id}", false) }.toMutableMap()
