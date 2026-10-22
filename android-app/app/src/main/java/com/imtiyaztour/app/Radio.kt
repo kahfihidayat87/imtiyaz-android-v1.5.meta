@@ -353,12 +353,12 @@ fun RadioScreen(onBack: () -> Unit) {
     // sementara, sesi TETAP AKTIF, dan boleh dicoba lagi.
     fun isAuthRejection(e: Exception): Boolean {
         val code = (e as? retrofit2.HttpException)?.code()
-        // return code == 401 || code == 403
+        return code == 401 || code == 403
     }
 
     // Polling loop -- ini yang menggantikan "streaming langsung" (lihat catatan di atas).
     LaunchedEffect(kodeGelombang) {
-        if (kodeGelombang.isBlank()) // return@LaunchedEffect
+        if (kodeGelombang.isBlank()) return@LaunchedEffect
         while (isActive) {
             try {
                 val resp = withContext(Dispatchers.IO) {
@@ -390,7 +390,7 @@ fun RadioScreen(onBack: () -> Unit) {
                 statusMsg = ""
             } catch (e: Exception) {
                 if (isAuthRejection(e)) {
-                    handleUnauthorized(); // return@LaunchedEffect
+                    handleUnauthorized(); return@LaunchedEffect
                 }
                 statusMsg = "Tidak terhubung ke server -- akan mencoba lagi"
             }
@@ -439,7 +439,7 @@ fun RadioScreen(onBack: () -> Unit) {
         if (isPressed) {
             if (!hasMicPermission) {
                 micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                // return@LaunchedEffect
+                return@LaunchedEffect
             }
             if (recorder.start()) isRecording = true
         } else {
