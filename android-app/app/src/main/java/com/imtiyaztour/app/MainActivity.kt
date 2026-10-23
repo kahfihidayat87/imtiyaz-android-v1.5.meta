@@ -607,7 +607,7 @@ fun BerandaScreen(
     onRadioClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val namaJamaah = Prefs.getNama(context)
+    val namaJamaah = Prefs.getNama(context).replace(" (TL)", "")
     LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             if (AnnouncementStore.isUnread) {
@@ -640,8 +640,8 @@ fun BerandaScreen(
                       Icon(Icons.Default.Headset, contentDescription = null, tint = Color(0xFF0F7A5A))
                       Spacer(Modifier.width(12.dp))
                       Column(Modifier.weight(1f)) {
-                          Text("Radio Tour Leader", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                          Text("Dengarkan arahan atau masukkan kode gelombang TL", fontSize = 11.sp, color = Color.Gray)
+                          Text("Radio Imtiyaz", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                          Text("Dengarkan kajian dan manasik virtual", fontSize = 11.sp, color = Color.Gray)
                       }
                       Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF0F7A5A))
                   }
