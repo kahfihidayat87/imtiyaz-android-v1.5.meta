@@ -13,25 +13,30 @@ class RadioService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        val channelId = "radio_foreground"
-        val channelName = "Radio Imtiyaz"
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_LOW)
-            val nm = getSystemService(NotificationManager::class.java)
-            nm.createNotificationChannel(channel)
-        }
-        val notif = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Radio Imtiyaz")
-            .setContentText("Radio sedang berjalan di latar belakang")
-            .setSmallIcon(android.R.drawable.ic_media_play)
-            .setOngoing(true)
-            .build()
-        if (Build.VERSION.SDK_INT >= 34) {
-            startForeground(101, notif, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
-        } else if (Build.VERSION.SDK_INT >= 29) {
-            startForeground(101, notif, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
-        } else {
-            startForeground(101, notif)
+        try {
+            val channelId = "radio_foreground"
+            val channelName = "Radio Imtiyaz"
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_LOW)
+                val nm = getSystemService(NotificationManager::class.java)
+                nm.createNotificationChannel(channel)
+            }
+            val notif = NotificationCompat.Builder(this, channelId)
+                .setContentTitle("Radio Imtiyaz")
+                .setContentText("Radio sedang berjalan di latar belakang")
+                .setSmallIcon(android.R.drawable.ic_media_play)
+                .setOngoing(true)
+                .build()
+            if (Build.VERSION.SDK_INT >= 34) {
+                startForeground(101, notif, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+            } else if (Build.VERSION.SDK_INT >= 29) {
+                startForeground(101, notif, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+            } else {
+                startForeground(101, notif)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("RadioService", "StartForeground gagal: ${e.message}")
+            stopSelf()
         }
     }
 
