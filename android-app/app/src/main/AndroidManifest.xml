@@ -70,5 +70,9 @@
             android:name=".ModeAmanService"
             android:foregroundServiceType="location"
             android:exported="false" />
+            <service
+            android:name=".RadioService"
+            android:foregroundServiceType="mediaPlayback|microphone"
+            android:exported="false" />
     </application>
 </manifest>

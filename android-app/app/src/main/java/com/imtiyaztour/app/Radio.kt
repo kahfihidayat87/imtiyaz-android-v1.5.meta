@@ -413,11 +413,18 @@ fun RadioScreen(onBack: () -> Unit) {
 
     // v2.14.1: cleanup LiveKit hanya saat keluar RadioScreen.
     // Start/stop siaran sekarang manual via tombol di LiveKitSection.
-    DisposableEffect(Unit) {
-        onDispose {
-            RadioLiveKit.berhenti()
+            DisposableEffect(Unit) {
+            // Mulai Foreground Service agar radio tetap jalan di background
+            val intent = android.content.Intent(context, RadioService::class.java)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+            onDispose {
+                // Jangan matikan RadioLiveKit di sini agar tetap connect di background
+            }
         }
-    }
 
     fun sendClip(file: File) {
         isSending = true
