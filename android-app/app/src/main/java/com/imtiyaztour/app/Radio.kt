@@ -56,7 +56,7 @@ import java.util.Locale
 //
 // CATATAN JUJUR SOAL BATASAN: ini model "push-to-talk" ala Zello/voice-note
 // instan -- BUKAN audio streaming langsung sungguhan seperti HT/radio fisik.
-// Tour Leader tekan-tahan tombol untuk merekam, lepas untuk kirim; jamaah
+// Pembimbing tekan-tahan tombol untuk merekam, lepas untuk kirim; jamaah
 // menerimanya lewat polling setiap ~2,5 detik (ada delay singkat, bukan
 // sepersekian detik). Audio streaming real-time sungguhan butuh infrastruktur
 // WebRTC + server TURN/SFU yang jauh lebih besar dari stack WordPress+Node ini
@@ -68,10 +68,10 @@ import java.util.Locale
 // FIX BESAR: sistem "Login TL" terpisah (username/password sendiri, layar
 // login sendiri) DIHAPUS TOTAL -- setelah berkali-kali gagal di lapangan dan
 // tidak bisa dilacak akar masalahnya tanpa akses langsung ke server produksi.
-// Sekarang status Tour Leader HANYA berupa satu centang pada akun JAMAAH yang
+// Sekarang status Pembimbing HANYA berupa satu centang pada akun JAMAAH yang
 // login lewat jalur yang SUDAH TERBUKTI bekerja (tidak pernah dilaporkan
 // gagal). Tidak ada lagi layar/akun/token terpisah untuk TL -- login sekali
-// sebagai jamaah, dan kalau akun itu ditandai "Tour Leader" oleh Admin, tombol
+// sebagai jamaah, dan kalau akun itu ditandai "Pembimbing" oleh Admin, tombol
 // bicara (ikon mikrofon) otomatis muncul. Jamaah biasa selalu melihat ikon
 // earphone -- mode dengar saja, tidak ada tombol/gerbang untuk mencoba bicara.
 // ============================================================================
@@ -445,20 +445,20 @@ fun RadioScreen(onBack: () -> Unit) {
         }
     }
 
-    Column(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().navigationBarsPadding().imePadding()) {
         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onBack) { Text("← Kembali") }
         }
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-            Text("Radio Tour Leader", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+            Text("Radio Imtiyaz", fontWeight = FontWeight.Bold, fontSize = 20.sp)
             Text(
-                "Mode Radio Pengajian",
+                "Siaran & Manasik",
                 fontSize = 12.sp, color = Color.Gray
             )
             if (isTourLeader) {
-                Text("Anda ditandai sebagai Tour Leader -- Anda bisa bicara di kanal ini", fontSize = 11.sp, color = Color(0xFF0F7A5A), fontWeight = FontWeight.Bold)
+                Text("Anda ditandai sebagai pembimbing -- Anda bisa bicara di gelombang ini", fontSize = 11.sp, color = Color(0xFF0F7A5A), fontWeight = FontWeight.Bold)
             } else {
-                Text("Mode dengar -- hanya Tour Leader yang bisa bicara di kanal ini", fontSize = 11.sp, color = Color.Gray)
+                Text("Hanya pembimbing yang bisa bicara di gelombang ini", fontSize = 11.sp, color = Color.Gray)
             }
             if (statusMsg.isNotEmpty()) Text(statusMsg, fontSize = 11.sp, color = Color(0xFFDC2626))
         }
@@ -523,7 +523,7 @@ fun RadioScreen(onBack: () -> Unit) {
                                 if (isTourLeader)
                                     "Anda akan mendapat kode unik. Bagikan kode ke jamaah agar bisa bergabung."
                                 else
-                                    "Minta kode gelombang dari Tour Leader Anda, lalu masukkan di sini.",
+                                    "Minta kode gelombang dari Pembimbing Anda, lalu masukkan di sini.",
                                 fontSize = 11.sp, color = Color.Gray
                             )
                             Spacer(Modifier.height(12.dp))
@@ -745,7 +745,7 @@ private fun LiveKitSection(
                         if (isTourLeader)
                             "Anda akan mendapat kode unik. Bagikan kode ke jamaah agar bisa bergabung."
                         else
-                            "Minta kode gelombang dari Tour Leader Anda, lalu masukkan di sini.",
+                            "Minta kode gelombang dari Pembimbing Anda, lalu masukkan di sini.",
                         fontSize = 11.sp, color = Color.Gray
                     )
                     Spacer(Modifier.height(12.dp))
@@ -1027,13 +1027,13 @@ private fun PushToTalkButton(isRecording: Boolean, isSending: Boolean, interacti
 @Composable
 private fun ListenOnlyIndicator() {
     Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("Mode dengar", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
+        Text("Mendengarkan", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(12.dp))
         Box(
             modifier = Modifier.size(84.dp).background(Color(0xFF9CA3AF), CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Default.Headset, contentDescription = "Mode dengar", tint = Color.White, modifier = Modifier.size(36.dp))
+            Icon(Icons.Default.Headset, contentDescription = "Mendengarkan", tint = Color.White, modifier = Modifier.size(36.dp))
         }
     }
 }
