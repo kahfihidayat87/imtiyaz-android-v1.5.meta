@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.util.Log
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.MediaRecorder
@@ -17,8 +16,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -147,7 +144,6 @@ class RadioRecorder(private val context: Context) {
             startTime = System.currentTimeMillis()
             true
         } catch (e: Exception) {
-            Log.e("RadioRecorder", "start error: ${e.message}", e)
             recorder = null
             false
         }
@@ -167,7 +163,6 @@ class RadioRecorder(private val context: Context) {
                 outputFile
             }
         } catch (e: Exception) {
-            Log.e("RadioRecorder", "stop error: ${e.message}", e)
             try { recorder?.release() } catch (e2: Exception) {}
             recorder = null
             outputFile?.delete()
@@ -176,9 +171,7 @@ class RadioRecorder(private val context: Context) {
     }
 
     fun cancel() {
-        try { recorder?.stop(); recorder?.release() } catch (e: Exception) {
-            Log.e("RadioRecorder", "cancel error: ${e.message}", e)
-        }
+        try { recorder?.stop(); recorder?.release() } catch (e: Exception) {}
         recorder = null
         outputFile?.delete()
         outputFile = null
@@ -223,18 +216,10 @@ fun RadioScreen(onBack: () -> Unit) {
     var statusMsg by remember { mutableStateOf("") }
     // v2.14.0: mode UI -- "voice" (voice note lama) atau "live" (LiveKit)
     var mode by remember { mutableStateOf("voice") }
-
     var liveStatus by remember { mutableStateOf("") }
     var liveActive by remember { mutableStateOf(false) }
     val playedIds = remember { mutableSetOf<String>() }
     val recorder = remember { RadioRecorder(context) }
-            }
-        } else if (mode != "live") {
-            RadioLiveKit.berhenti()
-            liveActive = false
-            liveStatus = ""
-        }
-    }
 
     // v2.15.0 FIX: fetch is_tour_leader sekali di awal supaya gate UI (TL vs Jamaah)
     // benar SEBELUM user join gelombang. Sebelumnya hanya di-set oleh poll loop,
@@ -247,29 +232,11 @@ fun RadioScreen(onBack: () -> Unit) {
             isTourLeader = resp.is_tour_leader ?: false
             myId = resp.my_jamaah_id ?: ""
         } catch (e: Exception) {
-                    Log.e("RadioLive", "Error: ${e.message}", e)
             // Diam-diam skip — bukan blocker utama. User bisa retry join.
         }
     }
     // v2.15.0: Gelombang Radio
     var kodeGelombang by remember { mutableStateOf("") }
-
-    // Auto-connect LiveKit saat tab Siaran Live dibuka dan gelombang sudah aktif
-    LaunchedEffect(mode, kodeGelombang, isTourLeader) {
-        if (mode == "live" && kodeGelombang.isNotBlank() && isTourLeader) {
-            if (!RadioLiveKit.sedangAktif()) {
-                liveStatus = "Menghubungkan..."
-                RadioLiveKit.mulai(context, jamaahId, jamaahToken, kodeGelombang) { status ->
-                    liveStatus = status
-                    liveActive = RadioLiveKit.sedangAktif()
-                }
-            }
-        } else if (mode != "live") {
-            RadioLiveKit.berhenti()
-            liveActive = false
-            liveStatus = ""
-        }
-    }
     var gelombangNama by remember { mutableStateOf("") }
     var gelombangTLNama by remember { mutableStateOf("") }
     var gelombangPeserta by remember { mutableIntStateOf(0) }
@@ -301,7 +268,6 @@ fun RadioScreen(onBack: () -> Unit) {
                     gelombangError = resp.error ?: "Gagal buat gelombang"
                 }
             } catch (e: Exception) {
-                    Log.e("RadioLive", "Error: ${e.message}", e)
                 gelombangError = "Gagal: ${e.message}"
             }
             isCreatingGelombang = false
@@ -330,7 +296,6 @@ fun RadioScreen(onBack: () -> Unit) {
                     gelombangError = resp.error ?: "Gagal join"
                 }
             } catch (e: Exception) {
-                    Log.e("RadioLive", "Error: ${e.message}", e)
                 gelombangError = "Gagal: ${e.message}"
             }
             isJoiningGelombang = false
@@ -410,9 +375,7 @@ fun RadioScreen(onBack: () -> Unit) {
                                 val f = File(dir, "recv_${m.id}.m4a")
                                 f.writeBytes(android.util.Base64.decode(m.audio, android.util.Base64.DEFAULT))
                                 AudioPlayerManager.toggle(f.absolutePath)
-                            } catch (e: Exception) {
-                    Log.e("RadioLive", "Error: ${e.message}", e)
-}
+                            } catch (e: Exception) {}
                         } else {
                             playedIds.add(m.id)
                         }
@@ -420,7 +383,6 @@ fun RadioScreen(onBack: () -> Unit) {
                 }
                 statusMsg = ""
             } catch (e: Exception) {
-                    Log.e("RadioLive", "Error: ${e.message}", e)
                 if (isAuthRejection(e)) {
                     handleUnauthorized(); return@LaunchedEffect
                 }
@@ -453,7 +415,6 @@ fun RadioScreen(onBack: () -> Unit) {
                 }
                 statusMsg = ""
             } catch (e: Exception) {
-                    Log.e("RadioLive", "Error: ${e.message}", e)
                 if (isAuthRejection(e)) {
                     handleUnauthorized()
                 } else {
@@ -484,7 +445,7 @@ fun RadioScreen(onBack: () -> Unit) {
         }
     }
 
-    Column(Modifier.fillMaxSize().navigationBarsPadding().imePadding().verticalScroll(rememberScrollState())) {
+    Column(Modifier.fillMaxSize().navigationBarsPadding().imePadding()) {
         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onBack) { Text("← Kembali") }
         }
@@ -738,10 +699,7 @@ private fun LiveKitSection(
                 .background(
                     if (liveActive) Color(0xFFDC2626) else Color(0xFF9CA3AF),
                     CircleShape
-                )
-                .clickable {
-                    if (liveActive) onStop() else onStart()
-                },
+                ),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -756,12 +714,6 @@ private fun LiveKitSection(
             if (isTourLeader) "Mode Siaran Langsung (TL)" else "Mode Mendengarkan (Live)",
             fontWeight = FontWeight.Bold, fontSize = 14.sp
         )
-        if (isTourLeader) {
-            Text(
-                if (liveActive) "Ketuk ikon untuk berhenti siaran" else "Ketuk ikon untuk mulai siaran",
-                fontSize = 11.sp, color = Color.Gray
-            )
-        }
         if (liveStatus.isNotEmpty()) {
             Spacer(Modifier.height(4.dp))
             Text(
