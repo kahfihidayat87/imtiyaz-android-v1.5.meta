@@ -415,11 +415,15 @@ fun RadioScreen(onBack: () -> Unit) {
     // Start/stop siaran sekarang manual via tombol di LiveKitSection.
             DisposableEffect(Unit) {
             // Mulai Foreground Service agar radio tetap jalan di background
-            val intent = android.content.Intent(context, RadioService::class.java)
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
+            try {
+                val intent = android.content.Intent(context, RadioService::class.java)
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+            } catch (e: Exception) {
+                Log.e("Radio", "Gagal start foreground service: ${e.message}")
             }
             onDispose {
                 // Jangan matikan RadioLiveKit di sini agar tetap connect di background

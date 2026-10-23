@@ -72,7 +72,7 @@
             android:exported="false" />
             <service
             android:name=".RadioService"
-            android:foregroundServiceType="mediaPlayback|microphone"
+            android:foregroundServiceType="mediaPlayback"
             android:exported="false" />
     </application>
 </manifest>

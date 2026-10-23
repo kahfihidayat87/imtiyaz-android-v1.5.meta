@@ -26,7 +26,13 @@ class RadioService : Service() {
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setOngoing(true)
             .build()
-        startForeground(101, notif)
+        if (Build.VERSION.SDK_INT >= 34) {
+            startForeground(101, notif, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+        } else if (Build.VERSION.SDK_INT >= 29) {
+            startForeground(101, notif, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+        } else {
+            startForeground(101, notif)
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
