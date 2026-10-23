@@ -223,12 +223,6 @@ fun RadioScreen(onBack: () -> Unit) {
     var statusMsg by remember { mutableStateOf("") }
     // v2.14.0: mode UI -- "voice" (voice note lama) atau "live" (LiveKit)
     var mode by remember { mutableStateOf("voice") }
-            }
-        } else if (mode != "live") {
-            RadioLiveKit.berhenti()
-            liveActive = false
-        }
-    }
 
     var liveStatus by remember { mutableStateOf("") }
     var liveActive by remember { mutableStateOf(false) }
