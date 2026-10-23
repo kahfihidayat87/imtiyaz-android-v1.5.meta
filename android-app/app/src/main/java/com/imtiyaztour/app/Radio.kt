@@ -720,7 +720,10 @@ private fun LiveKitSection(
                 .background(
                     if (liveActive) Color(0xFFDC2626) else Color(0xFF9CA3AF),
                     CircleShape
-                ),
+                )
+                .clickable {
+                    if (liveActive) onStop() else onStart()
+                },
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -735,6 +738,12 @@ private fun LiveKitSection(
             if (isTourLeader) "Mode Siaran Langsung (TL)" else "Mode Mendengarkan (Live)",
             fontWeight = FontWeight.Bold, fontSize = 14.sp
         )
+        if (isTourLeader) {
+            Text(
+                if (liveActive) "Ketuk ikon untuk berhenti siaran" else "Ketuk ikon untuk mulai siaran",
+                fontSize = 11.sp, color = Color.Gray
+            )
+        }
         if (liveStatus.isNotEmpty()) {
             Spacer(Modifier.height(4.dp))
             Text(
