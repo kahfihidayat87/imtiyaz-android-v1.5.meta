@@ -696,7 +696,7 @@ private fun LiveKitSection(
     gelombangError: String,
     onStart: () -> Unit,
     onStop: () -> Unit,
-    onCreateGelombang: (String) -> Unit,
+    onCreateGelombang: (String, String) -> Unit,
     onJoinGelombang: (String) -> Unit,
     onLeaveGelombang: () -> Unit,
     onRevokeGelombang: () -> Unit
