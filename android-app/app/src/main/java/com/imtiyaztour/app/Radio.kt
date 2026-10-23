@@ -898,7 +898,7 @@ private fun LiveKitSection(
         CreateGelombangDialog(
             isLoading = isCreatingGelombang,
             onDismiss = { showCreateDialog = false },
-            onCreate = { nama -> showCreateDialog = false; onCreateGelombang(nama) }
+            onCreate = { nama, kode -> showCreateDialog = false; onCreateGelombang(nama, kode) }
         )
     }
     if (showJoinDialog) {
@@ -978,7 +978,7 @@ private fun CreateGelombangDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { if (nama.isNotBlank() && !isLoading) onCreate(nama.trim()) },
+                onClick = { if (nama.isNotBlank() && !isLoading) onCreate(nama.trim(), kodeManual.trim()) },
                 enabled = nama.isNotBlank() && !isLoading
             ) {
                 if (isLoading) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
