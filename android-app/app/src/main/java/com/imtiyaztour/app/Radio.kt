@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.util.Log
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.MediaRecorder
@@ -16,6 +17,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -144,6 +147,8 @@ class RadioRecorder(private val context: Context) {
             startTime = System.currentTimeMillis()
             true
         } catch (e: Exception) {
+                    Log.e("RadioLive", "Error: ${e.message}", e)
+                    statusMsg = "Error Live: ${e.message}"
             recorder = null
             false
         }
@@ -163,6 +168,8 @@ class RadioRecorder(private val context: Context) {
                 outputFile
             }
         } catch (e: Exception) {
+                    Log.e("RadioLive", "Error: ${e.message}", e)
+                    statusMsg = "Error Live: ${e.message}"
             try { recorder?.release() } catch (e2: Exception) {}
             recorder = null
             outputFile?.delete()
@@ -171,7 +178,9 @@ class RadioRecorder(private val context: Context) {
     }
 
     fun cancel() {
-        try { recorder?.stop(); recorder?.release() } catch (e: Exception) {}
+        try { recorder?.stop(); recorder?.release() } catch (e: Exception) {
+                    Log.e("RadioLive", "Error: ${e.message}", e)
+                    statusMsg = "Error Live: ${e.message}"}
         recorder = null
         outputFile?.delete()
         outputFile = null
@@ -232,6 +241,8 @@ fun RadioScreen(onBack: () -> Unit) {
             isTourLeader = resp.is_tour_leader ?: false
             myId = resp.my_jamaah_id ?: ""
         } catch (e: Exception) {
+                    Log.e("RadioLive", "Error: ${e.message}", e)
+                    statusMsg = "Error Live: ${e.message}"
             // Diam-diam skip — bukan blocker utama. User bisa retry join.
         }
     }
@@ -268,6 +279,8 @@ fun RadioScreen(onBack: () -> Unit) {
                     gelombangError = resp.error ?: "Gagal buat gelombang"
                 }
             } catch (e: Exception) {
+                    Log.e("RadioLive", "Error: ${e.message}", e)
+                    statusMsg = "Error Live: ${e.message}"
                 gelombangError = "Gagal: ${e.message}"
             }
             isCreatingGelombang = false
@@ -296,6 +309,8 @@ fun RadioScreen(onBack: () -> Unit) {
                     gelombangError = resp.error ?: "Gagal join"
                 }
             } catch (e: Exception) {
+                    Log.e("RadioLive", "Error: ${e.message}", e)
+                    statusMsg = "Error Live: ${e.message}"
                 gelombangError = "Gagal: ${e.message}"
             }
             isJoiningGelombang = false
@@ -375,7 +390,9 @@ fun RadioScreen(onBack: () -> Unit) {
                                 val f = File(dir, "recv_${m.id}.m4a")
                                 f.writeBytes(android.util.Base64.decode(m.audio, android.util.Base64.DEFAULT))
                                 AudioPlayerManager.toggle(f.absolutePath)
-                            } catch (e: Exception) {}
+                            } catch (e: Exception) {
+                    Log.e("RadioLive", "Error: ${e.message}", e)
+                    statusMsg = "Error Live: ${e.message}"}
                         } else {
                             playedIds.add(m.id)
                         }
@@ -383,6 +400,8 @@ fun RadioScreen(onBack: () -> Unit) {
                 }
                 statusMsg = ""
             } catch (e: Exception) {
+                    Log.e("RadioLive", "Error: ${e.message}", e)
+                    statusMsg = "Error Live: ${e.message}"
                 if (isAuthRejection(e)) {
                     handleUnauthorized(); return@LaunchedEffect
                 }
@@ -415,6 +434,8 @@ fun RadioScreen(onBack: () -> Unit) {
                 }
                 statusMsg = ""
             } catch (e: Exception) {
+                    Log.e("RadioLive", "Error: ${e.message}", e)
+                    statusMsg = "Error Live: ${e.message}"
                 if (isAuthRejection(e)) {
                     handleUnauthorized()
                 } else {
@@ -445,7 +466,7 @@ fun RadioScreen(onBack: () -> Unit) {
         }
     }
 
-    Column(Modifier.fillMaxSize().navigationBarsPadding().imePadding()) {
+    Column(Modifier.fillMaxSize().navigationBarsPadding().imePadding().verticalScroll(rememberScrollState())) {
         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onBack) { Text("← Kembali") }
         }
