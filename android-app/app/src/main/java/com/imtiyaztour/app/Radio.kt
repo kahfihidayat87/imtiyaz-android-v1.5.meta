@@ -228,13 +228,6 @@ fun RadioScreen(onBack: () -> Unit) {
     var liveActive by remember { mutableStateOf(false) }
     val playedIds = remember { mutableSetOf<String>() }
     val recorder = remember { RadioRecorder(context) }
-            }
-        } else if (mode != "live") {
-            RadioLiveKit.berhenti()
-            liveActive = false
-            liveStatus = ""
-        }
-    }
 
     // v2.15.0 FIX: fetch is_tour_leader sekali di awal supaya gate UI (TL vs Jamaah)
     // benar SEBELUM user join gelombang. Sebelumnya hanya di-set oleh poll loop,
@@ -263,13 +256,6 @@ fun RadioScreen(onBack: () -> Unit) {
                     liveStatus = status
                     liveActive = RadioLiveKit.sedangAktif()
                 }
-            }
-        } else if (mode != "live") {
-            RadioLiveKit.berhenti()
-            liveActive = false
-            liveStatus = ""
-        }
-    }
     var gelombangNama by remember { mutableStateOf("") }
     var gelombangTLNama by remember { mutableStateOf("") }
     var gelombangPeserta by remember { mutableIntStateOf(0) }
