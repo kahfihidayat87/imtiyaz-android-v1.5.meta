@@ -147,7 +147,7 @@ class RadioRecorder(private val context: Context) {
             startTime = System.currentTimeMillis()
             true
         } catch (e: Exception) {
-            Log.e("RadioLive", "Error: ${e.message}", e)
+            Log.e("RadioRecorder", "start error: ${e.message}", e)
             recorder = null
             false
         }
@@ -167,7 +167,7 @@ class RadioRecorder(private val context: Context) {
                 outputFile
             }
         } catch (e: Exception) {
-            Log.e("RadioLive", "Error: ${e.message}", e)
+            Log.e("RadioRecorder", "stop error: ${e.message}", e)
             try { recorder?.release() } catch (e2: Exception) {}
             recorder = null
             outputFile?.delete()
@@ -177,7 +177,7 @@ class RadioRecorder(private val context: Context) {
 
     fun cancel() {
         try { recorder?.stop(); recorder?.release() } catch (e: Exception) {
-            Log.e("RadioLive", "Error: ${e.message}", e)
+            Log.e("RadioRecorder", "cancel error: ${e.message}", e)
         }
         recorder = null
         outputFile?.delete()
@@ -257,7 +257,6 @@ fun RadioScreen(onBack: () -> Unit) {
             myId = resp.my_jamaah_id ?: ""
         } catch (e: Exception) {
                     Log.e("RadioLive", "Error: ${e.message}", e)
-                    // statusMsg dihapus (tidak ada di scope ini)
             // Diam-diam skip — bukan blocker utama. User bisa retry join.
         }
     }
@@ -295,7 +294,6 @@ fun RadioScreen(onBack: () -> Unit) {
                 }
             } catch (e: Exception) {
                     Log.e("RadioLive", "Error: ${e.message}", e)
-                    // statusMsg dihapus (tidak ada di scope ini)
                 gelombangError = "Gagal: ${e.message}"
             }
             isCreatingGelombang = false
@@ -325,7 +323,6 @@ fun RadioScreen(onBack: () -> Unit) {
                 }
             } catch (e: Exception) {
                     Log.e("RadioLive", "Error: ${e.message}", e)
-                    // statusMsg dihapus (tidak ada di scope ini)
                 gelombangError = "Gagal: ${e.message}"
             }
             isJoiningGelombang = false
@@ -407,7 +404,7 @@ fun RadioScreen(onBack: () -> Unit) {
                                 AudioPlayerManager.toggle(f.absolutePath)
                             } catch (e: Exception) {
                     Log.e("RadioLive", "Error: ${e.message}", e)
-                    // statusMsg dihapus (tidak ada di scope ini)}
+}
                         } else {
                             playedIds.add(m.id)
                         }
@@ -416,7 +413,6 @@ fun RadioScreen(onBack: () -> Unit) {
                 statusMsg = ""
             } catch (e: Exception) {
                     Log.e("RadioLive", "Error: ${e.message}", e)
-                    // statusMsg dihapus (tidak ada di scope ini)
                 if (isAuthRejection(e)) {
                     handleUnauthorized(); return@LaunchedEffect
                 }
@@ -450,7 +446,6 @@ fun RadioScreen(onBack: () -> Unit) {
                 statusMsg = ""
             } catch (e: Exception) {
                     Log.e("RadioLive", "Error: ${e.message}", e)
-                    // statusMsg dihapus (tidak ada di scope ini)
                 if (isAuthRejection(e)) {
                     handleUnauthorized()
                 } else {
