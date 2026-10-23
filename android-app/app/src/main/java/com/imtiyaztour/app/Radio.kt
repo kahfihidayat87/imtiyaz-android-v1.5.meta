@@ -572,7 +572,7 @@ fun RadioScreen(onBack: () -> Unit) {
                     CreateGelombangDialog(
                         isLoading = isCreatingGelombang,
                         onDismiss = { showVoiceCreateDialog = false },
-                        onCreate = { nama -> showVoiceCreateDialog = false; handleCreateGelombang(nama) }
+                        onCreate = { nama, kode -> showVoiceCreateDialog = false; handleCreateGelombang(nama, kode) }
                     )
                 }
                 if (showVoiceJoinDialog) {
@@ -944,9 +944,10 @@ private fun LiveKitSection(
 private fun CreateGelombangDialog(
     isLoading: Boolean,
     onDismiss: () -> Unit,
-    onCreate: (String) -> Unit
+    onCreate: (String, String) -> Unit
 ) {
     var nama by remember { mutableStateOf("") }
+    var kodeManual by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = { if (!isLoading) onDismiss() },
         title = { Text("Buat Gelombang Radio") },
@@ -958,7 +959,16 @@ private fun CreateGelombangDialog(
                 OutlinedTextField(
                     value = nama,
                     onValueChange = { nama = it },
-                    label = { Text("Nama Gelombang") },
+                    label = { Text("Nama Gelombang")
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = kodeManual,
+                onValueChange = { kodeManual = it.uppercase() },
+                label = { Text("Kode Manual (Opsional)") },
+                placeholder = { Text("Misal: KAJI-UMUM") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            ) },
                     placeholder = { Text("Linuwih 17 Okt 2026") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
