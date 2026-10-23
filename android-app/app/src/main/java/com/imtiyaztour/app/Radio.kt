@@ -237,6 +237,23 @@ fun RadioScreen(onBack: () -> Unit) {
     }
     // v2.15.0: Gelombang Radio
     var kodeGelombang by remember { mutableStateOf("") }
+
+    // Auto-connect LiveKit saat tab Siaran Live dibuka
+    LaunchedEffect(mode, kodeGelombang, isTourLeader) {
+        if (mode == "live" && kodeGelombang.isNotBlank() && isTourLeader) {
+            if (!RadioLiveKit.sedangAktif()) {
+                liveStatus = "Menghubungkan..."
+                RadioLiveKit.mulai(context, jamaahId, jamaahToken, kodeGelombang) { status ->
+                    liveStatus = status
+                    liveActive = RadioLiveKit.sedangAktif()
+                }
+            }
+        } else if (mode != "live") {
+            RadioLiveKit.berhenti()
+            liveActive = false
+            liveStatus = ""
+        }
+    }
     var gelombangNama by remember { mutableStateOf("") }
     var gelombangTLNama by remember { mutableStateOf("") }
     var gelombangPeserta by remember { mutableIntStateOf(0) }
@@ -244,9 +261,10 @@ fun RadioScreen(onBack: () -> Unit) {
     var isJoiningGelombang by remember { mutableStateOf(false) }
     var gelombangError by remember { mutableStateOf("") }
     var showVoiceCreateDialog by remember { mutableStateOf(false) }
+    var kodeManualInput by remember { mutableStateOf("") }
     var showVoiceJoinDialog by remember { mutableStateOf(false) }
 
-    fun handleCreateGelombang(nama: String) {
+    fun handleCreateGelombang(nama: String, kodeManual: String) {
         isCreatingGelombang = true
         gelombangError = ""
         scope.launch {
@@ -255,7 +273,8 @@ fun RadioScreen(onBack: () -> Unit) {
                     GelombangApiClient.service.create(mapOf(
                         "jamaah_id" to jamaahId,
                         "token" to jamaahToken,
-                        "nama" to nama
+                        "nama" to nama,
+                        "kode_manual" to kodeManual
                     ))
                 }
                 if (resp.kode != null) {
@@ -654,7 +673,7 @@ fun RadioScreen(onBack: () -> Unit) {
                     liveStatus = ""
                     liveActive = false
                 },
-                onCreateGelombang = { nama -> handleCreateGelombang(nama) },
+                onCreateGelombang = { nama -> handleCreateGelombang(nama, kodeManualInput) },
                 onJoinGelombang = { kode -> handleJoinGelombang(kode) },
                 onLeaveGelombang = { handleLeaveGelombang() },
                 onRevokeGelombang = { handleRevokeGelombang() }
@@ -699,7 +718,8 @@ private fun LiveKitSection(
                 .background(
                     if (liveActive) Color(0xFFDC2626) else Color(0xFF9CA3AF),
                     CircleShape
-                ),
+                )
+                .clickable { if (liveActive) onStop() else onStart() },
             contentAlignment = Alignment.Center
         ) {
             Icon(
