@@ -115,7 +115,7 @@ object RadioLiveKit {
                 }
 
                 if (resp.is_tl) {
-                    r.localParticipant.setMicrophoneEnabled(true)
+                    r.try { localParticipant.setMicrophoneEnabled(true) } catch (e: Exception) { Log.e("RadioLiveKit", "Mic error: ${e.message}") }
                     onStatus("\uD83D\uDD34 Siaran aktif")
                     Log.d(TAG, "TL siaran aktif di room")
                 } else {

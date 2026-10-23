@@ -28,7 +28,9 @@ class RadioService : Service() {
                 .setOngoing(true)
                 .build()
             if (Build.VERSION.SDK_INT >= 34) {
-                startForeground(101, notif, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+                startForeground(101, notif, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+            } else if (Build.VERSION.SDK_INT >= 30) {
+                startForeground(101, notif, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
             } else if (Build.VERSION.SDK_INT >= 29) {
                 startForeground(101, notif, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
             } else {
