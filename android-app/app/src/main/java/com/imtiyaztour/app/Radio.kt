@@ -147,8 +147,7 @@ class RadioRecorder(private val context: Context) {
             startTime = System.currentTimeMillis()
             true
         } catch (e: Exception) {
-                    Log.e("RadioLive", "Error: ${e.message}", e)
-                    statusMsg = "Error Live: ${e.message}"
+            Log.e("RadioLive", "Error: ${e.message}", e)
             recorder = null
             false
         }
@@ -168,8 +167,7 @@ class RadioRecorder(private val context: Context) {
                 outputFile
             }
         } catch (e: Exception) {
-                    Log.e("RadioLive", "Error: ${e.message}", e)
-                    statusMsg = "Error Live: ${e.message}"
+            Log.e("RadioLive", "Error: ${e.message}", e)
             try { recorder?.release() } catch (e2: Exception) {}
             recorder = null
             outputFile?.delete()
@@ -179,8 +177,8 @@ class RadioRecorder(private val context: Context) {
 
     fun cancel() {
         try { recorder?.stop(); recorder?.release() } catch (e: Exception) {
-                    Log.e("RadioLive", "Error: ${e.message}", e)
-                    statusMsg = "Error Live: ${e.message}"}
+            Log.e("RadioLive", "Error: ${e.message}", e)
+        }
         recorder = null
         outputFile?.delete()
         outputFile = null
@@ -225,6 +223,23 @@ fun RadioScreen(onBack: () -> Unit) {
     var statusMsg by remember { mutableStateOf("") }
     // v2.14.0: mode UI -- "voice" (voice note lama) atau "live" (LiveKit)
     var mode by remember { mutableStateOf("voice") }
+
+    // Auto-connect LiveKit saat tab Siaran Live dibuka dan gelombang sudah aktif
+    LaunchedEffect(mode, kodeGelombang, isTourLeader) {
+        if (mode == "live" && kodeGelombang.isNotBlank() && isTourLeader) {
+            if (!RadioLiveKit.sedangAktif()) {
+                liveStatus = "Menghubungkan..."
+                RadioLiveKit.mulai(context, jamaahId, jamaahToken, kodeGelombang) { status ->
+                    liveStatus = status
+                    liveActive = RadioLiveKit.sedangAktif()
+                }
+            }
+        } else if (mode != "live") {
+            RadioLiveKit.berhenti()
+            liveActive = false
+        }
+    }
+
     var liveStatus by remember { mutableStateOf("") }
     var liveActive by remember { mutableStateOf(false) }
     val playedIds = remember { mutableSetOf<String>() }
@@ -242,7 +257,7 @@ fun RadioScreen(onBack: () -> Unit) {
             myId = resp.my_jamaah_id ?: ""
         } catch (e: Exception) {
                     Log.e("RadioLive", "Error: ${e.message}", e)
-                    statusMsg = "Error Live: ${e.message}"
+                    // statusMsg dihapus (tidak ada di scope ini)
             // Diam-diam skip — bukan blocker utama. User bisa retry join.
         }
     }
@@ -280,7 +295,7 @@ fun RadioScreen(onBack: () -> Unit) {
                 }
             } catch (e: Exception) {
                     Log.e("RadioLive", "Error: ${e.message}", e)
-                    statusMsg = "Error Live: ${e.message}"
+                    // statusMsg dihapus (tidak ada di scope ini)
                 gelombangError = "Gagal: ${e.message}"
             }
             isCreatingGelombang = false
@@ -310,7 +325,7 @@ fun RadioScreen(onBack: () -> Unit) {
                 }
             } catch (e: Exception) {
                     Log.e("RadioLive", "Error: ${e.message}", e)
-                    statusMsg = "Error Live: ${e.message}"
+                    // statusMsg dihapus (tidak ada di scope ini)
                 gelombangError = "Gagal: ${e.message}"
             }
             isJoiningGelombang = false
@@ -392,7 +407,7 @@ fun RadioScreen(onBack: () -> Unit) {
                                 AudioPlayerManager.toggle(f.absolutePath)
                             } catch (e: Exception) {
                     Log.e("RadioLive", "Error: ${e.message}", e)
-                    statusMsg = "Error Live: ${e.message}"}
+                    // statusMsg dihapus (tidak ada di scope ini)}
                         } else {
                             playedIds.add(m.id)
                         }
@@ -401,7 +416,7 @@ fun RadioScreen(onBack: () -> Unit) {
                 statusMsg = ""
             } catch (e: Exception) {
                     Log.e("RadioLive", "Error: ${e.message}", e)
-                    statusMsg = "Error Live: ${e.message}"
+                    // statusMsg dihapus (tidak ada di scope ini)
                 if (isAuthRejection(e)) {
                     handleUnauthorized(); return@LaunchedEffect
                 }
@@ -435,7 +450,7 @@ fun RadioScreen(onBack: () -> Unit) {
                 statusMsg = ""
             } catch (e: Exception) {
                     Log.e("RadioLive", "Error: ${e.message}", e)
-                    statusMsg = "Error Live: ${e.message}"
+                    // statusMsg dihapus (tidak ada di scope ini)
                 if (isAuthRejection(e)) {
                     handleUnauthorized()
                 } else {
