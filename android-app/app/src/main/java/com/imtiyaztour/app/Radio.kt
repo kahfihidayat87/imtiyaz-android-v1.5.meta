@@ -1,5 +1,7 @@
 package com.imtiyaztour.app
 
+import android.util.Log
+
 import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
