@@ -466,15 +466,6 @@ fun RadioScreen(onBack: () -> Unit) {
             } else {
                 Text("Mode dengar -- hanya Tour Leader yang bisa bicara di kanal ini", fontSize = 11.sp, color = Color.Gray)
             }
-            if (isFallbackChannel) {
-                Spacer(Modifier.height(6.dp))
-                Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3CD)), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        "⚠ Akun Anda belum ditugaskan ke kanal radio tertentu oleh Admin, jadi masuk ke kanal umum. Kalau seharusnya Anda satu rombongan dengan jamaah lain, minta Admin memilih Kanal Radio akun Anda di WP Admin (Data Jamaah > Kanal Radio) -- tanpa itu, Anda tidak akan bisa saling dengar dengan rombongan yang benar.",
-                        fontSize = 10.sp, color = Color(0xFF92400E), modifier = Modifier.padding(10.dp)
-                    )
-                }
-            }
             if (statusMsg.isNotEmpty()) Text(statusMsg, fontSize = 11.sp, color = Color(0xFFDC2626))
         }
 
@@ -547,7 +538,7 @@ fun RadioScreen(onBack: () -> Unit) {
                                     if (isTourLeader) showVoiceCreateDialog = true
                                     else showVoiceJoinDialog = true
                                 },
-                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                modifier = Modifier.fillMaxWidth().height(56.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)),
                                 shape = RoundedCornerShape(10.dp)
                             ) {
@@ -769,7 +760,7 @@ private fun LiveKitSection(
                             if (isTourLeader) showCreateDialog = true
                             else showJoinDialog = true
                         },
-                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)),
                         shape = RoundedCornerShape(10.dp)
                     ) {
@@ -847,7 +838,7 @@ private fun LiveKitSection(
                 Button(
                     onClick = onStop,
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
                     shape = RoundedCornerShape(10.dp)
                 ) {
                     Text(
@@ -859,7 +850,7 @@ private fun LiveKitSection(
                 Button(
                     onClick = onStart,
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)),
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
                     shape = RoundedCornerShape(10.dp)
                 ) {
                     Text(
