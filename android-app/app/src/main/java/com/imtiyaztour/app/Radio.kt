@@ -228,16 +228,6 @@ fun RadioScreen(onBack: () -> Unit) {
     var liveActive by remember { mutableStateOf(false) }
     val playedIds = remember { mutableSetOf<String>() }
     val recorder = remember { RadioRecorder(context) }
-    
-    // Auto-connect LiveKit saat tab Siaran Live dibuka dan gelombang sudah aktif
-    LaunchedEffect(mode, kodeGelombang, isTourLeader) {
-        if (mode == "live" && kodeGelombang.isNotBlank() && isTourLeader) {
-            if (!RadioLiveKit.sedangAktif()) {
-                liveStatus = "Menghubungkan..."
-                RadioLiveKit.mulai(context, jamaahId, jamaahToken, kodeGelombang) { status ->
-                    liveStatus = status
-                    liveActive = RadioLiveKit.sedangAktif()
-                }
             }
         } else if (mode != "live") {
             RadioLiveKit.berhenti()
@@ -263,6 +253,23 @@ fun RadioScreen(onBack: () -> Unit) {
     }
     // v2.15.0: Gelombang Radio
     var kodeGelombang by remember { mutableStateOf("") }
+    
+    // Auto-connect LiveKit saat tab Siaran Live dibuka dan gelombang sudah aktif
+    LaunchedEffect(mode, kodeGelombang, isTourLeader) {
+        if (mode == "live" && kodeGelombang.isNotBlank() && isTourLeader) {
+            if (!RadioLiveKit.sedangAktif()) {
+                liveStatus = "Menghubungkan..."
+                RadioLiveKit.mulai(context, jamaahId, jamaahToken, kodeGelombang) { status ->
+                    liveStatus = status
+                    liveActive = RadioLiveKit.sedangAktif()
+                }
+            }
+        } else if (mode != "live") {
+            RadioLiveKit.berhenti()
+            liveActive = false
+            liveStatus = ""
+        }
+    }
     var gelombangNama by remember { mutableStateOf("") }
     var gelombangTLNama by remember { mutableStateOf("") }
     var gelombangPeserta by remember { mutableIntStateOf(0) }
