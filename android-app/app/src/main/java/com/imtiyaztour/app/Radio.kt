@@ -207,8 +207,6 @@ fun RadioScreen(onBack: () -> Unit) {
         hasMicPermission = granted
     }
 
-    var channelNama by remember { mutableStateOf("") }
-    var isFallbackChannel by remember { mutableStateOf(false) }
     var isTourLeader by remember { mutableStateOf(false) }
     var messages by remember { mutableStateOf(listOf<RadioMessage>()) }
     var lastAfter by remember { mutableStateOf(0L) }
@@ -232,9 +230,7 @@ fun RadioScreen(onBack: () -> Unit) {
                 RadioApiClient.service.poll(RadioPollRequest(jamaahId, jamaahToken, 0L))
             }
             isTourLeader = resp.is_tour_leader ?: false
-            channelNama = resp.channel_nama ?: ""
             myId = resp.my_jamaah_id ?: ""
-            isFallbackChannel = resp.is_fallback_channel ?: false
         } catch (e: Exception) {
             // Diam-diam skip — bukan blocker utama. User bisa retry join.
         }
@@ -364,10 +360,8 @@ fun RadioScreen(onBack: () -> Unit) {
                 val resp = withContext(Dispatchers.IO) {
                     RadioApiClient.service.poll(RadioPollRequest(jamaahId, jamaahToken, lastAfter))
                 }
-                channelNama = resp.channel_nama ?: channelNama
                 myId = resp.my_jamaah_id ?: myId
-                isFallbackChannel = resp.is_fallback_channel ?: false
-                isTourLeader = resp.is_tour_leader ?: false
+                    isTourLeader = resp.is_tour_leader ?: false
                 if (resp.messages.isNotEmpty()) {
                     messages = (messages + resp.messages).takeLast(30)
                     lastAfter = resp.messages.maxOf { it.time }
@@ -458,7 +452,7 @@ fun RadioScreen(onBack: () -> Unit) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
             Text("Radio Tour Leader", fontWeight = FontWeight.Bold, fontSize = 20.sp)
             Text(
-                if (channelNama.isNotEmpty()) "Kanal: $channelNama" else "Menghubungkan ke kanal...",
+                "Mode Radio Pengajian",
                 fontSize = 12.sp, color = Color.Gray
             )
             if (isTourLeader) {
