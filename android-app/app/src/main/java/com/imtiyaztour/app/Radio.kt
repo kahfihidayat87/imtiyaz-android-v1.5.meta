@@ -673,7 +673,7 @@ fun RadioScreen(onBack: () -> Unit) {
                     liveStatus = ""
                     liveActive = false
                 },
-                onCreateGelombang = { nama -> handleCreateGelombang(nama, kodeManualInput) },
+                onCreateGelombang = { nama, kode -> handleCreateGelombang(nama, kode) },
                 onJoinGelombang = { kode -> handleJoinGelombang(kode) },
                 onLeaveGelombang = { handleLeaveGelombang() },
                 onRevokeGelombang = { handleRevokeGelombang() }
