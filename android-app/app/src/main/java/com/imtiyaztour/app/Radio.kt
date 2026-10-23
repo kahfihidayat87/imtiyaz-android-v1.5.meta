@@ -948,45 +948,52 @@ private fun CreateGelombangDialog(
 ) {
     var nama by remember { mutableStateOf("") }
     var kodeManual by remember { mutableStateOf("") }
+
     AlertDialog(
-        onDismissRequest = { if (!isLoading) onDismiss() },
-        title = { Text("Buat Gelombang Radio") },
+        onDismissRequest = onDismiss,
+        title = { Text("Buat Gelombang Radio", fontWeight = FontWeight.Bold) },
         text = {
-            Column {
-                Text("Beri nama gelombang (misal: Linuwih 17 Okt). Sistem akan generate kode unik.",
-                    fontSize = 12.sp, color = Color.Gray)
-                Spacer(Modifier.height(12.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "Beri nama gelombang. Kode manual bersifat opsional, jika dikosongkan sistem akan membuat kode acak.",
+                    fontSize = 12.sp, color = Color.Gray
+                )
                 OutlinedTextField(
                     value = nama,
                     onValueChange = { nama = it },
-                    label = { Text("Nama Gelombang")
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-                value = kodeManual,
-                onValueChange = { kodeManual = it.uppercase() },
-                label = { Text("Kode Manual (Opsional)") },
-                placeholder = { Text("Misal: KAJI-UMUM") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            ) },
-                    placeholder = { Text("Linuwih 17 Okt 2026") },
+                    label = { Text("Nama Gelombang") },
+                    placeholder = { Text("Misal: Kajian Ahad") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = kodeManual,
+                    onValueChange = { kodeManual = it.uppercase() },
+                    label = { Text("Kode Manual (Opsional)") },
+                    placeholder = { Text("") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         },
         confirmButton = {
             TextButton(
-                onClick = { if (nama.isNotBlank() && !isLoading) onCreate(nama.trim(), kodeManual.trim()) },
+                onClick = {
+                    if (nama.isNotBlank() && !isLoading) {
+                        onCreate(nama.trim(), kodeManual.trim())
+                    }
+                },
                 enabled = nama.isNotBlank() && !isLoading
             ) {
-                if (isLoading) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                else Text("BUAT", fontWeight = FontWeight.Bold, color = Color(0xFF0F7A5A))
+                if (isLoading) {
+                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                } else {
+                    Text("BUAT", fontWeight = FontWeight.Bold, color = Color(0xFF0F7A5A))
+                }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !isLoading) { Text("Batal") }
+            TextButton(onClick = onDismiss) { Text("Batal") }
         }
     )
 }
