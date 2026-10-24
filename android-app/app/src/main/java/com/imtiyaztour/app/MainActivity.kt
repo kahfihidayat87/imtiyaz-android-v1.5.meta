@@ -534,7 +534,8 @@ fun ImtiyazApp() {
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
             )
         },
-        bottomBar = {
+        if (!showRadio) {
+            bottomBar = {
             NavigationBar(containerColor = Color.White) {
                 NavigationBarItem(selected = selectedTab == 0, onClick = { resetSubPages(); selectedTab = 0 }, icon = { Icon(Icons.Default.Home, null) }, label = { Text("Beranda", fontSize = 9.sp) })
                 NavigationBarItem(selected = selectedTab == 1, onClick = { resetSubPages(); selectedTab = 1 }, icon = { Icon(Icons.Default.DateRange, null) }, label = { Text("Jadwal", fontSize = 9.sp) })
@@ -543,6 +544,7 @@ fun ImtiyazApp() {
                 NavigationBarItem(selected = selectedTab == 4, onClick = { resetSubPages(); selectedTab = 4 }, icon = { Icon(Icons.Default.PlayArrow, null) }, label = { Text("Game", fontSize = 9.sp) })
                 NavigationBarItem(selected = selectedTab == 5, onClick = { resetSubPages(); selectedTab = 5 }, icon = { Icon(Icons.Default.Person, null) }, label = { Text("Saya", fontSize = 9.sp) })
             }
+        }
         }
     ) { padding ->
         Box(Modifier.padding(padding)) {
