@@ -6,14 +6,21 @@ import android.app.Service
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 
 class RadioService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
+    private var wakeLock: PowerManager.WakeLock? = null
+
     override fun onCreate() {
         super.onCreate()
         try {
+            val powerManager = getSystemService(POWER_SERVICE) as PowerManager
+            wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "ImtiyazRadio::WakeLock")
+            wakeLock?.acquire(60 * 60 * 1000L) // Tahan HP bangun maks 1 jam
+
             val channelId = "radio_foreground"
             val channelName = "Radio Imtiyaz"
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -48,6 +55,9 @@ class RadioService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        if (wakeLock?.isHeld == true) {
+            wakeLock?.release()
+        }
         RadioLiveKit.berhenti()
     }
 }
