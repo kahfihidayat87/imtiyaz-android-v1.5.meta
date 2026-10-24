@@ -238,7 +238,7 @@ fun RadioScreen(onBack: () -> Unit) {
         }
     }
     // v2.15.0: Gelombang Radio
-    var kodeGelombang by remember { mutableStateOf("") }
+    var kodeGelombang by remember { mutableStateOf(Prefs.getActiveKodeGelombang(context)) }
 
     // Auto-connect LiveKit saat tab Siaran Live dibuka
     LaunchedEffect(mode, kodeGelombang, isTourLeader) {
@@ -281,6 +281,7 @@ fun RadioScreen(onBack: () -> Unit) {
                 }
                 if (resp.kode != null) {
                     kodeGelombang = resp.kode!!
+                    Prefs.setActiveKodeGelombang(context, resp.kode!!)
                     gelombangNama = resp.nama ?: nama
                     gelombangTLNama = resp.tl_nama ?: ""
                     gelombangPeserta = 1
@@ -334,7 +335,7 @@ fun RadioScreen(onBack: () -> Unit) {
                     ))
                 }
             } catch (_: Exception) { }
-            kodeGelombang = ""; gelombangNama = ""
+            kodeGelombang = ""; gelombangNama = ""; Prefs.clearActiveKodeGelombang(context)
             gelombangTLNama = ""; gelombangPeserta = 0
         }
     }
@@ -968,7 +969,7 @@ private fun CreateGelombangDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    "Beri nama gelombang. Kode manual bersifat opsional, jika dikosongkan sistem akan membuat kode acak.",
+                    "Beri nama gelombang dan kode unik (contoh: KAJI-UMUM).",
                     fontSize = 12.sp, color = Color.Gray
                 )
                 OutlinedTextField(
@@ -982,7 +983,7 @@ private fun CreateGelombangDialog(
                 OutlinedTextField(
                     value = kodeManual,
                     onValueChange = { kodeManual = it.uppercase() },
-                    label = { Text("Kode Manual (Opsional)") },
+                    label = { Text("Kode Gelombang (Wajib)") },
                     placeholder = { Text("") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -996,7 +997,7 @@ private fun CreateGelombangDialog(
                         onCreate(nama.trim(), kodeManual.trim())
                     }
                 },
-                enabled = nama.isNotBlank() && !isLoading
+                enabled = nama.isNotBlank() && kodeManual.isNotBlank() && !isLoading
             ) {
                 if (isLoading) {
                     CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)

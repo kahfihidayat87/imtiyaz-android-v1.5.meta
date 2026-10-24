@@ -262,7 +262,16 @@ object Prefs {
     // v2.15.1: Guest ID untuk audien umum radio pengajian (tanpa login).
     // Sticky di SharedPreferences, format guest_<8hex>. Dipakai sebagai jamaah_id
     // untuk gelombang/join dan radio/poll. Server mengenali prefix guest_.
-    fun getOrCreateGuestId(context: Context): String {
+        // Menyimpan kode gelombang agar tidak reset saat pindah layar
+    fun setActiveKodeGelombang(context: Context, kode: String) {
+        get(context).edit().putString("active_kode_gelombang", kode).apply()
+    }
+    fun getActiveKodeGelombang(context: Context): String = get(context).getString("active_kode_gelombang", "") ?: ""
+    fun clearActiveKodeGelombang(context: Context) {
+        get(context).edit().remove("active_kode_gelombang").apply()
+    }
+
+fun getOrCreateGuestId(context: Context): String {
         val prefs = get(context)
         val existing = prefs.getString("guest_id", null)
         if (!existing.isNullOrBlank()) return existing
