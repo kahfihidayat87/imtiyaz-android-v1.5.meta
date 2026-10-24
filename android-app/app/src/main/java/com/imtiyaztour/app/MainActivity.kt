@@ -1,6 +1,8 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 
 package com.imtiyaztour.app
+import android.provider.Settings
+import android.os.PowerManager
 
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
@@ -358,8 +360,32 @@ class MainActivity : ComponentActivity() {
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
+
+@Composable
+fun RequestBatteryOptimization() {
+    val context = LocalContext.current
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+            if (!powerManager.isIgnoringBatteryOptimizations(context.packageName)) {
+                try {
+                    val intent = Intent().apply {
+                        action = Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+                        data = Uri.parse("package:${context.packageName}")
+                    }
+                    context.startActivity(intent)
+                } catch (e: Exception) {
+                    // Abaikan jika HP tidak mendukung intent ini
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun ImtiyazApp() {
+    RequestBatteryOptimization()
+
     var showSplash by remember { mutableStateOf(true) }
     var selectedTab by remember { mutableStateOf(0) }
     var selectedPaket by remember { mutableStateOf<PaketUmrah?>(null) }
