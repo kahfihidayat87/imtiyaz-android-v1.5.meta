@@ -117,8 +117,10 @@ object RadioLiveKit {
                 if (resp.is_tl) {
                     try {
                         r.localParticipant.setMicrophoneEnabled(true)
-                    } catch (e: Exception) {
-                        Log.e("RadioLiveKit", "Mic error: ${e.message}")
+                    } catch (e: Throwable) {
+                        // Tangkap Throwable (termasuk AssertionError dari WebRTC)
+                        Log.e("RadioLiveKit", "Mic error: ${e.message}", e)
+                        onStatus("Mic gagal diakses. Cek izin atau tutup aplikasi lain.")
                     }
                     onStatus("\uD83D\uDD34 Siaran aktif")
                     Log.d(TAG, "TL siaran aktif di room")
