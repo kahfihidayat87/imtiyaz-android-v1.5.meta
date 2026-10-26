@@ -550,7 +550,7 @@ fun ImtiyazApp() {
                     NavigationBarItem(selected = selectedTab == 1, onClick = { resetSubPages(); selectedTab = 1 }, icon = { Icon(Icons.Default.DateRange, null) }, label = { Text("Jadwal", fontSize = 9.sp) })
                     NavigationBarItem(selected = selectedTab == 2, onClick = { resetSubPages(); selectedTab = 2 }, icon = { Icon(Icons.Default.MenuBook, null) }, label = { Text("Quran", fontSize = 9.sp) })
                     NavigationBarItem(selected = selectedTab == 3, onClick = { resetSubPages(); selectedTab = 3 }, icon = { Icon(Icons.Default.Favorite, null) }, label = { Text("Doa", fontSize = 9.sp) })
-                    NavigationBarItem(selected = selectedTab == 4, onClick = { resetSubPages(); selectedTab = 4 }, icon = { Icon(Icons.Default.PlayArrow, null) }, label = { Text("Game", fontSize = 9.sp) })
+                    NavigationBarItem(selected = selectedTab == 4, onClick = { resetSubPages(); selectedTab = 4 }, icon = { Icon(Icons.Default.Mosque, null) }, label = { Text("Mabrur", fontSize = 9.sp) })
                     NavigationBarItem(selected = selectedTab == 5, onClick = { resetSubPages(); selectedTab = 5 }, icon = { Icon(Icons.Default.Person, null) }, label = { Text("Saya", fontSize = 9.sp) })
                 }
             }
