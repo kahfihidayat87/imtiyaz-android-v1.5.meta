@@ -240,22 +240,6 @@ fun RadioScreen(onBack: () -> Unit) {
     // v2.15.0: Gelombang Radio
     var kodeGelombang by remember { mutableStateOf(Prefs.getActiveKodeGelombang(context)) }
 
-    // Auto-connect LiveKit saat tab Siaran Live dibuka
-    LaunchedEffect(mode, kodeGelombang, isTourLeader) {
-        if (mode == "live" && kodeGelombang.isNotBlank() && isTourLeader) {
-            if (!RadioLiveKit.sedangAktif()) {
-                liveStatus = "Menghubungkan..."
-                RadioLiveKit.mulai(context, jamaahId, jamaahToken, kodeGelombang) { status ->
-                    liveStatus = status
-                    liveActive = RadioLiveKit.sedangAktif()
-                }
-            }
-        } else if (mode != "live" || kodeGelombang.isBlank()) {
-            RadioLiveKit.berhenti()
-            liveActive = false
-            liveStatus = ""
-        }
-    }
     var gelombangNama by remember { mutableStateOf("") }
     var gelombangTLNama by remember { mutableStateOf("") }
     var gelombangPeserta by remember { mutableIntStateOf(0) }
@@ -750,10 +734,12 @@ private fun LiveKitSection(
             modifier = Modifier
                 .size(72.dp)
                 .background(
-                    if (liveActive) Color(0xFFDC2626) else Color(0xFF9CA3AF),
+                    if (liveActive) Color(0xFFDC2626) else Color(0xFF0F7A5A), // Hijau jika siap mulai
                     CircleShape
                 )
-                .clickable { if (liveActive) onStop() else onStart() },
+                .clickable {
+                    if (liveActive) onStop() else onStart()
+                },
             contentAlignment = Alignment.Center
         ) {
             Icon(
