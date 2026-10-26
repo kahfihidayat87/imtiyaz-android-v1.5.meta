@@ -1424,3 +1424,102 @@ Jamaah bertanya seputar umrah (paket, sisa bayar) lewat suara, dijawab AI secara
 5. **Safety:** Guardrails + Fallback WA.
 6. **Testing:** Device.
 
+____
+Terakhir update: 26 Okt 2026 (Migrasi LiveKit VPS & Perbaikan Radio)
+Repo utama: https://github.com/kahfihidayat87/imtiyaz-android-v1.5.meta
+Local path: C:\Users\DELL\Documents\GitHub\imtiyaz-android-v1.5.meta
+
+📊 Status Saat Ini
+Item	Nilai
+Versi aktif (App Jamaah)	2.13.0 (versionCode 15) — Perlu di-bump ke 2.15.0 sebelum rilis Play Store
+Branch	main
+CI	GitHub Actions hijau
+Server Node.js	Berjalan via PM2 di Shared Hosting (BUKAN lsnode lagi)
+Server LiveKit	VPS Hostinger (187.124.137.227)
+Domain LiveKit	livekit.pastiumrah.com (SSL via Caddy)
+🚀 Pencapaian Besar Sesi Ini (26 Okt 2026)
+1. Migrasi LiveKit Cloud → VPS Hostinger
+Kita telah sukses memindahkan server siaran radio dari LiveKit Cloud ke VPS Hostinger milik sendiri.
+
+VPS IP: 187.124.137.227
+
+Konfigurasi VPS: Docker Compose (livekit.yaml & Caddyfile di /opt/livekit).
+
+SSL: Otomatis via Caddy (Let's Encrypt).
+
+Port Firewall VPS: 80, 443, 7880, 7881, 7882 (UDP/TCP).
+
+Catatan Penting: Blok turn: di livekit.yaml dihapus agar Caddy bisa menangani SSL dengan lancar.
+
+2. Perbaikan Node.js API (Shared Hosting)
+Server Node.js (api.pastiumrah.com) sempat crash karena Hostinger melakukan deploy ulang dan menghapus modul serta file kustom.
+
+PM2: Diinstall secara global (di ~/.npm-global) dan dijalankan sebagai process manager (imtiyaz-api).
+
+Auto-Start: Dibuat script pm2-watchdog.sh yang berjalan di background untuk memastikan API selalu hidup (menggantikan crontab yang diblokir Hostinger).
+
+File Kustom yang Hilang: skrining-routes.js dibuat ulang (mode darurat), service-account.json (kunci Firebase) dipulihkan.
+
+Modul Hilang: firebase-admin, pdfkit, dan livekit-server-sdk di-install ulang secara manual via NPM.
+
+3. Perubahan Logika API (Node.js)
+Kode Gelombang Manual: Server TIDAK LAGI menggunakan generateKodeGelombang(). Kode 100% diambil dari input manual kode_manual yang dikirim TL. Jika kosong, server menolak (HTTP 400).
+
+Guest Mode: Endpoint /api/radio/gelombang/join dan /api/radio/token sekarang menerima ID berawalan guest_ tanpa memerlukan token WordPress.
+
+Firebase: service-account.json berhasil dimuat kembali ([FCM] Firebase Admin SDK initialized).
+
+4. Perbaikan Android (App Jamaah)
+Branding: "Radio Tour Leader" diganti menjadi "Radio Imtiyaz". Teks "Tour Leader" diganti menjadi "Pembimbing".
+
+UI: Bottom Navigation disembunyikan saat berada di layar Radio. Tombol mic diperbaiki agar bisa di-tap.
+
+Guest Mode: Prefs.getOrCreateGuestId() ditambahkan. Jika user tidak login, ID guest_xxxx dikirim ke server.
+
+Background Service: Dibuat RadioService.kt (Foreground Service + WakeLock). Radio tetap tersambung meski layar HP mati/terkunci.
+
+Battery Optimization: Izin REQUEST_IGNORE_BATTERY_OPTIMIZATIONS ditambahkan di MainActivity saat aplikasi pertama kali dibuka.
+
+Error Handling: Menambahkan parsing JSON agar jika server error, pesan yang muncul di HP adalah pesan aslinya (bukan sekadar "HTTP 400").
+
+5. Firestore Rules
+Collection gelombang sekarang allow read: if true; agar Guest (tanpa login) bisa mendengarkan radio.
+
+🔧 Cara Mengelola Server (PENTING!)
+Sejak sesi ini, server Node.js TIDAK LAGI menggunakan LiteSpeed (lsnode). Kita beralih ke PM2.
+
+Server API (api.pastiumrah.com)
+Login: ssh -p 65002 u120369480@153.92.10.222
+
+Perintah	Fungsi
+pm2 status	Cek status server
+pm2 restart imtiyaz-api	Restart server (setelah edit kode)
+pm2 logs imtiyaz-api	Lihat log realtime
+pm2 stop imtiyaz-api	Matikan server
+Server LiveKit VPS (livekit.pastiumrah.com)
+Login: ssh root@187.124.137.227
+Folder: /opt/livekit
+
+Perintah	Fungsi
+docker ps	Cek status container (LiveKit & Caddy)
+docker compose restart	Restart LiveKit & Caddy
+docker compose logs -f livekit	Lihat log LiveKit
+docker compose logs -f caddy	Lihat log SSL/Caddy
+📝 Kandidat TAHAP Selanjutnya
+Bump Versi Play Store: Ubah versionCode 15 → 16, versionName 2.13.0 → 2.15.0. Build AAB untuk Play Store.
+
+Kustomisasi UI Radio: Perbaiki tampilan error HTTP 400 di UI (jika ada) agar lebih rapi.
+
+Dokumentasi Admin: Update HANDOFF untuk App Admin (memastikan fitur KAS & PROSPEK terdokumentasi).
+
+Pembersihan Sisa Kode: Hapus total LocateService.kt (karena sudah tidak dipakai) dan hapus file .bak- di lokal.
+
+⚠️ Catatan Kritis untuk Percakapan Berikutnya
+Jangan menyentuh service-account.json atau .env di server tanpa backup.
+
+Jangan pernah menghapus atau menimpa file app.js dengan versi asli Hostinger (karena Hostinger tidak menyertakan patch LiveKit kita).
+
+Jika Hostinger melakukan deploy ulang (folder versions berubah), wajib menjalankan npm install firebase-admin pdfkit livekit-server-sdk dan memastikan file service-account.json ada.
+
+Selalu gunakan pm2 restart imtiyaz-api setelah mengedit app.js.
+
