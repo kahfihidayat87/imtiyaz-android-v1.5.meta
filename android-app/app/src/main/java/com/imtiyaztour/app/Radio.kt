@@ -220,7 +220,7 @@ fun RadioScreen(onBack: () -> Unit) {
     var mode by remember { mutableStateOf("voice") }
     var liveStatus by remember { mutableStateOf("") }
     var liveActive by remember { mutableStateOf(false) }
-    }
+}
     val playedIds = remember { mutableSetOf<String>() }
     val recorder = remember { RadioRecorder(context) }
 
