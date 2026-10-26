@@ -632,7 +632,7 @@ fun RadioScreen(onBack: () -> Unit) {
                 }
                 Spacer(Modifier.height(4.dp))
 
-                LazyColumn(Modifier.weight(1f).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                LazyColumn(Modifier.weight(1f).padding(horizontal = 16.dp), contentPadding = PaddingValues(bottom = 100.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (messages.isEmpty()) {
                         item { Text("Belum ada suara masuk di gelombang ini.", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(top = 16.dp)) }
                     }
@@ -730,26 +730,28 @@ private fun LiveKitSection(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Top
     ) {
-        if (kodeGelombang.isNotBlank()) {
-            Box(
-                modifier = Modifier
-                    .size(72.dp)
-                    .background(
-                        if (liveActive) Color(0xFFDC2626) else Color(0xFF0F7A5A), // Hijau jika siap mulai
-                        CircleShape
-                    )
-                    .clickable {
-                        if (liveActive) onStop() else onStart()
+        Box(
+            modifier = Modifier
+                .size(72.dp)
+                .background(
+                    when {
+                        kodeGelombang.isBlank() -> Color(0xFF9CA3AF) // Abu-abu jika belum join
+                        liveActive -> Color(0xFFDC2626)              // Merah jika sedang live
+                        else -> Color(0xFF0F7A5A)                    // Hijau jika siap mulai
                     },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    if (isTourLeader) Icons.Default.Mic else Icons.Default.Headset,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(32.dp)
+                    CircleShape
                 )
-            }
+                .clickable(enabled = kodeGelombang.isNotBlank()) { // Matikan klik jika kode kosong
+                    if (liveActive) onStop() else onStart()
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                if (isTourLeader) Icons.Default.Mic else Icons.Default.Headset,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(32.dp)
+            )
         }
         Spacer(Modifier.height(12.dp))
         if (kodeGelombang.isNotBlank()) {
