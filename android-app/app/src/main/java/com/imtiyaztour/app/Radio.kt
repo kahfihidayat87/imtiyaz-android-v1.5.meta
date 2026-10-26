@@ -220,6 +220,13 @@ fun RadioScreen(onBack: () -> Unit) {
     var mode by remember { mutableStateOf("voice") }
     var liveStatus by remember { mutableStateOf("") }
     var liveActive by remember { mutableStateOf(false) }
+    // Paksa reset status saat layar dibuka
+    LaunchedEffect(Unit) {
+        if (kodeGelombang.isBlank()) {
+                liveActive = false // Pastikan mati
+            liveActive = false
+        }
+    }
     val playedIds = remember { mutableSetOf<String>() }
     val recorder = remember { RadioRecorder(context) }
 
