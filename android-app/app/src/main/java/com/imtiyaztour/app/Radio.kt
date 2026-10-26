@@ -250,7 +250,7 @@ fun RadioScreen(onBack: () -> Unit) {
                     liveActive = RadioLiveKit.sedangAktif()
                 }
             }
-        } else if (mode != "live") {
+        } else if (mode != "live" || kodeGelombang.isBlank()) {
             RadioLiveKit.berhenti()
             liveActive = false
             liveStatus = ""
@@ -265,6 +265,26 @@ fun RadioScreen(onBack: () -> Unit) {
     var showVoiceCreateDialog by remember { mutableStateOf(false) }
     var kodeManualInput by remember { mutableStateOf("") }
     var showVoiceJoinDialog by remember { mutableStateOf(false) }
+
+    
+    // Helper untuk mem-parsing pesan error JSON dari server
+    fun parseError(e: Exception): String {
+        return if (e is retrofit2.HttpException) {
+            try {
+                val body = e.response()?.errorBody()?.string()
+                if (!body.isNullOrBlank()) {
+                    val json = com.google.gson.JsonParser.parseString(body).asJsonObject
+                    "Gagal: " + (json.get("error")?.asString ?: "Error ${e.code()}")
+                } else {
+                    "Gagal: Error ${e.code()}"
+                }
+            } catch (ex: Exception) {
+                "Gagal: Error ${e.code()}"
+            }
+        } else {
+            "Gagal: ${e.message ?: "Koneksi terputus"}"
+        }
+    }
 
     fun handleCreateGelombang(nama: String, kodeManual: String) {
         isCreatingGelombang = true
@@ -290,7 +310,7 @@ fun RadioScreen(onBack: () -> Unit) {
                     gelombangError = resp.error ?: "Gagal buat gelombang"
                 }
             } catch (e: Exception) {
-                gelombangError = "Gagal: ${e.message}"
+                gelombangError = parseError(e)
             }
             isCreatingGelombang = false
         }
@@ -318,7 +338,7 @@ fun RadioScreen(onBack: () -> Unit) {
                     gelombangError = resp.error ?: "Gagal join"
                 }
             } catch (e: Exception) {
-                gelombangError = "Gagal: ${e.message}"
+                gelombangError = parseError(e)
             }
             isJoiningGelombang = false
         }

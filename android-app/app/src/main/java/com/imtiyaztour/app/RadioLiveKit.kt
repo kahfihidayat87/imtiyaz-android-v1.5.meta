@@ -77,7 +77,7 @@ object RadioLiveKit {
                 }
 
                 if (resp.token == null || resp.url == null) {
-                    onStatus("Gagal dapat token: ${resp.error ?: "unknown"}")
+                    onStatus("Gagal: ${resp.error ?: "Token tidak valid"}")
                     return@launch
                 }
 
