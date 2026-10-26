@@ -730,30 +730,34 @@ private fun LiveKitSection(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Top
     ) {
-        Box(
-            modifier = Modifier
-                .size(72.dp)
-                .background(
-                    if (liveActive) Color(0xFFDC2626) else Color(0xFF0F7A5A), // Hijau jika siap mulai
-                    CircleShape
+        if (kodeGelombang.isNotBlank()) {
+            Box(
+                modifier = Modifier
+                    .size(72.dp)
+                    .background(
+                        if (liveActive) Color(0xFFDC2626) else Color(0xFF0F7A5A), // Hijau jika siap mulai
+                        CircleShape
+                    )
+                    .clickable {
+                        if (liveActive) onStop() else onStart()
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    if (isTourLeader) Icons.Default.Mic else Icons.Default.Headset,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(32.dp)
                 )
-                .clickable {
-                    if (liveActive) onStop() else onStart()
-                },
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                if (isTourLeader) Icons.Default.Mic else Icons.Default.Headset,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(32.dp)
-            )
+            }
         }
         Spacer(Modifier.height(12.dp))
-        Text(
-            if (isTourLeader) "Mode Siaran Langsung (TL)" else "Mode Mendengarkan (Live)",
-            fontWeight = FontWeight.Bold, fontSize = 14.sp
-        )
+        if (kodeGelombang.isNotBlank()) {
+            Text(
+                if (isTourLeader) "Mode Siaran Langsung (TL)" else "Mode Mendengarkan (Live)",
+                fontWeight = FontWeight.Bold, fontSize = 14.sp
+            )
+        }
         if (liveStatus.isNotEmpty()) {
             Spacer(Modifier.height(4.dp))
             Text(
