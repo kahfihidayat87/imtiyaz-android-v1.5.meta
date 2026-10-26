@@ -605,7 +605,7 @@ fun ImtiyazApp() {
                         onDoaClick = { selectedDoa = it },
                         onMatsuratClick = { showMatsurat = true }
                     )
-                    4 -> TerbangKeMakkahScreen(onBack = { selectedTab = 0 })
+                    4 -> MabrurScreen()
                     5 -> SayaScreen(
                         onRadioClick = { showRadio = true },
                         onFindJamaahClick = { showFindJamaah = true },
