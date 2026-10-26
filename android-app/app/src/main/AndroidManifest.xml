@@ -74,5 +74,6 @@
             android:name=".RadioService"
             android:foregroundServiceType="mediaPlayback|microphone"
             android:exported="false" />
+        <receiver android:name=".KajianReminderReceiver" android:exported="false" />
     </application>
 </manifest>

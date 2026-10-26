@@ -7,11 +7,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -21,6 +23,7 @@ import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.Calendar
 
 data class KajianJamaah(
     val id: String = "",
@@ -34,6 +37,7 @@ data class KajianJamaah(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MabrurScreen() {
+    val context = LocalContext.current
     var list by remember { mutableStateOf<List<KajianJamaah>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
 
@@ -87,6 +91,20 @@ fun MabrurScreen() {
                                         Text("Kode Radio: ${item.kode_gelombang}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF92400E))
                                     }
                                 }
+                                Spacer(Modifier.height(12.dp))
+                                Button(
+                                    onClick = {
+                                        val kajianTime = getKajianTime(item.tanggal, item.jam)
+                                        val reminderTime = kajianTime - (60 * 60 * 1000) // 1 jam sebelum
+                                        KajianReminderScheduler.setReminder(context, reminderTime, item.tema)
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)),
+                                    modifier = Modifier.fillMaxWidth().height(36.dp)
+                                ) {
+                                    Icon(Icons.Default.Notifications, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Ingatkan Saya", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }
@@ -94,4 +112,16 @@ fun MabrurScreen() {
             }
         }
     }
+}
+
+fun getKajianTime(tanggalMs: Long, jamStr: String): Long {
+    val cal = Calendar.getInstance()
+    cal.timeInMillis = tanggalMs
+    val parts = jamStr.split(":")
+    if (parts.size == 2) {
+        cal.set(Calendar.HOUR_OF_DAY, parts[0].toIntOrNull() ?: 8)
+        cal.set(Calendar.MINUTE, parts[1].toIntOrNull() ?: 0)
+        cal.set(Calendar.SECOND, 0)
+    }
+    return cal.timeInMillis
 }
