@@ -539,7 +539,7 @@ fun ImtiyazApp() {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Column { Text("Imtiyaz Tour | UmrohMU", fontWeight = FontWeight.Bold, color = Color(0xFF0F7A5A)); Text("PPIU U383/2021 • Travel Umrah Nyaman Lansia", fontSize = 11.sp, color = Color.Gray) } },
+                title = { Column { Text("Imtiyaz Tour | Umrahmu", fontWeight = FontWeight.Bold, color = Color(0xFF0F7A5A)); Text("PPIU U383/2021 • Travel Umrah Ramah Lansia", fontSize = 11.sp, color = Color.Gray) } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
             )
         },
@@ -758,7 +758,7 @@ fun BerandaScreen(
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text("Pengingat Ibadah & Kesehatan", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                        Text("Atur pengingat minum obat, air, istirahat", fontSize = 11.sp, color = Color.Gray)
+                        Text("Atur alarm minum obat, air, istirahat", fontSize = 11.sp, color = Color.Gray)
                     }
                     Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF0F7A5A))
                 }
@@ -930,7 +930,7 @@ fun DokumenScreen(onBack: () -> Unit = {}) {
 fun DoaListScreen(onDoaClick: (Doa) -> Unit, onMatsuratClick: () -> Unit = {}) {
     LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
-            Text("Panduan Doa", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+            Text("Panduan Doa & Dzikir", fontWeight = FontWeight.Bold, fontSize = 20.sp)
             Text("Bisa dibaca tanpa internet", fontSize = 12.sp, color = Color.Gray)
             Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFF0FDF4)), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) { Text("✅ Offline Mode - Tanpa internet di pesawat / Masjidil Haram", fontSize = 10.sp, color = Color(0xFF0F7A5A), modifier = Modifier.padding(8.dp)) }
             Spacer(Modifier.height(8.dp))
@@ -1384,7 +1384,7 @@ fun SayaScreen(
                     }
                     Spacer(Modifier.height(8.dp))
                     if (!kesehatanHasData) {
-                        Text("Belum ada data kesehatan. Hubungi Tour Leader atau Admin.", fontSize = 11.sp, color = Color.Gray)
+                        Text("Belum ada data kesehatan, hubungi Admin.", fontSize = 11.sp, color = Color.Gray)
                     } else {
                         val kd = kesehatanData
                         if (kd != null) {
@@ -1458,7 +1458,7 @@ fun SayaScreen(
                     if (!modeAmanAktif) {
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            "Kalau izin belum lengkap atau salah klik, aktifkan lewat tombol di atas atau jalankan ulang setup.",
+                            "Pastikan tombol sudah berwarna merah. Jika belum, klik untuk jalankan ulang setup.",
                             fontSize = 10.sp, color = Color.Gray
                         )
                     }
