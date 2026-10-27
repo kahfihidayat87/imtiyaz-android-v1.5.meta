@@ -10,6 +10,11 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.material3.Icon
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material.icons.filled.Headset
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -36,7 +41,7 @@ data class KajianJamaah(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MabrurScreen() {
+fun MabrurScreen(onRadioClick: () -> Unit = {}) {
     val context = LocalContext.current
     var list by remember { mutableStateOf<List<KajianJamaah>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
@@ -58,6 +63,27 @@ fun MabrurScreen() {
 Column(Modifier.fillMaxSize().padding(16.dp)) {
             Text("Jadwal Kajian Bersama Asatidz Imtiyaz", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFF111827))
             Text("Istiqamah menjaga kemabruran pasca umrah", fontSize = 12.sp, color = Color.Gray)
+
+            Spacer(Modifier.height(16.dp))
+
+            // --- KARTU RADIO IMTIYAZ ---
+            Card(
+                modifier = Modifier.fillMaxWidth().clickable { onRadioClick() },
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF0F7A5A)), // Warna hijau khas
+                elevation = CardDefaults.cardElevation(2.dp)
+            ) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Headset, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
+                    Spacer(Modifier.width(16.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Radio Imtiyaz", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
+                        Text("Dengarkan kajian dan manasik virtual", fontSize = 12.sp, color = Color(0xFFD1FAE5))
+                    }
+                }
+            }
+            // ----------------------------
+            
             Spacer(Modifier.height(16.dp))
 
             if (loading) {

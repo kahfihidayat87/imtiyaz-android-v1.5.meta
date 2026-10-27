@@ -671,18 +671,6 @@ fun BerandaScreen(
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 elevation = CardDefaults.cardElevation(1.dp),
                 modifier = Modifier.fillMaxWidth().clickable { onItineraryClick() }
-            ) {
-                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Map, contentDescription = null, tint = Color(0xFF0F7A5A))
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("Itinerary Umrah 9 Hari", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                        Text("Ramadhan & Reguler -- jadwal harian umum", fontSize = 11.sp, color = Color.Gray)
-                    }
-                    Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF0F7A5A))
-                }
-            }
-            Spacer(Modifier.height(16.dp))
             
             ) {
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
