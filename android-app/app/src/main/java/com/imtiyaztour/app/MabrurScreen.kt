@@ -55,7 +55,7 @@ fun MabrurScreen() {
     }
 
     Box(Modifier.fillMaxSize()) {
-Column(Modifier.fillMaxSize().padding(pad).padding(16.dp)) {
+Column(Modifier.fillMaxSize().padding(16.dp)) {
             Text("Jadwal Kajian Bersama Asatidz Imtiyaz", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFF111827))
             Text("Istiqamah menjaga kemabruran pasca umrah", fontSize = 12.sp, color = Color.Gray)
             Spacer(Modifier.height(16.dp))
