@@ -645,7 +645,7 @@ fun BerandaScreen(
 ) {
     val context = LocalContext.current
     val namaJamaah = Prefs.getNama(context).replace(" (TL)", "")
-    LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
             if (AnnouncementStore.isUnread) {
                 AnnouncementCard(onClick = onAnnouncementClick)
@@ -664,8 +664,8 @@ fun BerandaScreen(
                     Text("Pilih Paket Umrah", color = Color(0xFFFFD700), fontSize = 12.sp)
                 }
             }
-            Spacer(Modifier.height(16.dp))
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(12.dp))
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -683,7 +683,7 @@ fun BerandaScreen(
                     Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF0F7A5A))
                 }
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
             Card(
                 shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White),
                 elevation = CardDefaults.cardElevation(1.dp),
@@ -699,7 +699,7 @@ fun BerandaScreen(
                     Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF0F7A5A))
                 }
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
             Card(
                 shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White),
                 elevation = CardDefaults.cardElevation(1.dp),
@@ -747,7 +747,7 @@ fun BerandaScreen(
                     Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF0F7A5A))
                 }
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
             Text("Pilih Paket Umrah", fontWeight = FontWeight.Bold, fontSize = 18.sp)
             Text("${AppData.paket.size} pilihan, profesional & amanah", fontSize = 12.sp, color = Color.Gray)
             Spacer(Modifier.height(8.dp))
