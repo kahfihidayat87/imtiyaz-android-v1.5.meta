@@ -438,6 +438,7 @@ fun ImtiyazApp() {
         selectedPembimbing = null
         showAnnouncementDetail = false
         showDokumen = false
+        showKantor = false
         showMatsurat = false
     }
 
@@ -454,7 +455,7 @@ fun ImtiyazApp() {
                   showItinerary || showRadio || showPembimbingList ||
                   selectedPembimbing != null || showManasik || showJournalList ||
                   showJournalEditActive || showReminder || showFindJamaah || showInvoiceList ||
-                  showDokumen || showMatsurat || showChecklistBarang
+                  showDokumen || showMatsurat || showChecklistBarang || showKantor
     ) {
         when {
             selectedTripId != null -> selectedTripId = null
@@ -472,6 +473,7 @@ fun ImtiyazApp() {
             showFindJamaah -> showFindJamaah = false
             showInvoiceList -> showInvoiceList = false
             showDokumen -> showDokumen = false
+            showKantor -> showKantor = false
             showMatsurat -> showMatsurat = false
             showChecklistBarang -> showChecklistBarang = false
         }
@@ -585,6 +587,7 @@ fun ImtiyazApp() {
                     onBack = { showInvoiceList = false }
                 )
                 showDokumen -> DokumenScreen(onBack = { showDokumen = false })
+                showKantor -> KantorScreen(onBack = { showKantor = false })
                 showMatsurat -> AlMatsuratScreen(onBack = { showMatsurat = false })
                 showChecklistBarang -> ChecklistBarangScreen(onBack = { showChecklistBarang = false })
                 else -> when (selectedTab) {
@@ -612,6 +615,7 @@ fun ImtiyazApp() {
                         onFindJamaahClick = { showFindJamaah = true },
                         onInvoiceClick = { showInvoiceList = true },
                         onDokumenClick = { showDokumen = true },
+                        onKantorClick = { showKantor = true },
                         onBarangClick = { showChecklistBarang = true }
                     )
                 }
@@ -659,7 +663,7 @@ fun BerandaScreen(
                     // dan baru jatuh kembali ke nama travel kalau belum login.
                     Text("Assalamualaikum,", color = Color(0xFFD1FAE5), fontSize = 14.sp)
                     Text(
-                        namaJamaah.ifBlank { AppData.kontak.nama_travel },
+                        namaJamaah.ifBlank { "Sahabat Imtiyaz" },
                         color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp
                     )
                     Text("Pilih Paket Umrah", color = Color(0xFFFFD700), fontSize = 12.sp)
@@ -1294,6 +1298,26 @@ fun SayaScreen(
                         FirebaseAuthHelper.logout()
                     }
                 }) { Text("Keluar", fontSize = 12.sp) }
+            }
+        }
+
+        // --- CARD KANTOR OPERASIONAL (SETELAH LOGIN) ---
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth().clickable { onKantorClick() },
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(1.dp)
+            ) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color(0xFF0F7A5A))
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Kantor Operasional Kami", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text("Klik untuk melihat perwakilan kami di seluruh Indonesia", fontSize = 11.sp, color = Color.Gray)
+                    }
+                    Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF0F7A5A))
+                }
             }
         }
 
