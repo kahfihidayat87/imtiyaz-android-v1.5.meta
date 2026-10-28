@@ -1549,6 +1549,16 @@ data class KesehatanMeResponse(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun KantorScreen(onBack: () -> Unit) {
+    var kantorList by remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
+    LaunchedEffect(Unit) {
+        com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("kantor_operasional")
+            .addSnapshotListener { snap, _ ->
+                if (snap != null) {
+                    kantorList = snap.documents.map { it.data ?: emptyMap() }
+                }
+            }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -1575,17 +1585,6 @@ fun KantorScreen(onBack: () -> Unit) {
                 Text("Silakan hubungi kantor terdekat untuk konsultasi & pendaftaran.", fontSize = 12.sp, color = Color.Gray)
                 Spacer(Modifier.height(8.dp))
             }
-            // Firestore listener untuk kantor
-            var kantorList by remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
-            LaunchedEffect(Unit) {
-                com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("kantor_operasional")
-                    .addSnapshotListener { snap, _ ->
-                        if (snap != null) {
-                            kantorList = snap.documents.map { it.data ?: emptyMap() }
-                        }
-                    }
-            }
-
             if (kantorList.isEmpty()) {
                 item {
                     Text("Belum ada data kantor operasional.", fontSize = 12.sp, color = Color.Gray)
