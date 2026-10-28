@@ -409,6 +409,7 @@ fun ImtiyazApp() {
     var showJournalEditActive by remember { mutableStateOf(false) }
     var showReminder by remember { mutableStateOf(false) }
     var showFindJamaah by remember { mutableStateOf(false) }
+    var showKantor by remember { mutableStateOf(false) }
     var showInvoiceList by remember { mutableStateOf(false) }
     var showAnnouncementDetail by remember { mutableStateOf(false) }
     var showPembimbingList by remember { mutableStateOf(false) }
@@ -645,11 +646,11 @@ fun BerandaScreen(
 ) {
     val context = LocalContext.current
     val namaJamaah = Prefs.getNama(context).replace(" (TL)", "")
-    LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         item {
             if (AnnouncementStore.isUnread) {
                 AnnouncementCard(onClick = onAnnouncementClick)
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(8.dp))
             }
             Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF0F7A5A)), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(20.dp)) {
@@ -664,8 +665,8 @@ fun BerandaScreen(
                     Text("Pilih Paket Umrah", color = Color(0xFFFFD700), fontSize = 12.sp)
                 }
             }
-            Spacer(Modifier.height(12.dp))
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(8.dp))
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -683,7 +684,7 @@ fun BerandaScreen(
                     Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF0F7A5A))
                 }
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
             Card(
                 shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White),
                 elevation = CardDefaults.cardElevation(1.dp),
@@ -699,7 +700,7 @@ fun BerandaScreen(
                     Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF0F7A5A))
                 }
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
             Card(
                 shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White),
                 elevation = CardDefaults.cardElevation(1.dp),
@@ -715,7 +716,7 @@ fun BerandaScreen(
                     Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF0F7A5A))
                 }
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
             Card(
                 shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White),
                 elevation = CardDefaults.cardElevation(1.dp),
@@ -731,7 +732,7 @@ fun BerandaScreen(
                     Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF0F7A5A))
                 }
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
             Card(
                 shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White),
                 elevation = CardDefaults.cardElevation(1.dp),
@@ -747,7 +748,7 @@ fun BerandaScreen(
                     Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF0F7A5A))
                 }
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
             Text("Pilih Paket Umrah", fontWeight = FontWeight.Bold, fontSize = 18.sp)
             Text("${AppData.paket.size} pilihan, profesional & amanah", fontSize = 12.sp, color = Color.Gray)
             Spacer(Modifier.height(8.dp))
@@ -1543,3 +1544,76 @@ data class KesehatanMeResponse(
     val data: KesehatanData? = null,
     val error: String? = null
 )
+
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun KantorScreen(onBack: () -> Unit) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Kantor Operasional") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Kembali")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color(0xFF0F7A5A),
+                    titleContentColor = Color.White,
+                    navigationIconContentColor = Color.White
+                )
+            )
+        }
+    ) { pad ->
+        LazyColumn(
+            Modifier.fillMaxSize().padding(pad).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item {
+                Text("Perwakilan Kami", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF0F7A5A))
+                Text("Silakan hubungi kantor terdekat untuk konsultasi & pendaftaran.", fontSize = 12.sp, color = Color.Gray)
+                Spacer(Modifier.height(8.dp))
+            }
+            // Firestore listener untuk kantor
+            var kantorList by remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
+            LaunchedEffect(Unit) {
+                com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("kantor_operasional")
+                    .addSnapshotListener { snap, _ ->
+                        if (snap != null) {
+                            kantorList = snap.documents.map { it.data ?: emptyMap() }
+                        }
+                    }
+            }
+
+            if (kantorList.isEmpty()) {
+                item {
+                    Text("Belum ada data kantor operasional.", fontSize = 12.sp, color = Color.Gray)
+                }
+            } else {
+                items(kantorList) { k ->
+                    val nama = k["nama"] as? String ?: ""
+                    val alamat = k["alamat"] as? String ?: ""
+                    val telepon = k["telepon"] as? String ?: ""
+                    Card(
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(1.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color(0xFF0F7A5A))
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text(nama, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text(alamat, fontSize = 12.sp, color = Color.Gray)
+                                Spacer(Modifier.height(4.dp))
+                                Text("WA: $telepon", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F7A5A))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
