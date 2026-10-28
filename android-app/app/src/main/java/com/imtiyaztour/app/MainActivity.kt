@@ -68,7 +68,7 @@ data class PaketUmrah(val id: String, val nama: String, val kategori: String, va
 data class Dokumen(val id: String, val nama: String, val deskripsi: String, var checked: Boolean = false)
 data class Doa(val id: String, val judul: String, val arab: String, val latin: String, val arti: String)
 
-data class KontakInfo(val nama_travel: String = "Imtiyaz Tour Jogja", val alamat: String = "PPIU U383/2021 • Jln. Pertapan, Tegal Cerme RT08, Baturetno, Banguntapan, Bantul", val kontak: String = "0811-277-6543 • pastiumrah.com")
+data class KontakInfo(val nama_travel: String = "Sahabat Imtiyaz", val alamat: String = "PPIU U383/2021 • Jln. Pertapan, Tegal Cerme RT08, Baturetno, Banguntapan, Bantul", val kontak: String = "0811-277-6543 • pastiumrah.com")
 
 // FIX: sebelumnya paket, dokumen, dan kontak ini hardcode DAN dipakai langsung oleh
 // layar Beranda/Paket/Dokumen/Saya — jadi walau admin sudah bisa mengubahnya lewat
@@ -1002,7 +1002,7 @@ fun DetailDoaScreen(doa: Doa, onBack: () -> Unit) {
 // nama orang lain. Sekarang jamaah WAJIB login dengan username+password yang dibuat
 // Admin (lihat imtiyaz-connector.php) sebelum bisa mengakses fitur-fitur ini.
 @Composable
-fun LoginScreen(onLoggedIn: () -> Unit, onCancel: (() -> Unit)? = null) {
+fun LoginScreen(onLoggedIn: () -> Unit, onCancel: (() -> Unit)? = null, onKantorClick: () -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var username by remember { mutableStateOf("") }
@@ -1078,7 +1078,27 @@ fun LoginScreen(onLoggedIn: () -> Unit, onCancel: (() -> Unit)? = null) {
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F7A5A)),
             shape = RoundedCornerShape(12.dp)
         ) { if (isLoading) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp) else Text("Masuk", fontWeight = FontWeight.Bold) }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(16.dp))
+        
+        // --- CARD KANTOR OPERASIONAL (SEBELUM LOGIN) ---
+        Card(
+            modifier = Modifier.fillMaxWidth().clickable { onKantorClick() },
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(2.dp)
+        ) {
+            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color(0xFF0F7A5A))
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Kantor Operasional Kami", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text("Klik untuk melihat perwakilan kami di seluruh Indonesia", fontSize = 11.sp, color = Color.Gray)
+                }
+                Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF0F7A5A))
+            }
+        }
+        
+        Spacer(Modifier.height(16.dp))
         Text("Belum punya akun? Hubungi Admin Imtiyaz Tour via tab Paket untuk mendaftar dan mendapatkan username/password.", fontSize = 10.sp, color = Color.Gray)
     }
 }
@@ -1088,6 +1108,7 @@ fun LoginScreen(onLoggedIn: () -> Unit, onCancel: (() -> Unit)? = null) {
 @Composable
 fun SayaScreen(
     onRadioClick: () -> Unit,
+    onKantorClick: () -> Unit = {},
     onFindJamaahClick: () -> Unit = {},
     onInvoiceClick: () -> Unit = {},
     onDokumenClick: () -> Unit = {},
@@ -1108,7 +1129,7 @@ fun SayaScreen(
     }
 
     if (!loggedIn) {
-        LoginScreen(onLoggedIn = {
+        LoginScreen(onKantorClick = onKantorClick, onLoggedIn = {
             loggedIn = true
             if (!Prefs.isSetupComplete(context)) showWizard = true
         })
