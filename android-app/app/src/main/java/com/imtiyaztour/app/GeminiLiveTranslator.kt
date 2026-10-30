@@ -1,0 +1,146 @@
+package com.imtiyaztour.app
+
+import android.media.AudioFormat
+import android.media.AudioManager
+import android.media.AudioRecord
+import android.media.AudioTrack
+import android.media.MediaRecorder
+import android.util.Base64
+import android.util.Log
+import kotlinx.coroutines.*
+import okhttp3.*
+import org.json.JSONObject
+import java.util.concurrent.TimeUnit
+
+class GeminiLiveTranslator(
+    private val ephemeralToken: String,
+    private val onTranscript: (String, Boolean) -> Unit,
+    private val onError: (String) -> Unit
+) {
+    private val client = OkHttpClient.Builder()
+        .readTimeout(0, TimeUnit.MILLISECONDS)
+        .pingInterval(15, TimeUnit.SECONDS)
+        .build()
+
+    private var webSocket: WebSocket? = null
+    private var audioRecord: AudioRecord? = null
+    private var audioTrack: AudioTrack? = null
+    private var isRecording = false
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    fun connect() {
+        val url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?access_token=$ephemeralToken"
+        val request = Request.Builder().url(url).build()
+
+        webSocket = client.newWebSocket(request, object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                Log.d("GeminiLive", "WebSocket opened")
+                val setupJson = """
+                    {
+                      "setup": {
+                        "model": "models/gemini-3.5-live-translate-preview",
+                        "generationConfig": {
+                          "responseModalities": ["AUDIO"],
+                          "translationConfig": {
+                            "targetLanguageCode": "ar",
+                            "echoTargetLanguage": true
+                          }
+                        },
+                        "inputAudioTranscription": {},
+                        "outputAudioTranscription": {}
+                      }
+                    }
+                """.trimIndent()
+                webSocket.send(setupJson)
+                startAudioRecording()
+            }
+
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                try {
+                    val json = JSONObject(text)
+                    if (json.has("serverContent")) {
+                        val serverContent = json.getJSONObject("serverContent")
+                        if (serverContent.has("inputTranscription")) {
+                            val t = serverContent.getJSONObject("inputTranscription").optString("text")
+                            if (t.isNotBlank()) onTranscript(t, true)
+                        }
+                        if (serverContent.has("outputTranscription")) {
+                            val t = serverContent.getJSONObject("outputTranscription").optString("text")
+                            if (t.isNotBlank()) onTranscript(t, false)
+                        }
+                        if (serverContent.has("modelTurn")) {
+                            val parts = serverContent.getJSONObject("modelTurn").optJSONArray("parts")
+                            if (parts != null) {
+                                for (i in 0 until parts.length()) {
+                                    val part = parts.getJSONObject(i)
+                                    if (part.has("inlineData")) {
+                                        val data = part.getJSONObject("inlineData").getString("data")
+                                        playAudioChunk(Base64.decode(data, Base64.DEFAULT))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("GeminiLive", "Parse error", e)
+                }
+            }
+
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                onError("Koneksi terputus: ${t.message}")
+                stop()
+            }
+        })
+    }
+
+    private fun startAudioRecording() {
+        val sampleRate = 16000
+        val bufferSize = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+        audioRecord = AudioRecord(MediaRecorder.AudioSource.MIC, sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize)
+        
+        val outBufferSize = AudioTrack.getMinBufferSize(24000, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
+        audioTrack = AudioTrack(
+            AudioManager.STREAM_MUSIC, 24000, AudioFormat.CHANNEL_OUT_MONO,
+            AudioFormat.ENCODING_PCM_16BIT, outBufferSize, AudioTrack.MODE_STREAM
+        ).apply { play() }
+
+        audioRecord?.startRecording()
+        isRecording = true
+
+        scope.launch {
+            val buffer = ShortArray(bufferSize / 2)
+            while (isRecording) {
+                val read = audioRecord?.read(buffer, 0, buffer.size) ?: 0
+                if (read > 0) {
+                    val bytes = shortArrayToByteArray(buffer.copyOf(read))
+                    val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
+                    val msg = """{"realtimeInput":{"mediaChunks":[{"mimeType":"audio/pcm;rate=16000","data":"$base64"}]}}"""
+                    webSocket?.send(msg)
+                }
+            }
+        }
+    }
+
+    private fun playAudioChunk(pcmData: ByteArray) {
+        audioTrack?.write(pcmData, 0, pcmData.size)
+    }
+
+    private fun shortArrayToByteArray(shorts: ShortArray): ByteArray {
+        val bytes = ByteArray(shorts.size * 2)
+        for (i in shorts.indices) {
+            bytes[i * 2] = (shorts[i].toInt() and 0xFF).toByte()
+            bytes[i * 2 + 1] = ((shorts[i].toInt() shr 8) and 0xFF).toByte()
+        }
+        return bytes
+    }
+
+    fun stop() {
+        isRecording = false
+        try { audioRecord?.stop(); audioRecord?.release() } catch (_: Exception) {}
+        try { audioTrack?.stop(); audioTrack?.release() } catch (_: Exception) {}
+        audioRecord = null; audioTrack = null
+        webSocket?.close(1000, "User stopped")
+        webSocket = null
+        scope.cancel()
+    }
+}

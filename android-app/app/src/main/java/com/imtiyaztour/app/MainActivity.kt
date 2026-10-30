@@ -410,6 +410,7 @@ fun ImtiyazApp() {
     var showReminder by remember { mutableStateOf(false) }
     var showFindJamaah by remember { mutableStateOf(false) }
     var showKantor by remember { mutableStateOf(false) }
+    var showLiveTranslator by remember { mutableStateOf(false) }
     var showInvoiceList by remember { mutableStateOf(false) }
     var showAnnouncementDetail by remember { mutableStateOf(false) }
     var showPembimbingList by remember { mutableStateOf(false) }
@@ -474,6 +475,7 @@ fun ImtiyazApp() {
             showInvoiceList -> showInvoiceList = false
             showDokumen -> showDokumen = false
             showKantor -> showKantor = false
+            showLiveTranslator -> showLiveTranslator = false
             showMatsurat -> showMatsurat = false
             showChecklistBarang -> showChecklistBarang = false
         }
@@ -588,6 +590,7 @@ fun ImtiyazApp() {
                 )
                 showDokumen -> DokumenScreen(onBack = { showDokumen = false })
                 showKantor -> KantorScreen(onBack = { showKantor = false })
+                showLiveTranslator -> LiveTranslatorScreen(onBack = { showLiveTranslator = false })
                 showMatsurat -> AlMatsuratScreen(onBack = { showMatsurat = false })
                 showChecklistBarang -> ChecklistBarangScreen(onBack = { showChecklistBarang = false })
                 else -> when (selectedTab) {
@@ -616,6 +619,7 @@ fun ImtiyazApp() {
                         onInvoiceClick = { showInvoiceList = true },
                         onDokumenClick = { showDokumen = true },
                         onKantorClick = { showKantor = true },
+                        onLiveTranslatorClick = { showLiveTranslator = true },
                         onBarangClick = { showChecklistBarang = true }
                     )
                 }
@@ -1117,6 +1121,7 @@ fun LoginScreen(onLoggedIn: () -> Unit, onCancel: (() -> Unit)? = null, onKantor
 fun SayaScreen(
     onRadioClick: () -> Unit,
     onKantorClick: () -> Unit = {},
+    onLiveTranslatorClick: () -> Unit = {},
     onFindJamaahClick: () -> Unit = {},
     onInvoiceClick: () -> Unit = {},
     onDokumenClick: () -> Unit = {},
@@ -1319,6 +1324,26 @@ fun SayaScreen(
                     Column(Modifier.weight(1f)) {
                         Text("Kantor Operasional Kami", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         Text("Klik untuk melihat perwakilan kami di seluruh Indonesia", fontSize = 11.sp, color = Color.Gray)
+                    }
+                    Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF0F7A5A))
+                }
+            }
+        }
+
+        // --- CARD ASISTEN BAHASA (SETELAH LOGIN) ---
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth().clickable { onLiveTranslatorClick() },
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(1.dp)
+            ) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Translate, contentDescription = null, tint = Color(0xFF0F7A5A))
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Asisten Bahasa", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text("Terjemahkan langsung ke Bahasa Arab", fontSize = 11.sp, color = Color.Gray)
                     }
                     Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF0F7A5A))
                 }
