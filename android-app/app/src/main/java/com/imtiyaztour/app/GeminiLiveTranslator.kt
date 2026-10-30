@@ -50,24 +50,26 @@ class GeminiLiveTranslator(
                         "model": "models/gemini-3.5-live-translate-preview",
                         "generationConfig": {
                           "responseModalities": ["AUDIO"],
-                          "translationConfig": {
-                            "targetLanguageCode": "ar",
-                            "echoTargetLanguage": false
-                          }
-                        },
-                        "inputAudioTranscription": {},
-                        "outputAudioTranscription": {},
-                        "sessionResumption": {}
+                          "inputAudioTranscription": {},
+                          "outputAudioTranscription": {}
+                        }
                       }
                     }
-                """.trimIndent()
+                """.trimIndent().trimIndent().trimIndent()
+                Log.d("GeminiLive", "Mengirim Setup JSON: $setupJson")
                 webSocket.send(setupJson)
-                startAudioRecording()
+                // Tunggu setupComplete dari server sebelum mulai audio
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
+                Log.d("GeminiLive", "Pesan diterima: $text")
                 try {
                     val json = JSONObject(text)
+                    if (json.has("setupComplete")) {
+                        Log.d("GeminiLive", "Setup Complete! Memulai mikrofon...")
+                        startAudioRecording()
+                        return
+                    }
                     if (json.has("serverContent")) {
                         val serverContent = json.getJSONObject("serverContent")
                         if (serverContent.has("inputTranscription")) {
@@ -101,6 +103,16 @@ class GeminiLiveTranslator(
                 } catch (e: Exception) {
                     Log.e("GeminiLive", "Parse error", e)
                 }
+            }
+
+            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                Log.w("GeminiLive", "WebSocket Closing: code=$code, reason=$reason")
+                webSocket.close(1000, null)
+            }
+
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                Log.w("GeminiLive", "WebSocket Closed: code=$code, reason=$reason")
+                stop()
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
@@ -165,6 +177,7 @@ class GeminiLiveTranslator(
                     val bytes = shortArrayToByteArray(buffer.copyOf(read))
                     val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
                     val msg = """{"realtimeInput":{"mediaChunks":[{"mimeType":"audio/pcm;rate=${sampleRate}","data":"$base64"}]}}"""
+                    Log.v("GeminiLive", "Mengirim Audio Chunk (${read} bytes)")
                     webSocket?.send(msg)
                 }
             }
