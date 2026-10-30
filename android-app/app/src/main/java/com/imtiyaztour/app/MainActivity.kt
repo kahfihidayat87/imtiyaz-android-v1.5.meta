@@ -670,6 +670,10 @@ fun BerandaScreen(
                 }
             }
             Spacer(Modifier.height(8.dp))
+            
+            // --- JADWAL SHALAT (Dikembalikan) ---
+            PrayerTimesCard()
+            
             Spacer(Modifier.height(8.dp))
             Card(
                 shape = RoundedCornerShape(16.dp),
