@@ -13,6 +13,7 @@ import android.util.Base64
 import android.util.Log
 import kotlinx.coroutines.*
 import okhttp3.*
+import okhttp3.logging.HttpLoggingInterceptor
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
@@ -25,6 +26,9 @@ class GeminiLiveTranslator(
     private val client = OkHttpClient.Builder()
         .readTimeout(0, TimeUnit.MILLISECONDS)
         .pingInterval(15, TimeUnit.SECONDS)
+        .addInterceptor(HttpLoggingInterceptor().apply {
+            level = HttpLoggingInterceptor.Level.BODY
+        })
         .build()
 
     private var webSocket: WebSocket? = null
@@ -100,6 +104,13 @@ class GeminiLiveTranslator(
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                Log.e("GeminiLive", "WebSocket Failure: ${t.message}", t)
+                if (response != null) {
+                    Log.e("GeminiLive", "Response Code: ${response.code}")
+                    try {
+                        Log.e("GeminiLive", "Response Body: ${response.body?.string()}")
+                    } catch (e: Exception) {}
+                }
                 onError("Koneksi terputus: ${t.message}")
                 stop()
             }

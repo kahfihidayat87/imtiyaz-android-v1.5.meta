@@ -1,5 +1,10 @@
 package com.imtiyaztour.app
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -48,6 +53,39 @@ fun LiveTranslatorScreen(onBack: () -> Unit) {
         }
     }
 
+    // Fungsi untuk memulai koneksi
+    fun startConnection() {
+        scope.launch {
+            try {
+                val token = fetchEphemeralToken()
+                translator = GeminiLiveTranslator(
+                    context = context,
+                    ephemeralToken = token,
+                    onTranscript = { text, isInput ->
+                        if (isInput) inputText = text else outputText = text
+                    },
+                    onError = { errorMsg = it; isConnected = false }
+                ).also { it.connect() }
+                isConnected = true
+            } catch (e: Exception) {
+                errorMsg = "Gagal memulai: ${e.message}"
+            }
+        }
+    }
+
+    // Launcher untuk meminta izin mikrofon
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            startConnection()
+        } else {
+            errorMsg = "Izin mikrofon ditolak. Aplikasi membutuhkan mikrofon untuk menerjemahkan."
+        }
+    }
+
+
+
     Column(Modifier.fillMaxSize().padding(24.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
             IconButton(onClick = { translator?.stop(); onBack() }) {
@@ -84,21 +122,12 @@ fun LiveTranslatorScreen(onBack: () -> Unit) {
         Button(
             onClick = {
                 if (!isConnected) {
-                    scope.launch {
-                        try {
-                            val token = fetchEphemeralToken()
-                            translator = GeminiLiveTranslator(
-                                context = context,
-                                ephemeralToken = token,
-                                onTranscript = { text, isInput ->
-                                    if (isInput) inputText = text else outputText = text
-                                },
-                                onError = { errorMsg = it; isConnected = false }
-                            ).also { it.connect() }
-                            isConnected = true
-                        } catch (e: Exception) {
-                            errorMsg = "Gagal memulai: ${e.message}"
-                        }
+                    // Cek izin mikrofon terlebih dahulu
+                    val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                    if (hasPermission) {
+                        startConnection()
+                    } else {
+                        micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                     }
                 } else {
                     translator?.stop()
