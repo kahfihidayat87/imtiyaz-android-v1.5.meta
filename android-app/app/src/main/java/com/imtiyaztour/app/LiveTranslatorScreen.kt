@@ -16,6 +16,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -28,9 +35,16 @@ fun LiveTranslatorScreen(onBack: () -> Unit) {
     var translator by remember { mutableStateOf<GeminiLiveTranslator?>(null) }
 
     suspend fun fetchEphemeralToken(): String {
-        // TODO: Hubungkan dengan endpoint backend Anda nanti
-        // Sementara, gunakan string statis agar compile sukses
-        return "TOKEN_DARI_SERVER_ANDA_DISINI"
+        return withContext(Dispatchers.IO) {
+            val client = OkHttpClient()
+            val request = Request.Builder()
+                .url("https://bahasa.pastiumrah.com/gemini-token")
+                .post("{}".toRequestBody("application/json".toMediaType()))
+                .build()
+            val response = client.newCall(request).execute()
+            val json = JSONObject(response.body?.string() ?: "{}")
+            if (json.has("token")) json.getString("token") else throw Exception("Gagal dapat token")
+        }
     }
 
     Column(Modifier.fillMaxSize().padding(24.dp)) {

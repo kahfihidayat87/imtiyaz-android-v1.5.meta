@@ -29,7 +29,7 @@ class GeminiLiveTranslator(
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     fun connect() {
-        val url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?access_token=$ephemeralToken"
+        val url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?access_token=$ephemeralToken"
         val request = Request.Builder().url(url).build()
 
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
@@ -43,11 +43,12 @@ class GeminiLiveTranslator(
                           "responseModalities": ["AUDIO"],
                           "translationConfig": {
                             "targetLanguageCode": "ar",
-                            "echoTargetLanguage": true
+                            "echoTargetLanguage": false
                           }
                         },
                         "inputAudioTranscription": {},
-                        "outputAudioTranscription": {}
+                        "outputAudioTranscription": {},
+                        "sessionResumption": {}
                       }
                     }
                 """.trimIndent()
@@ -67,6 +68,13 @@ class GeminiLiveTranslator(
                         if (serverContent.has("outputTranscription")) {
                             val t = serverContent.getJSONObject("outputTranscription").optString("text")
                             if (t.isNotBlank()) onTranscript(t, false)
+                        }
+                        // Handle interruption
+                        if (serverContent.has("interrupted") && serverContent.getBoolean("interrupted")) {
+                            audioTrack?.pause()
+                            audioTrack?.flush()
+                            audioTrack?.play()
+                            Log.d("GeminiLive", "Audio interrupted, buffer flushed")
                         }
                         if (serverContent.has("modelTurn")) {
                             val parts = serverContent.getJSONObject("modelTurn").optJSONArray("parts")
