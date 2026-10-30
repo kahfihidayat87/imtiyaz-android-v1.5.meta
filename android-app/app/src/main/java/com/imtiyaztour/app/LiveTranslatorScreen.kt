@@ -28,6 +28,7 @@ import org.json.JSONObject
 @Composable
 fun LiveTranslatorScreen(onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var inputText by remember { mutableStateOf("") }
     var outputText by remember { mutableStateOf("") }
     var isConnected by remember { mutableStateOf(false) }
@@ -87,6 +88,7 @@ fun LiveTranslatorScreen(onBack: () -> Unit) {
                         try {
                             val token = fetchEphemeralToken()
                             translator = GeminiLiveTranslator(
+                                context = context,
                                 ephemeralToken = token,
                                 onTranscript = { text, isInput ->
                                     if (isInput) inputText = text else outputText = text

@@ -1,5 +1,9 @@
 package com.imtiyaztour.app
 
+import android.content.Context
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
+import android.Manifest
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
@@ -13,6 +17,7 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 class GeminiLiveTranslator(
+    private val context: Context,
     private val ephemeralToken: String,
     private val onTranscript: (String, Boolean) -> Unit,
     private val onError: (String) -> Unit
@@ -29,7 +34,7 @@ class GeminiLiveTranslator(
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     fun connect() {
-        val url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?access_token=$ephemeralToken"
+        val url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token=$ephemeralToken"
         val request = Request.Builder().url(url).build()
 
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
@@ -102,18 +107,44 @@ class GeminiLiveTranslator(
     }
 
     private fun startAudioRecording() {
-        val sampleRate = 16000
-        val bufferSize = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-        audioRecord = AudioRecord(MediaRecorder.AudioSource.MIC, sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize)
-        
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            onError("Izin mikrofon belum diberikan.")
+            return
+        }
+
+        var sampleRate = 16000
+        var bufferSize = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+        var record = AudioRecord(MediaRecorder.AudioSource.MIC, sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize)
+
+        if (record.state != AudioRecord.STATE_INITIALIZED) {
+            Log.w("GeminiLive", "Fallback ke 44100 Hz")
+            record.release()
+            sampleRate = 44100
+            bufferSize = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+            record = AudioRecord(MediaRecorder.AudioSource.MIC, sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize)
+        }
+
+        if (record.state != AudioRecord.STATE_INITIALIZED) {
+            record.release()
+            onError("Gagal menginisialisasi mikrofon.")
+            return
+        }
+
+        audioRecord = record
+
         val outBufferSize = AudioTrack.getMinBufferSize(24000, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
         audioTrack = AudioTrack(
             AudioManager.STREAM_MUSIC, 24000, AudioFormat.CHANNEL_OUT_MONO,
             AudioFormat.ENCODING_PCM_16BIT, outBufferSize, AudioTrack.MODE_STREAM
         ).apply { play() }
 
-        audioRecord?.startRecording()
-        isRecording = true
+        try {
+            audioRecord?.startRecording()
+            isRecording = true
+        } catch (e: Exception) {
+            onError("Gagal memulai perekaman: ${e.message}")
+            return
+        }
 
         scope.launch {
             val buffer = ShortArray(bufferSize / 2)
@@ -122,7 +153,7 @@ class GeminiLiveTranslator(
                 if (read > 0) {
                     val bytes = shortArrayToByteArray(buffer.copyOf(read))
                     val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
-                    val msg = """{"realtimeInput":{"mediaChunks":[{"mimeType":"audio/pcm;rate=16000","data":"$base64"}]}}"""
+                    val msg = """{"realtimeInput":{"mediaChunks":[{"mimeType":"audio/pcm;rate=${sampleRate}","data":"$base64"}]}}"""
                     webSocket?.send(msg)
                 }
             }
