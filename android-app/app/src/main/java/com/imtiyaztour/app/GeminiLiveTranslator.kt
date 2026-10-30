@@ -13,6 +13,7 @@ import android.util.Base64
 import android.util.Log
 import kotlinx.coroutines.*
 import okhttp3.*
+import okio.ByteString
 import okhttp3.logging.HttpLoggingInterceptor
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
@@ -47,15 +48,23 @@ class GeminiLiveTranslator(
                 val setupJson = """
                     {
                       "setup": {
-                        "model": "models/gemini-3.5-live-translate-preview",
+                        "model": "models/gemini-2.5-flash-native-audio-latest",
                         "generationConfig": {
-                          "responseModalities": ["AUDIO"],
-                          "inputAudioTranscription": {},
-                          "outputAudioTranscription": {}
-                        }
+                          "responseModalities": ["AUDIO"]
+                        },
+                        "systemInstruction": {
+                          "parts": [
+                            {
+                              "text": "Act as a real-time, bidirectional audio translator between Indonesian and Arabic. If the voice input is in Indonesian, translate it exclusively into Arabic. If the voice input is in Arabic, translate it exclusively into Indonesian. Strict operational constraints: 1. Do NOT output any introductions, pleasantries, explanations, or commentary. 2. Translate ONLY the provided input; do not add or assume extra context. 3. Apply a strict 3-second delay before delivering the audio translation. 4. Output ONLY the direct translation. Deliver the final output exclusively in a natural voice tone and lifelike intonation."
+
+                            }
+                          ]
+                        },
+                        "inputAudioTranscription": {},
+                        "outputAudioTranscription": {}
                       }
                     }
-                """.trimIndent().trimIndent().trimIndent()
+                """.trimIndent().trimIndent().trimIndent().trimIndent().trimIndent().trimIndent().trimIndent()
                 Log.d("GeminiLive", "Mengirim Setup JSON: $setupJson")
                 webSocket.send(setupJson)
                 // Tunggu setupComplete dari server sebelum mulai audio
@@ -104,6 +113,46 @@ class GeminiLiveTranslator(
                     Log.e("GeminiLive", "Parse error", e)
                 }
             }
+            // ✅ TAMBAHAN: Handler untuk frame biner dari Gemini Live API
+            override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
+                try {
+                    val text = bytes.utf8()
+                    Log.d("GeminiLive", "Pesan biner diterima: $text")
+                    // Proses JSON yang sama seperti handler teks
+                    val json = JSONObject(text)
+                    if (json.has("setupComplete")) {
+                        Log.d("GeminiLive", "Setup Complete! Memulai mikrofon...")
+                        startAudioRecording()
+                        return
+                    }
+                    if (json.has("serverContent")) {
+                        val serverContent = json.getJSONObject("serverContent")
+                        if (serverContent.has("inputTranscription")) {
+                            val t = serverContent.getJSONObject("inputTranscription").optString("text")
+                            if (t.isNotBlank()) onTranscript(t, true)
+                        }
+                        if (serverContent.has("outputTranscription")) {
+                            val t = serverContent.getJSONObject("outputTranscription").optString("text")
+                            if (t.isNotBlank()) onTranscript(t, false)
+                        }
+                        if (serverContent.has("modelTurn")) {
+                            val parts = serverContent.getJSONObject("modelTurn").optJSONArray("parts")
+                            if (parts != null) {
+                                for (i in 0 until parts.length()) {
+                                    val part = parts.getJSONObject(i)
+                                    if (part.has("inlineData")) {
+                                        val data = part.getJSONObject("inlineData").getString("data")
+                                        playAudioChunk(Base64.decode(data, Base64.DEFAULT))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("GeminiLive", "Parse binary error", e)
+                }
+            }
+
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
                 Log.w("GeminiLive", "WebSocket Closing: code=$code, reason=$reason")
