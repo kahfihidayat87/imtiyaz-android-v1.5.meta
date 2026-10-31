@@ -43,6 +43,7 @@ fun LiveTranslatorScreen(onBack: () -> Unit) {
     var isConnected by remember { mutableStateOf(false) }
     var isConnecting by remember { mutableStateOf(false) }
     var isRecording by remember { mutableStateOf(false) }
+    var isPlaying by remember { mutableStateOf(false) }
     var errorMsg by remember { mutableStateOf("") }
     var translator by remember { mutableStateOf<GeminiLiveTranslator?>(null) }
 
@@ -73,7 +74,10 @@ fun LiveTranslatorScreen(onBack: () -> Unit) {
                         if (isInput) inputText = text else outputText = text
                     },
                     onError = { errorMsg = it; isConnected = false; isConnecting = false; isRecording = false }
-                ).also { it.connect() }
+                ).also {
+                    it.onPlayingChanged = { playing -> isPlaying = playing }
+                    it.connect()
+                }
                 isConnected = true
             } catch (e: Exception) {
                 errorMsg = "Gagal memulai: ${e.message}"
@@ -134,30 +138,35 @@ fun LiveTranslatorScreen(onBack: () -> Unit) {
                 .clip(CircleShape)
                 .background(
                     when {
+                        isPlaying -> Color(0xFFF59E0B) // Kuning: sedang memutar balasan
                         isRecording -> Color.Red
                         isConnected -> Color(0xFF0F7A5A)
-                        isConnecting -> Color(0xFFF59E0B) // Kuning
+                        isConnecting -> Color(0xFFF59E0B)
                         else -> Color.Gray
                     }
                 )
-                .pointerInput(isConnected, isConnecting) {
+                .pointerInput(isConnected, isConnecting, isPlaying) {
                     detectTapGestures(
                         onPress = {
-                            if (isConnected) {
-                                isRecording = true
-                                translator?.startAudioRecording()
-                            } else if (!isConnecting) {
-                                val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-                                if (hasPermission) {
-                                    startConnection()
-                                } else {
-                                    micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            if (isPlaying) {
+                                tryAwaitRelease()
+                            } else {
+                                if (isConnected) {
+                                    isRecording = true
+                                    translator?.startAudioRecording()
+                                } else if (!isConnecting) {
+                                    val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                                    if (hasPermission) {
+                                        startConnection()
+                                    } else {
+                                        micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                    }
                                 }
-                            }
-                            tryAwaitRelease()
-                            if (isConnected && isRecording) {
-                                isRecording = false
-                                translator?.stopRecording()
+                                tryAwaitRelease()
+                                if (isConnected && isRecording) {
+                                    isRecording = false
+                                    translator?.stopRecording()
+                                }
                             }
                         }
                     )

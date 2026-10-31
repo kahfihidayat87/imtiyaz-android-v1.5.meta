@@ -1,5 +1,8 @@
 package com.imtiyaztour.app
 
+import android.media.audiofx.AcousticEchoCanceler
+import android.media.audiofx.NoiseSuppressor
+
 import android.content.Context
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
@@ -38,6 +41,9 @@ class GeminiLiveTranslator(
     @Volatile private var isRecording = false
     private var audioJob: Job? = null
     private var isPlayingAudio = false
+    private var aec: AcousticEchoCanceler? = null
+    private var noiseSuppressor: NoiseSuppressor? = null
+    var onPlayingChanged: (Boolean) -> Unit = {}
     private var playJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -193,6 +199,10 @@ class GeminiLiveTranslator(
     }
 
     fun startAudioRecording() {
+        if (isPlayingAudio) {
+            Log.w("GeminiLive", "Tolak mulai rekam")
+            return
+        }
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             onError("Izin mikrofon belum diberikan.")
             return
@@ -211,13 +221,21 @@ class GeminiLiveTranslator(
             return
         }
 
-        val record = AudioRecord(MediaRecorder.AudioSource.MIC, sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize)
+        val record = AudioRecord(MediaRecorder.AudioSource.VOICE_COMMUNICATION, sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize)
         if (record.state != AudioRecord.STATE_INITIALIZED) {
             record.release()
             onError("Gagal menginisialisasi mikrofon.")
             return
         }
         audioRecord = record
+        try {
+            if (AcousticEchoCanceler.isAvailable()) {
+                aec = AcousticEchoCanceler.create(record.audioSessionId)?.apply { enabled = true }
+            }
+            if (NoiseSuppressor.isAvailable()) {
+                noiseSuppressor = NoiseSuppressor.create(record.audioSessionId)?.apply { enabled = true }
+            }
+        } catch (_: Exception) {}
 
         val outBufferSize = AudioTrack.getMinBufferSize(24000, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
         val track = AudioTrack(
@@ -238,7 +256,7 @@ class GeminiLiveTranslator(
         audioJob = scope.launch(Dispatchers.IO) { // WAJIB Dispatchers.IO untuk blocking call
             val buffer = ShortArray(bufferSize / 2)
             val localRecord = audioRecord // Local reference untuk hindari race condition
-            while (isRecording && localRecord != null) {
+            while (isRecording && !isPlayingAudio && localRecord != null) {
                 val read = localRecord.read(buffer, 0, buffer.size)
                 if (read > 0) {
                     val bytes = shortArrayToByteArray(buffer.copyOf(read))
@@ -259,9 +277,12 @@ class GeminiLiveTranslator(
             audioJob?.join()
             audioJob = null
             
+            try { aec?.enabled = false; aec?.release() } catch (_: Exception) {}
+            try { noiseSuppressor?.enabled = false; noiseSuppressor?.release() } catch (_: Exception) {}
+            aec = null; noiseSuppressor = null
             try { audioRecord?.stop(); audioRecord?.release() } catch (_: Exception) {}
             audioRecord = null
-            
+
             Log.d("GeminiLive", "Mikrofon dihentikan, menunggu VAD server...")
         }
     }
@@ -270,13 +291,16 @@ class GeminiLiveTranslator(
 
     private fun playAudioChunk(pcmData: ByteArray) {
         isPlayingAudio = true
+        scope.launch(Dispatchers.Main) { onPlayingChanged(true) }
         audioTrack?.write(pcmData, 0, pcmData.size)
         
         // Reset timer setiap kali chunk baru masuk. 
         // Jika tidak ada chunk baru selama 800ms, baru izinkan mikrofon merekam lagi.
+                playJob?.cancel()
                 playJob = scope.launch {
             delay(800)
             isPlayingAudio = false
+            scope.launch(Dispatchers.Main) { onPlayingChanged(false) }
         }
     }
 
@@ -294,6 +318,9 @@ class GeminiLiveTranslator(
                 
         // Cleanup AEC dan AudioManager
                 
+        try { aec?.enabled = false; aec?.release() } catch (_: Exception) {}
+        try { noiseSuppressor?.enabled = false; noiseSuppressor?.release() } catch (_: Exception) {}
+        aec = null; noiseSuppressor = null
         try { audioRecord?.stop(); audioRecord?.release() } catch (_: Exception) {}
         try { audioTrack?.stop(); audioTrack?.release() } catch (_: Exception) {}
         audioRecord = null; audioTrack = null
