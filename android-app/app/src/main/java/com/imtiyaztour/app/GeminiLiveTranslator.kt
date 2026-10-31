@@ -4,8 +4,8 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import android.Manifest
+import kotlinx.coroutines.Job
 import android.media.AudioFormat
-import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaRecorder
@@ -35,7 +35,10 @@ class GeminiLiveTranslator(
     private var webSocket: WebSocket? = null
     private var audioRecord: AudioRecord? = null
     private var audioTrack: AudioTrack? = null
-    private var isRecording = false
+    @Volatile private var isRecording = false
+    private var audioJob: Job? = null
+    private var isPlayingAudio = false
+    private var playJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     fun connect() {
@@ -50,21 +53,32 @@ class GeminiLiveTranslator(
                       "setup": {
                         "model": "models/gemini-2.5-flash-native-audio-latest",
                         "generationConfig": {
-                          "responseModalities": ["AUDIO"]
+                          "responseModalities": ["AUDIO"],
+                          "speechConfig": {
+                            "voiceConfig": {
+                              "prebuiltVoiceConfig": {
+                                "voiceName": "Puck"
+                              }
+                            }
+                          }
                         },
                         "systemInstruction": {
                           "parts": [
                             {
-                              "text": "Act as a real-time, bidirectional audio translator between Indonesian and Arabic. If the voice input is in Indonesian, translate it exclusively into Arabic. If the voice input is in Arabic, translate it exclusively into Indonesian. Strict operational constraints: 1. Do NOT output any introductions, pleasantries, explanations, or commentary. 2. Translate ONLY the provided input; do not add or assume extra context. 3. Apply a strict 3-second delay before delivering the audio translation. 4. Output ONLY the direct translation. Deliver the final output exclusively in a natural voice tone and lifelike intonation."
-
+                              "text": "Anda adalah mesin penerjemah suara. Tugas Anda HANYA menerjemahkan. Jika input Bahasa Indonesia, output WAJIB Bahasa Arab. Jika input Bahasa Arab, output WAJIB Bahasa Indonesia. DILARANG KERAS menggunakan bahasa Inggris. Jangan pernah menjawab pertanyaan atau mengobrol. Cukup berikan terjemahan suaranya saja."
                             }
                           ]
                         },
                         "inputAudioTranscription": {},
-                        "outputAudioTranscription": {}
+                        "outputAudioTranscription": {},
+                        "realtimeInputConfig": {
+                          "automaticActivityDetection": {
+                            "disabled": false
+                          }
+                        }
                       }
                     }
-                """.trimIndent().trimIndent().trimIndent().trimIndent().trimIndent().trimIndent().trimIndent()
+                """.trimIndent().trimIndent().trimIndent().trimIndent().trimIndent().trimIndent().trimIndent().trimIndent().trimIndent().trimIndent()
                 Log.d("GeminiLive", "Mengirim Setup JSON: $setupJson")
                 webSocket.send(setupJson)
                 // Tunggu setupComplete dari server sebelum mulai audio
@@ -76,7 +90,7 @@ class GeminiLiveTranslator(
                     val json = JSONObject(text)
                     if (json.has("setupComplete")) {
                         Log.d("GeminiLive", "Setup Complete! Memulai mikrofon...")
-                        startAudioRecording()
+                        // startAudioRecording() dipanggil dari UI saat tombol ditekan
                         return
                     }
                     if (json.has("serverContent")) {
@@ -122,7 +136,7 @@ class GeminiLiveTranslator(
                     val json = JSONObject(text)
                     if (json.has("setupComplete")) {
                         Log.d("GeminiLive", "Setup Complete! Memulai mikrofon...")
-                        startAudioRecording()
+                        // startAudioRecording() dipanggil dari UI saat tombol ditekan
                         return
                     }
                     if (json.has("serverContent")) {
@@ -178,63 +192,92 @@ class GeminiLiveTranslator(
         })
     }
 
-    private fun startAudioRecording() {
+    fun startAudioRecording() {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             onError("Izin mikrofon belum diberikan.")
             return
         }
 
-        var sampleRate = 16000
-        var bufferSize = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-        var record = AudioRecord(MediaRecorder.AudioSource.MIC, sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize)
+        // Release resource lama jika ada
+        try { audioRecord?.stop(); audioRecord?.release() } catch (_: Exception) {}
+        try { audioTrack?.stop(); audioTrack?.release() } catch (_: Exception) {}
+        audioRecord = null
+        audioTrack = null
 
-        if (record.state != AudioRecord.STATE_INITIALIZED) {
-            Log.w("GeminiLive", "Fallback ke 44100 Hz")
-            record.release()
-            sampleRate = 44100
-            bufferSize = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-            record = AudioRecord(MediaRecorder.AudioSource.MIC, sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize)
+        val sampleRate = 16000
+        val bufferSize = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+        if (bufferSize <= 0) {
+            onError("Gagal mendapatkan buffer size yang valid.")
+            return
         }
 
+        val record = AudioRecord(MediaRecorder.AudioSource.MIC, sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize)
         if (record.state != AudioRecord.STATE_INITIALIZED) {
             record.release()
             onError("Gagal menginisialisasi mikrofon.")
             return
         }
-
         audioRecord = record
 
         val outBufferSize = AudioTrack.getMinBufferSize(24000, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
-        audioTrack = AudioTrack(
-            AudioManager.STREAM_MUSIC, 24000, AudioFormat.CHANNEL_OUT_MONO,
+        val track = AudioTrack(
+            android.media.AudioManager.STREAM_MUSIC, 24000, AudioFormat.CHANNEL_OUT_MONO,
             AudioFormat.ENCODING_PCM_16BIT, outBufferSize, AudioTrack.MODE_STREAM
-        ).apply { play() }
+        )
+        track.play()
+        audioTrack = track
 
         try {
-            audioRecord?.startRecording()
+            record.startRecording()
             isRecording = true
         } catch (e: Exception) {
             onError("Gagal memulai perekaman: ${e.message}")
             return
         }
 
-        scope.launch {
+        audioJob = scope.launch(Dispatchers.IO) { // WAJIB Dispatchers.IO untuk blocking call
             val buffer = ShortArray(bufferSize / 2)
-            while (isRecording) {
-                val read = audioRecord?.read(buffer, 0, buffer.size) ?: 0
+            val localRecord = audioRecord // Local reference untuk hindari race condition
+            while (isRecording && localRecord != null) {
+                val read = localRecord.read(buffer, 0, buffer.size)
                 if (read > 0) {
                     val bytes = shortArrayToByteArray(buffer.copyOf(read))
                     val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
                     val msg = """{"realtimeInput":{"mediaChunks":[{"mimeType":"audio/pcm;rate=${sampleRate}","data":"$base64"}]}}"""
-                    Log.v("GeminiLive", "Mengirim Audio Chunk (${read} bytes)")
                     webSocket?.send(msg)
+                    Log.d("GeminiLive", "Mengirim Audio Chunk (${read} bytes)")
                 }
             }
         }
     }
 
+    fun stopRecording() {
+        isRecording = false
+        
+        scope.launch(Dispatchers.IO) {
+            // Gunakan join() agar chunk terakhir dipastikan selesai dikirim
+            audioJob?.join()
+            audioJob = null
+            
+            try { audioRecord?.stop(); audioRecord?.release() } catch (_: Exception) {}
+            audioRecord = null
+            
+            Log.d("GeminiLive", "Mikrofon dihentikan, menunggu VAD server...")
+        }
+    }
+
+    
+
     private fun playAudioChunk(pcmData: ByteArray) {
+        isPlayingAudio = true
         audioTrack?.write(pcmData, 0, pcmData.size)
+        
+        // Reset timer setiap kali chunk baru masuk. 
+        // Jika tidak ada chunk baru selama 800ms, baru izinkan mikrofon merekam lagi.
+                playJob = scope.launch {
+            delay(800)
+            isPlayingAudio = false
+        }
     }
 
     private fun shortArrayToByteArray(shorts: ShortArray): ByteArray {
@@ -248,6 +291,9 @@ class GeminiLiveTranslator(
 
     fun stop() {
         isRecording = false
+                
+        // Cleanup AEC dan AudioManager
+                
         try { audioRecord?.stop(); audioRecord?.release() } catch (_: Exception) {}
         try { audioTrack?.stop(); audioTrack?.release() } catch (_: Exception) {}
         audioRecord = null; audioTrack = null
