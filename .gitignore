@@ -31,3 +31,7 @@ Thumbs.db
 *.hprof
 captures/
 patch_*.py
+
+# Debug artifacts (logcat, timeline, filtered log)
+gemini_*.txt
+*logcat*.txt

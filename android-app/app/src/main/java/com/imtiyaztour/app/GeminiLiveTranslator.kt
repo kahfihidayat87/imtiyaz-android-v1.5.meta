@@ -60,6 +60,7 @@ class GeminiLiveTranslator(
                         "model": "models/gemini-2.5-flash-native-audio-latest",
                         "generationConfig": {
                           "responseModalities": ["AUDIO"],
+                          "thinkingConfig": { "thinkingBudget": 0 },
                           "speechConfig": {
                             "voiceConfig": {
                               "prebuiltVoiceConfig": {
@@ -228,14 +229,6 @@ class GeminiLiveTranslator(
             return
         }
         audioRecord = record
-        try {
-            if (AcousticEchoCanceler.isAvailable()) {
-                aec = AcousticEchoCanceler.create(record.audioSessionId)?.apply { enabled = true }
-            }
-            if (NoiseSuppressor.isAvailable()) {
-                noiseSuppressor = NoiseSuppressor.create(record.audioSessionId)?.apply { enabled = true }
-            }
-        } catch (_: Exception) {}
 
         val outBufferSize = AudioTrack.getMinBufferSize(24000, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
         val track = AudioTrack(
@@ -248,6 +241,14 @@ class GeminiLiveTranslator(
         try {
             record.startRecording()
             isRecording = true
+            try {
+                if (AcousticEchoCanceler.isAvailable()) {
+                    aec = AcousticEchoCanceler.create(record.audioSessionId)?.apply { enabled = true }
+                }
+                if (NoiseSuppressor.isAvailable()) {
+                    noiseSuppressor = NoiseSuppressor.create(record.audioSessionId)?.apply { enabled = true }
+                }
+            } catch (_: Exception) {}
         } catch (e: Exception) {
             onError("Gagal memulai perekaman: ${e.message}")
             return
