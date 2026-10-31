@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
@@ -1339,7 +1340,7 @@ fun SayaScreen(
                 elevation = CardDefaults.cardElevation(1.dp)
             ) {
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Translate, contentDescription = null, tint = Color(0xFF0F7A5A))
+                    Text(text = "ا", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F7A5A), modifier = Modifier.width(24.dp), textAlign = TextAlign.Center)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text("Asisten Bahasa", fontWeight = FontWeight.Bold, fontSize = 14.sp)
