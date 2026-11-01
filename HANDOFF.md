@@ -1523,3 +1523,89 @@ Jika Hostinger melakukan deploy ulang (folder versions berubah), wajib menjalank
 
 Selalu gunakan pm2 restart imtiyaz-api setelah mengedit app.js.
 
+_______________________
+
+# 📄 HANDOFF PROYEK IMTIYAZ TOUR (App Jamaah & App Admin)
+
+**Terakhir Update:** 1 November 2026
+**Fokus Sesi Terakhir:** Finalisasi Gemini Live (Asisten Bahasa), Perbaikan Web Radio, dan UI Beranda Jamaah.
+
+---
+
+## 🌍 1. Infrastruktur & Server
+
+| Komponen | Detail |
+|---|---|
+| **Repo App Jamaah** | `kahfihidayat87/imtiyaz-android-v1.5.meta` |
+| **Repo App Admin** | `kahfihidayat87/imtiyaz-admin-android` |
+| **VPS (LiveKit & Gemini)** | IP: `187.124.137.227` (User: `root@srv2096621`) |
+| **Hostinger (WP & API Lama)**| IP: `153.92.10.222:65002` (User: `u120369480`) |
+| **Domain Gemini API** | `https://bahasa.pastiumrah.com` (Node.js di VPS, port 3001) |
+| **Domain Web Radio** | `https://radio.pastiumrah.com` (File statis di VPS: `/opt/livekit/www/`) |
+
+**Catatan VPS:**
+- Caddy berjalan dengan `network_mode: host`. Wajib gunakan `127.0.0.1:3001` untuk reverse proxy, bukan IP Docker (`172.x.x.x`).
+- Untuk restart API Node.js: `pm2 restart gemini-api`.
+- Web radio statis (`index.html`) diedit langsung di `/opt/livekit/www/index.html`. Tidak perlu restart Caddy.
+
+---
+
+## 📱 2. Status App Jamaah (Android)
+**Kondisi:** Mayoritas fitur utama selesai. CI GitHub Actions dalam kondisi **HIJAU**.
+
+### Fitur yang Selesai di Sesi Terakhir:
+1. **Asisten Bahasa (Live Translation AI):**
+   - WebSocket ke Gemini API (`gemini-2.5-flash-native-audio-latest`).
+   - Interaksi **Push-To-Talk** (Tekan & Tahan). Tombol dinamis: Abu-abu (Idle) -> Kuning (Connecting) -> Hijau (Ready) -> Merah (Recording).
+   - Menggunakan VAD otomatis (`disabled: false`).
+   - Prompt ketat (dilarang bahasa Inggris/ngobrol, fokus terjemahan).
+   - Filter audio kosong (silence) agar tidak ada audio *blank* berulang.
+   - Izin mikrofon otomatis diminta via `LaunchedEffect` saat layar dibuka.
+2. **Web Radio (`radio.pastiumrah.com`):** Tombol berhasil diubah menjadi *Toggle* (Berubah merah dan bertuliskan "Akhiri Mendengarkan" saat tersambung).
+3. **UI/UX Beranda:** Teks default diganti menjadi "Sahabat Imtiyaz". Jarak antar-card dirapatkan.
+4. **Kantor Operasional:** Card ditambahkan di Tab Saya (setelah login) dan layar Login.
+
+### Utang Teknis (Tech Debt) App Jamaah:
+- `LocateService.kt` masih ada (status `@Deprecated`), siap dihapus total pada rilis v2.14.0.
+
+---
+
+## 💻 3. Status App Admin (Android)
+**Kondisi:** 🔴 **CI GitHub Actions MASIH MERAH**. Harus segera diperbaiki sebelum menambah fitur baru!
+
+### Masalah Utama App Admin:
+- Terjadi **Brace Mismatch (kurung kurawal berlebih)** pada file `SayaScreen.kt` (sekitar baris 134) saat menambahkan fitur Card "Kantor Operasional".
+- Perlu menghapus `}` yang nyasar agar compile berhasil.
+- Fitur **CRUD Kantor Operasional** (Tambah/Edit/Hapus) sudah dibuatkan UI dan Repository-nya (`KantorListScreen.kt`, dll), namun **belum teruji** karena build gagal.
+
+---
+
+## ⚠️ 4. Aturan Kerja (WAJIB DIPATUHI AI SELANJUTNYA)
+1. **Selalu gunakan Git Bash** untuk semua perintah lokal.
+2. **JANGAN PERNAH PUSH KE GITHUB** sebelum menjalankan `./gradlew :app:compileDebugKotlin` dan memastikan hasilnya `BUILD SUCCESSFUL` di lokal.
+3. Selalu cek keseimbangan kurung kurawal (Brace Balance) sebelum commit:
+   `awk '{o+=gsub(/{/,"{"); c+=gsub(/}/,"}")} END{print "diff="o-c}' namafile.kt`
+4. Jangan pernah membocorkan API Key, Token, atau Service Account ke dalam chat.
+
+---
+
+## 🎯 5. Tugas Prioritas Selanjutnya (Action Items)
+
+1. **Perbaiki CI App Admin (URGEN):**
+   - Buka folder `imtiyaz-admin-android`.
+   - Perbaiki error compile (Brace mismatch) di `SayaScreen.kt`.
+   - Lakukan `./gradlew :app:compileDebugKotlin` sampai hijau, lalu `git push`.
+2. **Uji Fitur CRUD Kantor Operasional di App Admin:**
+   - Setelah CI Admin hijau, install ke HP.
+   - Tambahkan data kantor (Depok, Tarakan, Pangkal Pinang) lewat App Admin.
+3. **Sinkronisasi Data Kantor:**
+   - Cek apakah data dari App Admin langsung muncul di App Jamaah (menggunakan Firestore listener).
+4. **Bersih-bersih Kode (Opsional):**
+   - Hapus `LocateService.kt` di App Jamaah.
+   - Ganti `Locale("id", "ID")` yang deprecated menjadi `Locale.forLanguageTag("id-ID")` di beberapa file.
+
+---
+
+## 💬 6. Prompt untuk Chat AI Berikutnya (Copy-Paste ini di Chat Baru)
+
+"Halo AI, tolong baca dokumen HANDOFF di atas. Tugas pertama kita adalah membereskan CI App Admin yang merah karena brace mismatch di `SayaScreen.kt`. Berikan langkah-langkah Git Bash untuk memperbaikinya, lakukan compile lokal sampai BUILD SUCCESSFUL, lalu push ke GitHub. Setelah itu, kita akan lanjut menguji fitur Kantor Operasional di kedua aplikasi."
