@@ -32,6 +32,9 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import okhttp3.OkHttpClient
+import okhttp3.logging.HttpLoggingInterceptor
+import android.util.Log
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
@@ -87,8 +90,16 @@ interface FindApiService {
 
 object FindApiClient {
     val service: FindApiService by lazy {
+        val logger = HttpLoggingInterceptor().apply {
+            level = HttpLoggingInterceptor.Level.BODY
+        }
+        val client = OkHttpClient.Builder()
+            .addInterceptor(logger)
+            .build()
+
         Retrofit.Builder()
             .baseUrl(ApiConfig.BASE_URL)
+            .client(client)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(FindApiService::class.java)
@@ -449,6 +460,7 @@ fun FindJamaahScreen(onBack: () -> Unit) {
                     Button(
                         enabled = jamaahLoading == null,
                         onClick = {
+                            Log.d("FIND_DEBUG", "Tombol Cari ditekan untuk jamaah: ${j.id}, jamaahId=$jamaahId, token=${if(token.isNotBlank()) "ada" else "KOSONG"}")
                             if (jamaahLoading != null) return@Button
                             jamaahLoading = j.id
                             scope.launch {
@@ -463,6 +475,7 @@ fun FindJamaahScreen(onBack: () -> Unit) {
                                         errorMsg = resp.error ?: "Gagal meminta lokasi"
                                     }
                                 } catch (e: Exception) {
+                                    Log.e("FIND_DEBUG", "Gagal requestFind: ${e.message}", e)
                                     val msg = e.message ?: "unknown"
                                     errorMsg = when {
                                         msg.contains("429") -> "Mohon tunggu 10 detik sebelum mencari jamaah ini lagi."
