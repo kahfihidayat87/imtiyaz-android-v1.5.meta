@@ -204,12 +204,21 @@ fun FindJamaahScreen(onBack: () -> Unit) {
         val targetId = activeFind?.first?.id ?: return@LaunchedEffect
 
         var sudahRespons = false
+        Log.d("FIND_DEBUG", "Listener Firestore aktif untuk targetId=$targetId, menunggu reqId=$reqId")
         val listener = FirebaseFirestore.getInstance()
             .collection("lokasi_jamaah")
             .document(targetId)
             .addSnapshotListener { snapshot, error ->
-                if (error != null || snapshot == null || !snapshot.exists()) return@addSnapshotListener
+                if (error != null) {
+                    Log.e("FIND_DEBUG", "Listener Firestore error: ${error.message}")
+                    return@addSnapshotListener
+                }
+                if (snapshot == null || !snapshot.exists()) {
+                    Log.d("FIND_DEBUG", "Snapshot kosong / tidak ada")
+                    return@addSnapshotListener
+                }
                 val data = snapshot.data ?: return@addSnapshotListener
+                Log.d("FIND_DEBUG", "Snapshot data: request_id=${data["request_id"]}, target_reqId=$reqId")
                 if ((data["request_id"] as? String) == reqId) {
                     sudahRespons = true
                     findResult = FindStatus(
