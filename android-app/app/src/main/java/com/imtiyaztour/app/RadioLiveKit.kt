@@ -63,6 +63,14 @@ object RadioLiveKit {
             return
         }
 
+        // Defense in depth: prevent LiveKit connection without explicit gelombang code.
+        // This blocks listener attempts that skip the join step in the client.
+        if (kodeGelombang.isNullOrBlank()) {
+            onStatus("Gagal: kode gelombang belum diisi")
+            Log.w(TAG, "LiveKit start blocked: kodeGelombang is blank")
+            return
+        }
+
         CoroutineScope(Dispatchers.Main).launch {
             try {
                 onStatus("Menghubungkan...")
@@ -70,9 +78,7 @@ object RadioLiveKit {
                 // Fetch token di IO thread
                 val resp = withContext(Dispatchers.IO) {
                     val body = mutableMapOf("jamaah_id" to jamaahId, "token" to token)
-                    if (!kodeGelombang.isNullOrBlank()) {
-                        body["kode_gelombang"] = kodeGelombang
-                    }
+                    body["kode_gelombang"] = kodeGelombang
                     api.getToken(body)
                 }
 
@@ -99,7 +105,7 @@ object RadioLiveKit {
                                 Log.d(TAG, "Track subscribed: ${event.track.kind}")
                                 if (!resp.is_tl) {
                                     withContext(Dispatchers.Main) {
-                                        onStatus("\uD83D\uDD0A Mendengarkan TL...")
+                                        onStatus("🔊 Mendengarkan TL...")
                                     }
                                 }
                             }
@@ -122,10 +128,10 @@ object RadioLiveKit {
                         Log.e("RadioLiveKit", "Mic error: ${e.message}", e)
                         onStatus("Mic gagal diakses. Cek izin atau tutup aplikasi lain.")
                     }
-                    onStatus("\uD83D\uDD34 Siaran aktif")
+                    onStatus("🔴 Siaran aktif")
                     Log.d(TAG, "TL siaran aktif di room")
                 } else {
-                    onStatus("\uD83D\uDD0A Mendengarkan TL...")
+                    onStatus("🔊 Mendengarkan TL...")
                     Log.d(TAG, "Jamaah subscribe ke room")
                 }
 
