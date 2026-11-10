@@ -1,24 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-          xmlns:tools="http://schemas.android.com/tools">
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- v2.12.0: peta OSM butuh cek status jaringan -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <!-- Fitur baru: Adzan Alert & Pengingat Ibadah -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <!-- Fitur Tracking Lansia -->
+
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
-    <!-- v2.13.0 TAHAP 22: Setup wizard + wake-lock fondasi -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <!-- Block dari LiveKit manifest merger — kita tidak pakai screen share -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" tools:node="remove" />
 
     <application android:allowBackup="true" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:label="Imtiyaz Tour" android:theme="@android:style/Theme.Material.Light.NoActionBar">
@@ -29,7 +27,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Diperlukan agar tombol "Kamera" bisa menyimpan & meng-upload foto bukti transfer (sebelumnya onClick kosong) -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -40,37 +37,25 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
-        <!-- Fitur Adzan Alert -->
         <receiver android:name=".AdzanReceiver" android:exported="false" />
         <receiver android:name=".BootReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <!-- TAHAP 22: Xiaomi/Oppo/Vivo kadang kirim QUICKBOOT bukan BOOT_COMPLETED -->
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>
         </receiver>
-
-        <!-- Fitur Pengingat Ibadah -->
         <receiver android:name=".ReminderReceiver" android:exported="false" />
-
-        <!-- DEPRECATED v2.13.0: LocateService (ntfy.sh) dihapus. Tracking via FcmService. -->
-
-        <!-- v2.13.0: FCM Service untuk tracking real-time -->
-        <service
-            android:name=".FcmService"
-            android:exported="false">
+        <service android:name=".FcmService" android:exported="false">
             <intent-filter>
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
-
-        <!-- v2.13.0 (TAHAP 16): Mode Aman Foreground Service -->
         <service
             android:name=".ModeAmanService"
             android:foregroundServiceType="location"
             android:exported="false" />
-            <service
+        <service
             android:name=".RadioService"
             android:foregroundServiceType="mediaPlayback|microphone"
             android:exported="false" />

@@ -19,18 +19,14 @@ import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
 import retrofit2.http.POST
 
-/**
- * v2.14.1: LiveKit radio TL - siaran real-time.
- *
- * LiveKit.create() and setMicrophoneEnabled() must run on the main thread.
- * Token fetching remains on the IO dispatcher.
- */
+/** LiveKit radio. Token fetching uses IO; LiveKit and microphone operations use Main. */
 object RadioLiveKit {
-
     private const val TAG = "RadioLiveKit"
 
     private var room: Room? = null
     private var eventJob: Job? = null
+    private var connecting = false
+    private var appContext: Context? = null
 
     data class LiveKitTokenResp(
         val token: String? = null,
@@ -60,106 +56,99 @@ object RadioLiveKit {
         onMicPermissionRequired: () -> Unit = {},
         onStatus: (String) -> Unit
     ) {
-        if (room != null) {
-            onStatus("Sudah aktif")
+        if (room != null || connecting) {
+            onStatus(if (room != null) "Sudah aktif" else "Menghubungkan...")
             return
         }
-
         val kode = kodeGelombang?.trim()
         if (kode.isNullOrBlank()) {
             onStatus("Gagal: kode gelombang belum diisi")
-            Log.w(TAG, "LiveKit start blocked: kodeGelombang is blank")
             return
         }
 
+        connecting = true
+        appContext = context.applicationContext
         CoroutineScope(Dispatchers.Main).launch {
+            var serviceStarted = false
             try {
                 onStatus("Menghubungkan...")
-
-                // Fetch token and role before deciding whether microphone access is needed.
-                val resp = withContext(Dispatchers.IO) {
-                    val body = mutableMapOf("jamaah_id" to jamaahId, "token" to token)
-                    body["kode_gelombang"] = kode
-                    api.getToken(body)
+                val response = withContext(Dispatchers.IO) {
+                    api.getToken(mapOf("jamaah_id" to jamaahId, "token" to token, "kode_gelombang" to kode))
                 }
-
-                if (resp.token.isNullOrBlank() || resp.url.isNullOrBlank()) {
-                    onStatus("Gagal: ${resp.error ?: "Token tidak valid"}")
+                val liveToken = response.token
+                val liveUrl = response.url
+                if (liveToken.isNullOrBlank() || liveUrl.isNullOrBlank()) {
+                    onStatus("Gagal: ${response.error ?: "Token tidak valid"}")
                     return@launch
                 }
 
-                if (resp.is_tl &&
-                    context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED
-                ) {
+                // Ask for microphone only after the backend confirms the user is TL.
+                if (response.is_tl && context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                     onStatus("Izin mikrofon diperlukan untuk siaran TL.")
                     onMicPermissionRequired()
                     return@launch
                 }
 
-                val r = LiveKit.create(
+                // The foreground service and its wake lock must be active before connecting.
+                RadioService.start(context.applicationContext, response.is_tl)
+                serviceStarted = true
+
+                val newRoom = LiveKit.create(
                     appContext = context.applicationContext,
-                    options = RoomOptions(
-                        adaptiveStream = false,
-                        dynacast = false
-                    )
+                    options = RoomOptions(adaptiveStream = false, dynacast = false)
                 )
-                r.connect(url = resp.url, token = resp.token)
-                room = r
+                newRoom.connect(url = liveUrl, token = liveToken)
+                room = newRoom
 
                 eventJob = CoroutineScope(Dispatchers.IO).launch {
-                    r.events.collect { event ->
+                    newRoom.events.collect { event ->
                         when (event) {
                             is RoomEvent.TrackSubscribed -> {
                                 Log.d(TAG, "Track subscribed: ${event.track.kind}")
-                                if (!resp.is_tl) {
-                                    withContext(Dispatchers.Main) {
-                                        onStatus("🔊 Mendengarkan TL...")
-                                    }
+                                if (!response.is_tl) withContext(Dispatchers.Main) {
+                                    onStatus("🔊 Mendengarkan TL...")
                                 }
                             }
                             is RoomEvent.Disconnected -> {
                                 Log.d(TAG, "Disconnected")
                                 withContext(Dispatchers.Main) {
                                     onStatus("Koneksi terputus")
+                                    berhenti()
                                 }
                             }
-                            else -> {}
+                            else -> Unit
                         }
                     }
                 }
 
-                if (resp.is_tl) {
+                if (response.is_tl) {
                     try {
-                        r.localParticipant.setMicrophoneEnabled(true)
+                        newRoom.localParticipant.setMicrophoneEnabled(true)
                     } catch (e: Throwable) {
-                        Log.e(TAG, "Mic error: ${e.message}", e)
+                        Log.e(TAG, "Microphone activation failed", e)
                         onStatus("Mic gagal diakses. Cek izin atau tutup aplikasi lain.")
                         berhentiInternal()
+                        RadioService.stop(context.applicationContext)
                         return@launch
                     }
                     onStatus("🔴 Siaran aktif")
-                    Log.d(TAG, "TL siaran aktif di room")
                 } else {
                     onStatus("🔊 Mendengarkan TL...")
-                    Log.d(TAG, "Jamaah subscribe ke room")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error mulai LiveKit", e)
+                Log.e(TAG, "Unable to start LiveKit", e)
                 onStatus("Gagal: ${e.message ?: "unknown"}")
                 berhentiInternal()
+                if (serviceStarted) RadioService.stop(context.applicationContext)
+            } finally {
+                connecting = false
             }
         }
     }
 
     fun berhenti() {
-        CoroutineScope(Dispatchers.Main).launch {
-            try {
-                berhentiInternal()
-                Log.d(TAG, "LiveKit dihentikan")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error stop", e)
-            }
-        }
+        appContext?.let(RadioService::stop)
+        CoroutineScope(Dispatchers.Main).launch { berhentiInternal() }
     }
 
     private suspend fun berhentiInternal() {
@@ -168,8 +157,11 @@ object RadioLiveKit {
             eventJob = null
             room?.localParticipant?.setMicrophoneEnabled(false)
             room?.disconnect()
-        } catch (_: Exception) { }
-        room = null
+        } catch (e: Exception) {
+            Log.w(TAG, "Error while stopping LiveKit", e)
+        } finally {
+            room = null
+        }
     }
 
     fun sedangAktif(): Boolean = room != null
