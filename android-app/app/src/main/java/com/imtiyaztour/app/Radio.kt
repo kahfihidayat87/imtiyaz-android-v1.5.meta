@@ -40,28 +40,30 @@ fun RadioScreen(onBack: () -> Unit) {
     Column(modifier = Modifier.padding(16.dp)) {
         Text("Radio Imtiyaz")
 
-        if (kodeGelombang.isBlank()) {
-            Text("Masukkan kode gelombang terlebih dahulu")
-            gelombangError = "Masukkan kode gelombang terlebih dahulu"
+        // Keep composition free of state writes. Updating gelombangError while
+        // rendering caused a recomposition loop whenever the code was blank.
+        val displayedGelombangError = if (kodeGelombang.isBlank()) {
+            "Masukkan kode gelombang terlebih dahulu"
         } else {
-            gelombangError = ""
+            gelombangError
         }
-
-        if (gelombangError.isNotBlank()) {
-            Text(gelombangError)
+        if (displayedGelombangError.isNotBlank()) {
+            Text(displayedGelombangError)
         }
 
         Button(
             onClick = {
-                if (kodeGelombang.isBlank()) {
+                val kode = kodeGelombang.trim()
+                if (kode.isBlank()) {
                     gelombangError = "Masukkan kode gelombang terlebih dahulu"
                     return@Button
                 }
+                gelombangError = ""
                 if (!hasMicPermission) {
                     micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                     return@Button
                 }
-                RadioLiveKit.mulai(context, Prefs.getJamaahId(context), Prefs.getToken(context), kodeGelombang) {
+                RadioLiveKit.mulai(context, Prefs.getJamaahId(context), Prefs.getToken(context), kode) {
                     // Status updates are handled by LiveKit internally.
                 }
             }
