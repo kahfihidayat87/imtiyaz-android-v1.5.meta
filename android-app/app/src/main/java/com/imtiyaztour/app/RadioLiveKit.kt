@@ -1,6 +1,8 @@
 package com.imtiyaztour.app
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.util.Log
 import io.livekit.android.LiveKit
 import io.livekit.android.RoomOptions
@@ -20,9 +22,8 @@ import retrofit2.http.POST
 /**
  * v2.14.1: LiveKit radio TL - siaran real-time.
  *
- * FIX CRASH: LiveKit.create() dan setMicrophoneEnabled() WAJIB dipanggil di
- * Main thread (bukan IO). AudioSwitch initialization internal SDK butuh
- * Android Looper utama. Fetch token tetap di IO thread.
+ * LiveKit.create() and setMicrophoneEnabled() must run on the main thread.
+ * Token fetching remains on the IO dispatcher.
  */
 object RadioLiveKit {
 
@@ -56,6 +57,7 @@ object RadioLiveKit {
         jamaahId: String,
         token: String,
         kodeGelombang: String? = null,
+        onMicPermissionRequired: () -> Unit = {},
         onStatus: (String) -> Unit
     ) {
         if (room != null) {
@@ -63,9 +65,8 @@ object RadioLiveKit {
             return
         }
 
-        // Defense in depth: prevent LiveKit connection without explicit gelombang code.
-        // This blocks listener attempts that skip the join step in the client.
-        if (kodeGelombang.isNullOrBlank()) {
+        val kode = kodeGelombang?.trim()
+        if (kode.isNullOrBlank()) {
             onStatus("Gagal: kode gelombang belum diisi")
             Log.w(TAG, "LiveKit start blocked: kodeGelombang is blank")
             return
@@ -75,19 +76,26 @@ object RadioLiveKit {
             try {
                 onStatus("Menghubungkan...")
 
-                // Fetch token di IO thread
+                // Fetch token and role before deciding whether microphone access is needed.
                 val resp = withContext(Dispatchers.IO) {
                     val body = mutableMapOf("jamaah_id" to jamaahId, "token" to token)
-                    body["kode_gelombang"] = kodeGelombang
+                    body["kode_gelombang"] = kode
                     api.getToken(body)
                 }
 
-                if (resp.token == null || resp.url == null) {
+                if (resp.token.isNullOrBlank() || resp.url.isNullOrBlank()) {
                     onStatus("Gagal: ${resp.error ?: "Token tidak valid"}")
                     return@launch
                 }
 
-                // LiveKit.create + connect di Main thread (wajib)
+                if (resp.is_tl &&
+                    context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    onStatus("Izin mikrofon diperlukan untuk siaran TL.")
+                    onMicPermissionRequired()
+                    return@launch
+                }
+
                 val r = LiveKit.create(
                     appContext = context.applicationContext,
                     options = RoomOptions(
@@ -124,9 +132,10 @@ object RadioLiveKit {
                     try {
                         r.localParticipant.setMicrophoneEnabled(true)
                     } catch (e: Throwable) {
-                        // Tangkap Throwable (termasuk AssertionError dari WebRTC)
-                        Log.e("RadioLiveKit", "Mic error: ${e.message}", e)
+                        Log.e(TAG, "Mic error: ${e.message}", e)
                         onStatus("Mic gagal diakses. Cek izin atau tutup aplikasi lain.")
+                        berhentiInternal()
+                        return@launch
                     }
                     onStatus("🔴 Siaran aktif")
                     Log.d(TAG, "TL siaran aktif di room")
@@ -134,7 +143,6 @@ object RadioLiveKit {
                     onStatus("🔊 Mendengarkan TL...")
                     Log.d(TAG, "Jamaah subscribe ke room")
                 }
-
             } catch (e: Exception) {
                 Log.e(TAG, "Error mulai LiveKit", e)
                 onStatus("Gagal: ${e.message ?: "unknown"}")
