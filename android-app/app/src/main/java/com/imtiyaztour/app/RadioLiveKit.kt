@@ -67,6 +67,13 @@ object RadioLiveKit {
             try {
                 onStatus("Menghubungkan...")
 
+                // PATCH: Tolak koneksi jika bukan TL dan tidak ada kode gelombang
+                val isTL = Prefs.getRole(context) == "tour_leader" || Prefs.getRole(context) == "tl"
+                if (!isTL && kodeGelombang.isNullOrBlank()) {
+                    onStatus("Gagal: Kode gelombang wajib diisi.")
+                    return@launch
+                }
+
                 // Fetch token di IO thread
                 val resp = withContext(Dispatchers.IO) {
                     val body = mutableMapOf("jamaah_id" to jamaahId, "token" to token)
