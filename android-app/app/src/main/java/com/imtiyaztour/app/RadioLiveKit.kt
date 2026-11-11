@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import retrofit2.HttpException
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
@@ -66,13 +67,6 @@ object RadioLiveKit {
         CoroutineScope(Dispatchers.Main).launch {
             try {
                 onStatus("Menghubungkan...")
-
-                // PATCH: Tolak koneksi jika bukan TL dan tidak ada kode gelombang
-                val isTL = Prefs.getRole(context) == "tour_leader" || Prefs.getRole(context) == "tl"
-                if (!isTL && kodeGelombang.isNullOrBlank()) {
-                    onStatus("Gagal: Kode gelombang wajib diisi.")
-                    return@launch
-                }
 
                 // Fetch token di IO thread
                 val resp = withContext(Dispatchers.IO) {
@@ -136,6 +130,16 @@ object RadioLiveKit {
                     Log.d(TAG, "Jamaah subscribe ke room")
                 }
 
+            } catch (e: HttpException) {
+                val errorBody = e.response()?.errorBody()?.string() ?: ""
+                val errorMsg = try {
+                    org.json.JSONObject(errorBody).optString("error", "Akses ditolak")
+                } catch (_: Exception) {
+                    "Akses ditolak (HTTP ${e.code()})"
+                }
+                Log.e(TAG, "HTTP error: ${e.code()} - $errorMsg")
+                onStatus("Gagal: $errorMsg")
+                berhentiInternal()
             } catch (e: Exception) {
                 Log.e(TAG, "Error mulai LiveKit", e)
                 onStatus("Gagal: ${e.message ?: "unknown"}")
