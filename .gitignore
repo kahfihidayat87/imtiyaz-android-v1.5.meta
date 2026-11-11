@@ -35,3 +35,4 @@ patch_*.py
 # Debug artifacts (logcat, timeline, filtered log)
 gemini_*.txt
 *logcat*.txt
+*.bak

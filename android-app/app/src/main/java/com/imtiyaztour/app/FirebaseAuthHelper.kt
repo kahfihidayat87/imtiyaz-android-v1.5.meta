@@ -33,7 +33,11 @@ object FirebaseAuthHelper {
                     return@withContext false
                 }
                 Firebase.auth.signInWithCustomToken(resp.token).await()
-                Log.i(TAG, "Firebase login OK — uid=${resp.uid}, role=${resp.role}")
+                val currentUser = Firebase.auth.currentUser
+                val uid = currentUser?.uid ?: "unknown"
+                val tokenResult = currentUser?.getIdToken(false)?.await()
+                val role = tokenResult?.claims?.get("role") as? String ?: "unknown"
+                Log.i(TAG, "Firebase login OK — uid=$uid, role=$role")
                 true
             } catch (e: Exception) {
                 Log.w(TAG, "Firebase login gagal: ${e.message}")
