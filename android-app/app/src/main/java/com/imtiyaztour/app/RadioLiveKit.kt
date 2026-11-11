@@ -31,6 +31,7 @@ object RadioLiveKit {
 
     private var room: Room? = null
     private var eventJob: Job? = null
+    private var appContext: Context? = null
 
     data class LiveKitTokenResp(
         val token: String? = null,
@@ -80,6 +81,11 @@ object RadioLiveKit {
                 if (resp.token == null || resp.url == null) {
                     onStatus("Gagal: ${resp.error ?: "Token tidak valid"}")
                     return@launch
+                }
+
+                // Start Foreground Service agar LiveKit tetap hidup saat layar mati
+                context.applicationContext?.let {
+                    RadioForegroundService.start(it, resp.is_tl)
                 }
 
                 // LiveKit.create + connect di Main thread (wajib)
@@ -167,6 +173,8 @@ object RadioLiveKit {
             room?.disconnect()
         } catch (_: Exception) { }
         room = null
+        appContext?.let { RadioForegroundService.stop(it) }
+        appContext = null
     }
 
     fun sedangAktif(): Boolean = room != null

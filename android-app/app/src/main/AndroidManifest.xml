@@ -21,7 +21,15 @@
     <!-- Block dari LiveKit manifest merger — kita tidak pakai screen share -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" tools:node="remove" />
 
+        <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+
     <application android:allowBackup="true" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:label="Imtiyaz Tour" android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <service
+            android:name=".RadioForegroundService"
+            android:foregroundServiceType="microphone|mediaPlayback"
+            android:exported="false" />
+
         <activity android:name=".MainActivity" android:exported="true" android:theme="@style/Theme.Imtiyaz.Splash">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
